@@ -1,0 +1,74 @@
+{
+  "nome": "cimatron_v26",
+  "software": "cimatron",
+  "versione": "26",
+  "creato_il": "2026-04-10T00:00:00",
+  "separatore": "|",
+  "encoding": "utf-8",
+  "righe_header": 1,
+  "note": "Profilo predefinito Cimatron v26 - CSV pipe-separato con ID colonne numerici",
+  "colonne": {
+    "Name": {
+      "campo_master": "codice_interno",
+      "tipo": "string"
+    },
+    "Type": {
+      "campo_master": "tipo",
+      "tipo": "categoria",
+      "valori": {
+        "1": "FLAT",
+        "2": "BALL",
+        "3": "BULL",
+        "4": "DRILL",
+        "5": "TAP",
+        "6": "REAM",
+        "7": "SPOT",
+        "8": "TAPER"
+      }
+    },
+    "Diameter": {
+      "campo_master": "diametro_mm",
+      "tipo": "float"
+    },
+    "CornerRadius": {
+      "campo_master": "raggio_punta_mm",
+      "tipo": "float"
+    },
+    "PointAngle": {
+      "campo_master": "angolo_punta_gradi",
+      "tipo": "float"
+    },
+    "FluteLength": {
+      "campo_master": "lunghezza_tagl_mm",
+      "tipo": "float"
+    },
+    "OverallLength": {
+      "campo_master": "lunghezza_totale_mm",
+      "tipo": "float"
+    },
+    "NumFlutes": {
+      "campo_master": "num_taglienti",
+      "tipo": "int"
+    },
+    "Material": {
+      "campo_master": "materiale",
+      "tipo": "categoria",
+      "valori": {
+        "1": "HM",
+        "2": "HSS",
+        "3": "HSCo",
+        "4": "CBN",
+        "5": "PCD",
+        "6": "CER"
+      }
+    },
+    "CatalogName": {
+      "campo_master": "codice_catalogo",
+      "tipo": "string"
+    },
+    "Comment": {
+      "campo_master": "descrizione",
+      "tipo": "string"
+    }
+  }
+}
