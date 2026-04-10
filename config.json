@@ -1,0 +1,11 @@
+{
+  "export_ora": "22:00",
+  "output_dir": "output/auto",
+  "output_rete": "",
+  "formati_attivi": [
+    "cimatron_v26"
+  ],
+  "notify_on_change": true,
+  "keep_last_n": 7,
+  "_note": "Aggiungi profili in formati_attivi dopo averli creati con il Format Learner. Es: ['cimatron_v26', 'hypermill_2024', 'worknc_v30']"
+}
