@@ -1,0 +1,323 @@
+"""
+app_learner.py - Interfaccia web standalone del modulo Format Learner
+Porta: 5001  |  Avvia con: python learner/app_learner.py
+Apri: http://localhost:5001
+"""
+
+import os, sys, json, tempfile
+sys.path.insert(0, os.path.dirname(__file__))
+
+from flask import Flask, render_template_string, request, redirect, url_for, send_file
+from format_learner import analizza_file, MASTER_FIELDS
+from profile_manager import salva_profilo, carica_profilo, lista_profili, elimina_profilo
+from universal_converter import converti
+
+app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+UPLOAD_FOLDER = tempfile.mkdtemp()
+
+BASE = """<!DOCTYPE html><html lang="it"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Format Learner</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;background:#f8f8f6;color:#1a1a1a}
+.hdr{background:#1a1a1a;color:#fff;padding:.8rem 2rem;display:flex;align-items:center;gap:2rem}
+.hdr h1{margin:0;font-size:1rem;font-weight:500}
+.hdr a{color:#bbb;text-decoration:none;font-size:.9rem}.hdr a:hover{color:#fff}
+.main{max-width:1100px;margin:2rem auto;padding:0 1rem}
+.card{background:#fff;border:1px solid #e0e0de;border-radius:8px;padding:1.5rem;margin-bottom:1.5rem}
+.card h2{margin:0 0 1rem;font-size:1rem;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border:1px solid #e0e0de;padding:7px 10px;text-align:left}
+th{background:#f4f4f2;font-weight:600}
+.btn{display:inline-block;padding:7px 16px;border-radius:5px;border:1px solid #ccc;
+     cursor:pointer;font-size:13px;text-decoration:none;background:#fff;color:#333}
+.btn-p{background:#0055cc;color:#fff;border-color:#0055cc}
+.btn-s{background:#1a7a3c;color:#fff;border-color:#1a7a3c}
+.btn-d{background:#c0392b;color:#fff;border-color:#c0392b}
+.flash{padding:10px;border-radius:5px;margin-bottom:1rem;background:#d4edda;color:#155724}
+.flash.err{background:#f8d7da;color:#721c24}
+.badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:10px;font-weight:500}
+.b-a{background:#d4edda;color:#155724}.b-m{background:#fff3cd;color:#856404}
+.b-b{background:#f8d7da;color:#721c24}.b-n{background:#e9ecef;color:#6c757d}
+select,input[type=text],input[type=file]{padding:6px 10px;border:1px solid #ccc;
+  border-radius:4px;font-size:13px;width:100%}
+.up{border:2px dashed #ccc;border-radius:8px;padding:2rem;text-align:center;
+    color:#888;cursor:pointer}.up:hover{border-color:#0055cc;color:#0055cc}
+.steps{display:flex;gap:0;margin-bottom:1.5rem}
+.step{flex:1;padding:8px;text-align:center;font-size:12px;background:#e9ecef;color:#666}
+.step.on{background:#0055cc;color:#fff;font-weight:600}
+.step.ok{background:#1a7a3c;color:#fff}
+</style></head><body>
+<div class="hdr"><h1>Format Learner</h1>
+<a href="/">Impara</a><a href="/profili">Profili</a><a href="/converti">Converti</a></div>
+<div class="main">
+{% if msg %}<div class="flash {{ mtype }}">{{ msg }}</div>{% endif %}
+{% block content %}{% endblock %}
+</div></body></html>"""
+
+HOME = BASE.replace('{% block content %}{% endblock %}', """
+<div class="steps">
+  <div class="step on">1. Carica file</div>
+  <div class="step">2. Verifica mappatura</div>
+  <div class="step">3. Salva profilo</div>
+</div>
+<div class="card">
+  <h2>Carica un file esportato da qualsiasi CAM</h2>
+  <p style="color:#666;font-size:13px;margin-bottom:1rem">
+    Formati: <b>CSV</b>, <b>XLS/XLSX</b>, <b>ZIP</b> (es. Cimatron)<br>
+    Il sistema analizza la struttura e propone la mappatura automaticamente.
+  </p>
+  <form method="post" action="/analizza" enctype="multipart/form-data">
+    <label class="up" for="fi">
+      <div style="font-size:2rem">&#8679;</div>
+      <div>Trascina qui il file o clicca per sceglierlo</div>
+      <input type="file" id="fi" name="file" accept=".csv,.xls,.xlsx,.zip"
+             style="display:none" onchange="document.querySelector('.up div+div').textContent=this.files[0].name">
+    </label>
+    <div style="margin-top:1rem">
+      <button class="btn btn-p" type="submit">Analizza file</button>
+    </div>
+  </form>
+</div>
+{% if profili %}
+<div class="card">
+  <h2>Profili disponibili ({{ profili|length }})</h2>
+  <table><thead><tr><th>Nome</th><th>Software</th><th>Versione</th><th>Colonne</th></tr></thead>
+  <tbody>{% for p in profili %}
+  <tr><td><b>{{ p.nome }}</b></td><td>{{ p.software }}</td>
+      <td>{{ p.versione }}</td><td>{{ p.num_colonne }}</td></tr>
+  {% endfor %}</tbody></table>
+</div>{% endif %}
+""")
+
+ANALISI = BASE.replace('{% block content %}{% endblock %}', """
+<div class="steps">
+  <div class="step ok">1. Carica file</div>
+  <div class="step on">2. Verifica mappatura</div>
+  <div class="step">3. Salva profilo</div>
+</div>
+<div class="card">
+  <h2>{{ r.num_righe }} utensili | {{ r.num_colonne }} colonne</h2>
+  <form method="post" action="/salva_profilo">
+  <input type="hidden" name="filepath" value="{{ r.filepath }}">
+  <table style="margin-bottom:1rem">
+  <thead><tr><th>Colonna file</th><th>Campo master</th><th>Confidenza</th></tr></thead>
+  <tbody>
+  {% for campo, info in r.mapping.items() %}
+  <tr><td><code>{{ info.colonna_file }}</code></td>
+      <td><select name="map_{{ info.colonna_file }}">
+        <option value="">-- ignora --</option>
+        {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} — {{ v.label }}</option>{% endfor %}
+      </select></td>
+      <td><span class="badge b-{{ info.confidenza[0] }}">{{ info.confidenza }}</span></td></tr>
+  {% endfor %}
+  {% for col in r.colonne_non_mappate %}
+  <tr style="background:#fffde7"><td><code>{{ col }}</code></td>
+      <td><select name="map_{{ col }}">
+        <option value="">-- ignora --</option>
+        {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} — {{ v.label }}</option>{% endfor %}
+      </select></td>
+      <td><span class="badge b-n">non rilevata</span></td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% if r.valori_categoria %}
+  <h3 style="font-size:.9rem;margin-top:1.5rem">Valori categorici</h3>
+  {% for campo, valori in r.valori_categoria.items() %}
+  <p style="font-size:13px;font-weight:600">{{ campo }}</p>
+  <table style="width:auto;margin-bottom:1rem">
+  <thead><tr><th>Nel file</th><th>Nel master</th></tr></thead>
+  <tbody>{% for vf, vm in valori.items() %}
+  <tr><td><code>{{ vf }}</code></td>
+      <td><input type="text" name="cat_{{ campo }}_{{ vf }}" value="{{ vm }}" style="width:120px"></td></tr>
+  {% endfor %}</tbody></table>
+  {% endfor %}{% endif %}
+  <hr style="margin:1.5rem 0">
+  <h3 style="font-size:.9rem">Salva come profilo</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div><label style="font-size:12px">Nome *</label>
+         <input type="text" name="nome" placeholder="es. hypermill_2024" required></div>
+    <div><label style="font-size:12px">Software</label>
+         <input type="text" name="software" placeholder="es. hypermill"></div>
+    <div><label style="font-size:12px">Versione</label>
+         <input type="text" name="versione" placeholder="es. 2024.1"></div>
+  </div>
+  <div style="margin-bottom:1rem"><label style="font-size:12px">Note</label>
+    <input type="text" name="note" placeholder="opzionale"></div>
+  <div style="display:flex;gap:1rem">
+    <button class="btn btn-s" type="submit">Salva profilo</button>
+    <a class="btn" href="/">Annulla</a>
+  </div>
+  </form>
+</div>
+<div class="card"><h2>Anteprima</h2>
+<div style="overflow-x:auto"><table>
+<thead><tr>{% for c in r.colonne_originali %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+<tbody>{% for row in r.anteprima %}
+<tr>{% for c in r.colonne_originali %}<td>{{ row.get(c,'') }}</td>{% endfor %}</tr>
+{% endfor %}</tbody></table></div></div>
+""")
+
+PROFILI_P = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;margin-bottom:1rem">
+  <h2 style="margin:0">Profili salvati</h2>
+  <a class="btn btn-p" href="/">+ Nuovo</a>
+</div>
+<div class="card">
+{% if profili %}
+<table><thead><tr><th>Nome</th><th>Software</th><th>Versione</th><th>Colonne</th><th>Data</th><th></th></tr></thead>
+<tbody>{% for p in profili %}
+<tr><td><b>{{ p.nome }}</b></td><td>{{ p.software }}</td><td>{{ p.versione }}</td>
+    <td>{{ p.num_colonne }}</td><td style="color:#999;font-size:12px">{{ p.creato_il[:10] }}</td>
+    <td>
+      <a class="btn" href="/profilo/{{ p.file[:-5] }}/scarica">Scarica</a>
+      <a class="btn btn-d" href="/profilo/{{ p.file[:-5] }}/elimina"
+         onclick="return confirm('Eliminare?')">X</a>
+    </td></tr>
+{% endfor %}</tbody></table>
+{% else %}<p style="color:#999;text-align:center;padding:2rem">
+  Nessun profilo. <a href="/">Carica un file per iniziare.</a></p>{% endif %}
+</div>
+""")
+
+CONVERTI_P = BASE.replace('{% block content %}{% endblock %}', """
+<div class="card">
+  <h2>Converti file tra formati CAM</h2>
+  <form method="post" action="/converti" enctype="multipart/form-data">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+    <div><label style="font-size:12px;font-weight:600">File sorgente</label>
+         <input type="file" name="file" accept=".csv,.xls,.xlsx,.zip" required></div>
+    <div></div>
+    <div><label style="font-size:12px;font-weight:600">Profilo DA (sorgente)</label>
+         <select name="profilo_input" required>
+           <option value="">-- seleziona --</option>
+           {% for p in profili %}<option value="{{ p.file[:-5] }}">{{ p.nome }} ({{ p.software }} {{ p.versione }})</option>{% endfor %}
+         </select></div>
+    <div><label style="font-size:12px;font-weight:600">Profilo A (destinazione)</label>
+         <select name="profilo_output" required>
+           <option value="">-- seleziona --</option>
+           {% for p in profili %}<option value="{{ p.file[:-5] }}">{{ p.nome }} ({{ p.software }} {{ p.versione }})</option>{% endfor %}
+         </select></div>
+  </div>
+  {% if profili|length < 2 %}
+  <div class="flash err">Servono almeno 2 profili. <a href="/">Aggiungi profili</a>.</div>
+  {% endif %}
+  <button class="btn btn-p" type="submit" {% if profili|length < 2 %}disabled{% endif %}>
+    Converti e scarica</button>
+  </form>
+</div>
+""")
+
+
+@app.route('/')
+def home():
+    app.jinja_env.filters['basename'] = os.path.basename
+    return render_template_string(HOME, profili=lista_profili(),
+                                  msg=request.args.get('msg',''), mtype='')
+
+@app.route('/analizza', methods=['POST'])
+def analizza():
+    f = request.files.get('file')
+    if not f or f.filename == '':
+        return redirect(url_for('home', msg='Nessun file selezionato'))
+    fp = os.path.join(UPLOAD_FOLDER, f.filename)
+    f.save(fp)
+    try:
+        r = analizza_file(fp)
+    except Exception as e:
+        return redirect(url_for('home', msg=f'Errore: {e}'))
+    r.pop('df', None)
+    app.jinja_env.filters['basename'] = os.path.basename
+    return render_template_string(ANALISI, r=r, fields=MASTER_FIELDS, msg='', mtype='')
+
+@app.route('/salva_profilo', methods=['POST'])
+def salva_profilo_route():
+    form = request.form
+    fp   = form.get('filepath', '')
+    nome = form.get('nome', '').strip()
+    if not nome:
+        return redirect(url_for('home', msg='Nome obbligatorio'))
+    try:
+        r = analizza_file(fp)
+    except Exception as e:
+        return redirect(url_for('home', msg=f'Errore rianalisi: {e}'))
+    tutte = r['colonne_originali']
+    mapping, valori_cat = {}, {}
+    for col in tutte:
+        campo = form.get(f'map_{col}', '').strip()
+        if not campo:
+            continue
+        from format_learner import MASTER_FIELDS as MF
+        tipo = MF.get(campo, {}).get('tipo', 'string')
+        mapping[campo] = {'colonna_file': col, 'tipo': tipo, 'label': MF.get(campo, {}).get('label', campo)}
+    for campo in ['tipo', 'materiale']:
+        if campo in mapping:
+            col = mapping[campo]['colonna_file']
+            df  = r.get('df') or __import__('pandas').DataFrame()
+            try:
+                uniq = df[col].dropna().unique() if col in df.columns else []
+            except Exception:
+                uniq = []
+            vals = {}
+            for v in uniq:
+                key = f'cat_{campo}_{v}'
+                vals[str(v)] = form.get(key, str(v)).strip()
+            if vals:
+                valori_cat[campo] = vals
+    sep = '|' if fp.endswith('.zip') else ','
+    try:
+        with open(fp, 'r', encoding='utf-8', errors='replace') as fh:
+            raw = fh.read(2000)
+        sep = '|' if raw.count('|') > raw.count(',') else ','
+    except Exception:
+        pass
+    try:
+        salva_profilo(nome, form.get('software',''), form.get('versione',''),
+                      mapping, valori_cat, separatore=sep, note=form.get('note',''))
+        return redirect(url_for('profili_page', msg=f'Profilo "{nome}" salvato'))
+    except Exception as e:
+        return redirect(url_for('home', msg=f'Errore salvataggio: {e}'))
+
+@app.route('/profili')
+def profili_page():
+    return render_template_string(PROFILI_P, profili=lista_profili(),
+                                  msg=request.args.get('msg',''), mtype='')
+
+@app.route('/profilo/<nome>/scarica')
+def scarica(nome):
+    from profile_manager import _profile_path
+    path = _profile_path(nome)
+    return send_file(path, as_attachment=True) if os.path.exists(path) else redirect(url_for('profili_page'))
+
+@app.route('/profilo/<nome>/elimina')
+def elimina(nome):
+    elimina_profilo(nome)
+    return redirect(url_for('profili_page', msg=f'"{nome}" eliminato'))
+
+@app.route('/converti', methods=['GET','POST'])
+def converti_page():
+    profili = lista_profili()
+    if request.method == 'POST':
+        f    = request.files.get('file')
+        p_in = request.form.get('profilo_input','')
+        p_out= request.form.get('profilo_output','')
+        if not f or not p_in or not p_out:
+            return render_template_string(CONVERTI_P, profili=profili,
+                                          msg='Tutti i campi obbligatori', mtype='err')
+        in_p  = os.path.join(UPLOAD_FOLDER, f.filename)
+        out_p = os.path.join(UPLOAD_FOLDER, f'converted_{p_out}.csv')
+        f.save(in_p)
+        try:
+            converti(in_p, p_in, p_out, out_p)
+            return send_file(out_p, as_attachment=True, download_name=f'converted_{p_out}.csv')
+        except Exception as e:
+            return render_template_string(CONVERTI_P, profili=profili,
+                                          msg=f'Errore: {e}', mtype='err')
+    return render_template_string(CONVERTI_P, profili=profili,
+                                  msg=request.args.get('msg',''), mtype='')
+
+if __name__ == '__main__':
+    app.jinja_env.filters['basename'] = os.path.basename
+    print('Format Learner -> http://localhost:5001')
+    app.run(debug=True, port=5001)
