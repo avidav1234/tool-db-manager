@@ -1,82 +1,105 @@
 #!/bin/bash
 # ============================================================
-# start.sh — Avvio Tool DB Manager
-# Uso: ./start.sh
+# start.sh - Avvia Tool DB Manager completo
+# Uso: bash start.sh
 # ============================================================
 
-# Vai sempre nella cartella del progetto, qualunque sia la CWD
-cd "$(dirname "$0")"
-ROOT="$(pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$DIR"
 
 echo ""
-echo "╔══════════════════════════════════════╗"
-echo "║       Tool DB Manager v0.1           ║"
-echo "╚══════════════════════════════════════╝"
+echo "  Tool DB Manager"
+echo "  ==============="
 echo ""
 
-# --- Verifica Python ---
-if command -v python3.12 &>/dev/null; then
-    PY="python3.12"
-elif command -v python3.11 &>/dev/null; then
-    PY="python3.11"
-elif command -v python3 &>/dev/null; then
-    PY="python3"
-else
-    echo "❌  Python 3 non trovato. Installa con: brew install python@3.12"
-    exit 1
+find_python() {
+  for cmd in python3.13 python3.12 python3.11 python3.10              /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12              /opt/homebrew/bin/python3.11 /usr/local/bin/python3.12; do
+    if command -v "$cmd" &>/dev/null; then
+      version=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
+      minor=$(echo $version | cut -d. -f2)
+      if [ "$minor" -ge 10 ] && [ "$minor" -le 13 ]; then
+        echo "$cmd"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+PYTHON=$(find_python)
+if [ -z "$PYTHON" ]; then
+  echo "ERRORE: Python 3.10-3.13 non trovato."
+  echo "Installa con: brew install python@3.12"
+  exit 1
 fi
-echo "✓  Python: $($PY --version)"
+echo "  Python: $($PYTHON --version)"
 
-# --- Crea venv se non esiste ---
-if [ ! -d "$ROOT/venv" ]; then
-    echo "→  Creo ambiente virtuale..."
-    $PY -m venv "$ROOT/venv"
+if [ ! -f "venv/bin/activate" ]; then
+  echo "  Creo ambiente virtuale..."
+  "$PYTHON" -m venv venv
 fi
+source venv/bin/activate
 
-# --- Attiva venv ---
-source "$ROOT/venv/bin/activate"
-
-# --- Installa dipendenze se necessario ---
-if ! python -c "import flask" &>/dev/null; then
-    echo "→  Installo dipendenze..."
-    pip install -q flask pandas openpyxl schedule
+if ! python -c "import flask, pandas, openpyxl" &>/dev/null; then
+  echo "  Installo dipendenze (un momento)..."
+  pip install -q flask pandas openpyxl schedule
 fi
+echo "  Dipendenze OK"
 
-# --- Inizializza DB se non esiste ---
-if [ ! -f "$ROOT/database/tool_master.db" ]; then
-    echo "→  Inizializzo database..."
-    python - <<'PYEOF'
-import sqlite3, os, sys
-root = os.path.dirname(os.path.abspath(sys.argv[0])) if sys.argv[0] != '-' else os.getcwd()
-schema = os.path.join(root, 'database', 'schema.sql')
-db     = os.path.join(root, 'database', 'tool_master.db')
-os.makedirs(os.path.dirname(db), exist_ok=True)
-with open(schema) as f:
+if [ ! -f "database/tool_master.db" ]; then
+  echo "  Inizializzo database..."
+  python -c "
+import sqlite3, os
+os.makedirs('database', exist_ok=True)
+with open('database/schema.sql', encoding='utf-8') as f:
     sql = f.read()
-conn = sqlite3.connect(db)
+conn = sqlite3.connect('database/tool_master.db')
 conn.executescript(sql)
 conn.commit()
-print("  DB creato:", db)
-PYEOF
+conn.close()
+print('  DB creato.')
+"
 fi
+echo "  Database OK"
+
+mkdir -p output/auto output/manual logs
+lsof -ti:5000 | xargs kill -9 2>/dev/null || true
+lsof -ti:5001 | xargs kill -9 2>/dev/null || true
+sleep 0.5
 
 echo ""
-echo "┌─────────────────────────────────────────┐"
-echo "│  App principale → http://localhost:5000  │"
-echo "│  Format Learner → http://localhost:5001  │"
-echo "└─────────────────────────────────────────┘"
-echo ""
-echo "  Premi Ctrl+C per fermare entrambi"
-echo ""
+echo "  Avvio servizi..."
 
-# --- Avvia Format Learner in background ---
-python "$ROOT/learner/app_learner.py" &
+python ui/app.py > logs/app_main.log 2>&1 &
+MAIN_PID=$!
+python learner/app_learner.py > logs/app_learner.log 2>&1 &
 LEARNER_PID=$!
+sleep 2
 
-# --- Avvia app principale in foreground ---
-python "$ROOT/ui/app.py"
+MAIN_OK=false
+LEARNER_OK=false
+kill -0 $MAIN_PID 2>/dev/null && MAIN_OK=true
+kill -0 $LEARNER_PID 2>/dev/null && LEARNER_OK=true
 
-# --- Cleanup al Ctrl+C ---
-kill $LEARNER_PID 2>/dev/null
-echo ""
-echo "Applicazioni fermate."
+if $MAIN_OK && $LEARNER_OK; then
+  echo ""
+  echo "  Avviato con successo!"
+  echo ""
+  echo "  App principale  ->  http://localhost:5000"
+  echo "  Format Learner  ->  http://localhost:5001"
+  echo ""
+  echo "  Log: logs/app_main.log"
+  echo "  Per fermare: bash stop.sh  oppure Ctrl+C"
+  echo ""
+  open http://localhost:5000 2>/dev/null || true
+  trap "echo ''; echo '  Fermo i servizi...'; kill $MAIN_PID $LEARNER_PID 2>/dev/null; echo '  Fermato.'; exit 0" INT
+  wait $MAIN_PID
+else
+  echo ""
+  echo "  ERRORE nell'avvio. Dettagli:"
+  echo ""
+  cat logs/app_main.log 2>/dev/null | tail -30
+  echo ""
+  cat logs/app_learner.log 2>/dev/null | tail -10
+  exit 1
+fi
