@@ -205,28 +205,68 @@ def _l2b_colonna(col_name, serie, contesto, api_key) -> dict:
 # =====================================================================
 
 def _l3_mapping(analisi, struttura, api_key, log) -> dict:
-    log('L3', 'Produzione mapping strutturato...')
+    """
+    Mapping in batch da 15 colonne.
+    Evita prompt enormi che causano JSON malformato.
+    Con 100 colonne: 7 batch da 15 = 7 chiamate Haiku piccole e affidabili.
+    """
+    log('L3', 'Produzione mapping strutturato (batch da 15)...')
     fields_desc = '\n'.join('%s: %s' % (k, v) for k, v in MASTER_FIELDS.items())
+    software = struttura.get('software_cam', 'sconosciuto')
 
-    prompt = (
-        'File: %s\n\nANALISI COLONNE:\n%s\n\nCAMPI MASTER:\n%s\n\n'
-        'Regole: uni campo master mappato una volta. '
-        'Se dubbio: ignora.\n\n'
-        'Rispondi SOLO con JSON:\n'
-        '{"mapping":{"NomeCol":{"campo_master":"campo","confidenza":"alta/media/bassa",'
-        '"trasformazione":"nessuna/moltiplica_2/arrotonda","motivazione":"perche"}},'
-        '"colonne_ambigue":["col"],"warning":["avviso"]}'
-    ) % (struttura.get('software_cam', 'sconosciuto'),
-         json.dumps(analisi, ensure_ascii=False), fields_desc)
-    try:
-        testo = _chiama(prompt, MODEL_MAPPERE, api_key, max_tokens=2000)
-        result = _parse_json(testo)
-        n = sum(1 for v in result.get('mapping', {}).values() if v.get('campo_master', 'ignora') != 'ignora')
-        log('L3', '%d colonne mappate su %d totali' % (n, len(analisi)))
-        return result
-    except Exception as e:
-        log('L3', 'Errore: %s' % e)
-        return {}
+    # Dividi le colonne in batch da 15
+    colonne = list(analisi.keys())
+    BATCH_SIZE = 15
+    batches = [colonne[i:i+BATCH_SIZE] for i in range(0, len(colonne), BATCH_SIZE)]
+
+    mapping_totale = {}
+    campi_gia_mappati = set()  # evita duplicati tra batch
+    ambigue = []
+    warnings = []
+
+    for idx_batch, batch in enumerate(batches):
+        analisi_batch = {col: analisi[col] for col in batch}
+        # Esclude campi gia mappati dai batch precedenti
+        campi_disponibili = {k: v for k, v in MASTER_FIELDS.items() if k not in campi_gia_mappati}
+        fields_batch = '\n'.join('%s: %s' % (k, v) for k, v in campi_disponibili.items())
+
+        prompt = (
+            'File: %s | Batch %d/%d (%d colonne)\n\n'
+            'ANALISI COLONNE IN QUESTO BATCH:\n%s\n\n'
+            'CAMPI MASTER ANCORA DISPONIBILI:\n%s\n\n'
+            'Regole:\n'
+            '- Ogni campo master mappato UNA sola volta in tutto il file\n'
+            '- Colonna "Radius" senza Diameter = diametro_mm con moltiplica_2\n'
+            '- Colonna "Gauge"/"Gauge Length" = fuori_pinza_mm\n'
+            '- Se dubbio: ignora\n\n'
+            'Rispondi SOLO con JSON (solo le colonne di questo batch):\n'
+            '{"mapping":{"NomeCol":{"campo_master":"campo","confidenza":"alta/media/bassa",'
+            '"trasformazione":"nessuna/moltiplica_2/arrotonda/decodifica_tipo","motivazione":"perche"}},'
+            '"ambigue":["col"]}'
+        ) % (software, idx_batch+1, len(batches),
+             len(batch), json.dumps(analisi_batch, ensure_ascii=False),
+             fields_batch)
+
+        try:
+            testo = _chiama(prompt, MODEL_MAPPER, api_key, max_tokens=1000)
+            result = _parse_json(testo)
+            batch_mapping = result.get('mapping', {})
+
+            for col, info in batch_mapping.items():
+                campo = info.get('campo_master', 'ignora')
+                if campo == 'ignora' or campo in campi_gia_mappati:
+                    continue
+                mapping_totale[col] = info
+                campi_gia_mappati.add(campo)
+
+            ambigue.extend(result.get('ambigue', []))
+        except Exception as e:
+            log('L3', 'Batch %d/%d errore: %s' % (idx_batch+1, len(batches), e))
+
+    n = sum(1 for v in mapping_totale.values() if v.get('campo_master','ignora') != 'ignora')
+    log('L3', '%d colonne mappate su %d totali (%d batch)' % (n, len(colonne), len(batches)))
+
+    return {'mapping': mapping_totale, 'colonne_ambigue': ambigue, 'warning': warnings}
 
 
 # =====================================================================
@@ -312,7 +352,12 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
                 'nota': 'esclusa da analisi struttura'
             }
         else:
-            analisi[col] = _l2b_colonna(col, df[col], struttura, key)
+            serie = df[col].dropna()
+            # Skip colonne completamente vuote
+            if len(serie) == 0:
+                analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'colonna vuota'}
+            else:
+                analisi[col] = _l2b_colonna(col, serie, struttura, key)
             token_stimati += 250
         time.sleep(0.05)
     log('L2b', 'Analisi completata: %d colonne' % len(analisi))
