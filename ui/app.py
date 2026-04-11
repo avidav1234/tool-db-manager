@@ -173,7 +173,7 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </div>
   <div style="display:flex;gap:.5rem">
     <a class="btn" href="/importa">&#8657; Importa</a>
-    <a class="btn btn-p" href="/utensile/nuovo">+ Nuovo utensile</a>
+    <a class="btn btn-p" href="/utensile/nuovo">+ Nuovo</a>
     <a class="btn btn-s btn-lg" href="/export">&#8659; Esporta tutti</a>
   </div>
 </div>
@@ -187,60 +187,111 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
 <div class="card">
 {% if utensili %}
-<div style="margin-bottom:.75rem;display:flex;gap:.5rem">
-  <input type="text" id="search" placeholder="Cerca per codice o descrizione..."
-         oninput="filtra(this.value)"
-         style="flex:1;padding:7px 10px;border:1px solid #d0d0ce;border-radius:5px;font-size:13px">
+<div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap;align-items:center">
+  <input type="text" id="search"
+         placeholder="&#128269;  Cerca codice, descrizione, pinza... (Ctrl+F)"
+         oninput="filtra()"
+         style="flex:1;min-width:200px;padding:8px 12px;border:2px solid #e2e2df;border-radius:6px;font-size:13px">
+  <select id="filtro-tipo" onchange="filtra()"
+          style="padding:8px 10px;border:2px solid #e2e2df;border-radius:6px;font-size:13px;background:#fff">
+    <option value="">Tutti i tipi</option>
+    {% for t in tipi_lista %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+  </select>
+  <select id="filtro-pinza" onchange="filtra()"
+          style="padding:8px 10px;border:2px solid #e2e2df;border-radius:6px;font-size:13px;background:#fff;max-width:180px">
+    <option value="">Tutte le pinze</option>
+    {% for p in pinze_lista %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+  </select>
+  <span id="count-vis" style="font-size:12px;color:#888;white-space:nowrap">{{ n }} utensili</span>
 </div>
+
+<div style="overflow-x:auto">
 <table id="tbl">
 <thead><tr>
-  <th>Codice</th><th>Descrizione</th><th>Tipo</th>
-  <th>Diam.</th><th>R.punta</th><th>L.tot.</th>
-  <th style="background:#f0fdf4;color:#166534">Fuori pinza</th>
-  <th>Pinza</th><th>Tag.</th><th>Mat.</th><th></th>
+  <th>Codice / Descrizione</th>
+  <th>Tipo</th>
+  <th style="text-align:right">&#8960; mm</th>
+  <th style="text-align:right">R mm</th>
+  <th style="text-align:right">L tot</th>
+  <th style="background:#f0fdf4;color:#166534;text-align:right">Fuori pinza</th>
+  <th>Pinza</th>
+  <th style="text-align:center">Z</th>
+  <th style="width:90px"></th>
 </tr></thead>
 <tbody>
 {% for u in utensili %}
-<tr data-search="{{ (u.codice_interno ~ ' ' ~ u.descrizione)|lower }}">
-  <td><b>{{ u.codice_interno }}</b></td>
-  <td style="color:#555;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-      title="{{ u.descrizione }}">{{ u.descrizione }}</td>
-  <td><span class="badge b-ok">{{ u.tipo }}</span></td>
-  <td>{{ u.diametro_mm }}</td>
-  <td>{{ u.raggio_punta_mm }}</td>
-  <td>{{ u.lunghezza_totale_mm }}</td>
-  <td style="background:#f0fdf4;font-weight:600;color:#166534">
-    {{ u.fuori_pinza_mm if u.fuori_pinza_mm else '-' }} {% if u.fuori_pinza_mm %}mm{% endif %}
+<tr data-search="{{ (u.codice_interno ~ ' ' ~ (u.descrizione or '') ~ ' ' ~ (u.nome_pinza or ''))|lower }}"
+    data-tipo="{{ u.tipo }}"
+    data-pinza="{{ u.nome_pinza or '' }}">
+  <td>
+    <a href="/utensile/{{ u.id }}" style="font-weight:600;font-size:13px;color:#1a1a1a;text-decoration:none">
+      {{ u.codice_interno }}
+    </a>
+    {% if u.descrizione %}
+    <div style="font-size:11px;color:#888;margin-top:1px">{{ u.descrizione[:45] }}</div>
+    {% endif %}
   </td>
-  <td style="font-size:12px;color:#888">{{ u.nome_pinza or '-' }}</td>
-  <td>{{ u.num_taglienti }}</td>
-  <td>{{ u.materiale }}</td>
-  <td style="white-space:nowrap">
-    <a class="btn" style="padding:4px 9px;font-size:12px"
-       href="/utensile/{{ u.id }}">Dettaglio</a>
-    <a class="btn" style="padding:4px 9px;font-size:12px"
-       href="/utensile/{{ u.id }}/modifica">Modifica</a>
-    <a class="btn btn-d" style="padding:4px 9px;font-size:12px"
+  <td><span class="badge b-ok">{{ u.tipo }}</span></td>
+  <td style="text-align:right;font-family:monospace;font-size:13px">{{ u.diametro_mm }}</td>
+  <td style="text-align:right;font-family:monospace;font-size:13px;color:#888">
+    {{ u.raggio_punta_mm if u.raggio_punta_mm else '0' }}
+  </td>
+  <td style="text-align:right;font-family:monospace;font-size:13px;color:#888">{{ u.lunghezza_totale_mm }}</td>
+  <td style="text-align:right;background:#f0fdf4;padding-right:12px">
+    {% if u.fuori_pinza_mm %}
+    <b style="color:#1a6e35;font-family:monospace">{{ u.fuori_pinza_mm }}</b>
+    <span style="font-size:11px;color:#888"> mm</span>
+    {% else %}
+    <span style="color:#ddd">—</span>
+    {% endif %}
+  </td>
+  <td style="font-size:12px;color:#666;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+      title="{{ u.nome_pinza or '' }}">{{ u.nome_pinza or '—' }}</td>
+  <td style="text-align:center;font-size:13px;font-weight:600">{{ u.num_taglienti }}</td>
+  <td style="white-space:nowrap;text-align:right">
+    <a class="btn" style="padding:3px 8px;font-size:12px" title="Dettaglio"
+       href="/utensile/{{ u.id }}">&#8505;</a>
+    <a class="btn" style="padding:3px 8px;font-size:12px" title="Modifica"
+       href="/utensile/{{ u.id }}/modifica">&#9998;</a>
+    <a class="btn btn-d" style="padding:3px 8px;font-size:11px" title="Elimina"
        href="/utensile/{{ u.id }}/elimina"
-       onclick="return confirm('Eliminare {{ u.codice_interno }}?')">X</a>
+       onclick="return confirm('Eliminare ' + '{{ u.codice_interno }}' + '?')">&#128465;</a>
   </td>
 </tr>
 {% endfor %}
 </tbody></table>
+</div>
+
 <script>
-function filtra(q){
-  q=q.toLowerCase();
-  document.querySelectorAll('#tbl tbody tr').forEach(r=>{
-    r.style.display=(!q||r.dataset.search.includes(q))?'':'none';
+function filtra(){
+  var q=document.getElementById('search').value.toLowerCase();
+  var tipo=document.getElementById('filtro-tipo').value;
+  var pinza=document.getElementById('filtro-pinza').value;
+  var n=0;
+  document.querySelectorAll('#tbl tbody tr').forEach(function(r){
+    var ok=true;
+    if(q && !r.dataset.search.includes(q)) ok=false;
+    if(tipo && r.dataset.tipo!==tipo) ok=false;
+    if(pinza && r.dataset.pinza!==pinza) ok=false;
+    r.style.display=ok?'':'none';
+    if(ok) n++;
   });
+  document.getElementById('count-vis').textContent=n+' utensili';
 }
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='f'){
+    e.preventDefault();
+    var s=document.getElementById('search');
+    s.focus(); s.select();
+  }
+});
 </script>
 {% else %}
 <div style="text-align:center;padding:3rem;color:#aaa">
   <div style="font-size:3rem;margin-bottom:.5rem">&#128295;</div>
-  <p style="margin-bottom:1rem">Nessun utensile ancora nel database.</p>
+  <p style="margin-bottom:1rem">Nessun utensile nel database.</p>
   <a class="btn btn-p" href="/utensile/nuovo" style="margin-right:.5rem">+ Inserisci manualmente</a>
-  <a class="btn" href="/importa">&#8657; Importa da Excel / CSV</a>
+  <a class="btn" href="/importa">&#8657; Importa da Cimatron</a>
 </div>
 {% endif %}
 </div>
@@ -248,183 +299,40 @@ function filtra(q){
 
 @app.route('/')
 def home():
+    def arrotonda(v, dec=3):
+        if v is None: return v
+        try:
+            f = float(v)
+            return round(f, 1) if abs(f - round(f)) < 0.0001 else round(f, dec)
+        except: return v
+
     try:
         conn=get_conn()
-        rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY codice_interno").fetchall()
+        rows=conn.execute(
+            "SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo, diametro_mm, codice_interno"
+        ).fetchall()
         conn.close()
-        utensili=[dict(r) for r in rows]
+        utensili=[]
+        for row in rows:
+            u = dict(row)
+            for campo in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm',
+                          'lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
+                if u.get(campo) is not None:
+                    u[campo] = arrotonda(u[campo])
+            utensili.append(u)
     except Exception: utensili=[]
     cfg=carica_config(); profili=profili_learner()
+    tipi_lista  = sorted(set(u['tipo']       for u in utensili if u.get('tipo')))
+    pinze_lista = sorted(set(u['nome_pinza'] for u in utensili if u.get('nome_pinza')))
     return render_template_string(HOME_HTML,
         utensili=utensili, n=len(utensili),
-        n_tipi=len(set(u['tipo'] for u in utensili if u.get('tipo'))),
-        n_profili=len(profili), n_attivi=len(cfg.get('formati_attivi',[])),
-        active='home', msg=request.args.get('msg',''), mtype=request.args.get('mtype',''))
-
-# ---------------------------------------------------------------
-# FORM UTENSILE (nuovo + modifica)
-# ---------------------------------------------------------------
-FORM_HTML = BASE.replace('{% block content %}{% endblock %}', """
-<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
-  <a href="/" class="btn" style="padding:5px 12px;font-size:13px">&#8592; Indietro</a>
-  <h2 style="margin:0;font-size:1.1rem">{{ titolo }}</h2>
-</div>
-
-<form method="post" action="{{ action }}">
-<div class="card">
-  <p class="section-title">Identificazione</p>
-  <div class="form-row col3">
-    <div class="field">
-      <label class="required">Codice interno</label>
-      <input name="codice_interno" value="{{ u.codice_interno or '' }}"
-             placeholder="es. FP-D10-R0-L75" required>
-      <p class="hint">ID univoco aziendale — non modificabile dopo la creazione</p>
-    </div>
-    <div class="field">
-      <label>Codice catalogo fornitore</label>
-      <input name="codice_catalogo" value="{{ u.codice_catalogo or '' }}"
-             placeholder="es. R216.34-10030-AC10G">
-    </div>
-    <div class="field">
-      <label>Descrizione</label>
-      <input name="descrizione" value="{{ u.descrizione or '' }}"
-             placeholder="es. Fresa piatta D10 Z4 HM">
-    </div>
-  </div>
-
-  <p class="section-title">Classificazione</p>
-  <div class="form-row col3">
-    <div class="field">
-      <label class="required">Tipo utensile</label>
-      <select name="tipo">
-        {% for t in tipi %}
-        <option value="{{ t.codice }}" {{ 'selected' if u.tipo==t.codice }}>
-          {{ t.codice }} — {{ t.descrizione }}
-        </option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field">
-      <label class="required">Materiale tagliente</label>
-      <select name="materiale">
-        {% for m in materiali %}
-        <option value="{{ m.codice }}" {{ 'selected' if u.materiale==m.codice }}>
-          {{ m.codice }} — {{ m.descrizione }}
-        </option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field">
-      <label>Fornitore</label>
-      <select name="id_fornitore">
-        <option value="">-- nessuno --</option>
-        {% for f in fornitori %}
-        <option value="{{ f.id }}" {{ 'selected' if u.id_fornitore==f.id }}>{{ f.nome }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-
-  <p class="section-title">Geometria (mm)</p>
-  <div class="form-row col4">
-    <div class="field">
-      <label class="required">Diametro</label>
-      <input type="number" step="0.001" min="0" name="diametro_mm"
-             value="{{ u.diametro_mm or '' }}" placeholder="10.0" required>
-    </div>
-    <div class="field">
-      <label>Raggio punta</label>
-      <input type="number" step="0.001" min="0" name="raggio_punta_mm"
-             value="{{ u.raggio_punta_mm or 0 }}" placeholder="0 = piatta">
-      <p class="hint">0 = piatta / sferica se = diam/2</p>
-    </div>
-    <div class="field">
-      <label>Angolo punta (°)</label>
-      <input type="number" step="0.1" min="0" max="180" name="angolo_punta_gradi"
-             value="{{ u.angolo_punta_gradi or '' }}" placeholder="118">
-      <p class="hint">Solo per punte</p>
-    </div>
-    <div class="field">
-      <label>Angolo elica (°)</label>
-      <input type="number" step="0.1" min="0" max="90" name="angolo_elica_gradi"
-             value="{{ u.angolo_elica_gradi or '' }}" placeholder="30">
-    </div>
-  </div>
-  <div class="form-row col4">
-    <div class="field">
-      <label class="required">Lunghezza totale</label>
-      <input type="number" step="0.01" min="0" name="lunghezza_totale_mm"
-             value="{{ u.lunghezza_totale_mm or '' }}" placeholder="75.0" required>
-    </div>
-    <div class="field">
-      <label class="required">Lunghezza tagliente</label>
-      <input type="number" step="0.01" min="0" name="lunghezza_tagl_mm"
-             value="{{ u.lunghezza_tagl_mm or '' }}" placeholder="22.0" required>
-    </div>
-    <div class="field">
-      <label class="required">Num. taglienti</label>
-      <input type="number" step="1" min="1" max="20" name="num_taglienti"
-             value="{{ u.num_taglienti or 2 }}" required>
-    </div>
-    <div class="field">
-      <label>Passo filetto (mm)</label>
-      <input type="number" step="0.01" min="0" name="passo_mm"
-             value="{{ u.passo_mm or '' }}" placeholder="Solo per maschi">
-    </div>
-  </div>
-
-  <p class="section-title">Assemblaggio con pinza</p>
-  <div class="form-row col3">
-    <div class="field">
-      <label>Portautensile / Pinza</label>
-      <input name="nome_pinza" value="{{ u.nome_pinza or '' }}"
-             placeholder="es. HSL_D6-NEW">
-    </div>
-    <div class="field">
-      <label>Lunghezza presa (mm)</label>
-      <input type="number" step="0.01" min="0" name="lungh_presa_mm"
-             value="{{ u.lungh_presa_mm or '' }}" placeholder="36.0">
-      <p class="hint">Quanto utensile entra nella pinza</p>
-    </div>
-    <div class="field">
-      <label style="color:#1a6e35;font-weight:700">Fuori pinza (mm) ★</label>
-      <input type="number" step="0.01" min="0" name="fuori_pinza_mm"
-             value="{{ u.fuori_pinza_mm or '' }}" placeholder="20.0"
-             style="border-color:#1a6e35">
-      <p class="hint" style="color:#1a6e35">Distanza dalla punta all'inizio della pinza</p>
-    </div>
-  </div>
-
-  <p class="section-title">Note</p>
-  <div class="form-row">
-    <div class="field">
-      <textarea name="note" rows="2" placeholder="Note opzionali..."
-                style="resize:vertical">{{ u.note or '' }}</textarea>
-    </div>
-  </div>
-</div>
-
-<div style="display:flex;gap:.75rem;align-items:center">
-  <button class="btn btn-p btn-lg" type="submit">
-    {{ 'Salva modifiche' if modifica else 'Aggiungi utensile' }}
-  </button>
-  <a class="btn" href="/">Annulla</a>
-  {% if modifica %}
-  <a class="btn btn-d" style="margin-left:auto"
-     href="/utensile/{{ u.id }}/elimina"
-     onclick="return confirm('Eliminare questo utensile?')">Elimina</a>
-  {% endif %}
-</div>
-</form>
-""")
-
-def _get_lookup():
-    conn = get_conn()
-    tipi      = [dict(r) for r in conn.execute("SELECT * FROM tipo_utensile ORDER BY codice").fetchall()]
-    materiali = [dict(r) for r in conn.execute("SELECT * FROM materiale_utensile ORDER BY codice").fetchall()]
-    fornitori = [dict(r) for r in conn.execute("SELECT * FROM fornitore ORDER BY nome").fetchall()]
-    conn.close()
-    return tipi, materiali, fornitori
+        n_tipi=len(tipi_lista),
+        n_profili=len(profili),
+        n_attivi=len(cfg.get('formati_attivi',[])),
+        tipi_lista=tipi_lista,
+        pinze_lista=pinze_lista,
+        msg=request.args.get('msg',''),
+        mtype=request.args.get('mtype',''))
 
 @app.route('/utensile/nuovo', methods=['GET','POST'])
 def utensile_nuovo():
