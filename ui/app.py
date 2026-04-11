@@ -592,6 +592,28 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
 UPLOAD_DIR = tempfile.mkdtemp()
 
+@app.route('/debug_test_cimatron')
+def debug_test_cimatron():
+    import glob, tempfile, importlib
+    tmp = tempfile.gettempdir()
+    files = sorted(glob.glob(f'{tmp}/tmp*/Cimatron_2025.csv'), key=os.path.getmtime)
+    if not files:
+        return 'nessun file trovato'
+    f = files[-1]
+    with open(f, 'rb') as fh:
+        magic = fh.read(2)
+    is_utf16 = magic in (b'\xff\xfe', b'\xfe\xff')
+    # Testa _is_cimatron dal modulo ricaricato
+    _root = os.path.join(os.path.dirname(__file__), '..')
+    _learner = os.path.join(_root, 'learner')
+    for _p in [_root, _learner]:
+        if _p not in sys.path: sys.path.insert(0, _p)
+    import importers.import_from_excel as ief
+    importlib.reload(ief)
+    result = ief._is_cimatron(f)
+    return f"file={os.path.basename(os.path.dirname(f))}/Cimatron_2025.csv<br>magic={magic.hex()}<br>is_utf16={is_utf16}<br>_is_cimatron={result}<br>module_file={ief.__file__}"
+
+
 @app.route('/importa', methods=['GET','POST'])
 def importa():
     risultato = None
@@ -602,16 +624,40 @@ def importa():
             import_path = os.path.join(UPLOAD_DIR, f.filename)
             f.save(import_path)
             try:
-                import importlib, sys as _sys
+                # Aggiungi path necessari
                 _root = os.path.join(os.path.dirname(__file__), '..')
                 _learner = os.path.join(_root, 'learner')
                 for _p in [_root, _learner]:
-                    if _p not in _sys.path: _sys.path.insert(0, _p)
-                # Forza reload per evitare cache Python
-                if 'importers.import_from_excel' in _sys.modules:
-                    importlib.reload(_sys.modules['importers.import_from_excel'])
-                from importers.import_from_excel import importa as do_import
-                risultato = do_import(import_path, dry_run=dry_run)
+                    if _p not in sys.path:
+                        sys.path.insert(0, _p)
+                # Rileva Cimatron dai magic bytes PRIMA di qualsiasi import
+                with open(import_path, 'rb') as fh:
+                    magic = fh.read(2)
+                is_cimatron = magic in (b'\xff\xfe', b'\xfe\xff')
+                # Controlla anche ZIP
+                if not is_cimatron:
+                    import zipfile
+                    if zipfile.is_zipfile(import_path):
+                        with zipfile.ZipFile(import_path) as z:
+                            is_cimatron = any('Cutters' in os.path.basename(n) and n.endswith('.csv') for n in z.namelist())
+                if is_cimatron:
+                    from cimatron_importer import importa_file
+                    r = importa_file(import_path, dry_run=dry_run)
+                    risultato = {
+                        'inseriti':          r.get('utensili_inseriti', 0),
+                        'aggiornati':        r.get('utensili_aggiornati', 0),
+                        'errori':            r.get('utensili_errori', []),
+                        'dry_run':           dry_run,
+                        'versione':          r.get('versione', ''),
+                        'taglio_inserite':   r.get('taglio_inserite', 0),
+                        'taglio_aggiornate': r.get('taglio_aggiornate', 0),
+                    }
+                else:
+                    import importlib
+                    if 'importers.import_from_excel' in sys.modules:
+                        importlib.reload(sys.modules['importers.import_from_excel'])
+                    from importers.import_from_excel import importa as do_import
+                    risultato = do_import(import_path, dry_run=dry_run)
                 risultato['dry_run'] = dry_run
             except Exception as e:
                 risultato = {'inseriti':0,'aggiornati':0,'errori':[str(e)],'dry_run':dry_run}
