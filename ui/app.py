@@ -151,6 +151,8 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
   <a href="/cam" class="{{ 'active' if active=='cam' }}">CAM</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
   <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
+  <a href="/verifica" class="{{ 'active' if active=='verifica' }}"
+     style="color:{% if active=='verifica' %}#fff{% else %}#4ade80{% endif %}">&#9989; Verifica</a>
   <a href="/log" class="{{ 'active' if active=='log' }}">Log</a>
   <span style="margin-left:auto">
     <a href="http://localhost:5001" target="_blank" style="color:#555;font-size:12px">
