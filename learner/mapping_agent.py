@@ -157,31 +157,19 @@ def suggerisci_mapping(colonne: list, df, api_key: str = None) -> dict:
         return {}
 
 
-def _get_ssl_context():
-    """
-    Crea un contesto SSL che funziona su Mac.
-    Prova in ordine: certifi -> certificati sistema Mac -> default Python.
-    """
+def _ssl_ctx():
+    """Certifi-first SSL context - funziona su Mac senza configurazione."""
     import ssl
-    # 1. Prova certifi (se installato)
     try:
         import certifi
         return ssl.create_default_context(cafile=certifi.where())
     except ImportError:
         pass
-    # 2. Certificati di sistema Mac (funziona sempre su macOS)
-    try:
-        ctx = ssl.create_default_context()
-        ctx.load_verify_locations('/etc/ssl/cert.pem')
-        return ctx
-    except Exception:
-        pass
-    # 3. Default Python
     return ssl.create_default_context()
 
 
 def _chiama_claude(prompt: str, api_key: str) -> str:
-    """Chiama l'API Anthropic con gli header corretti e SSL fisso per Mac."""
+    """Chiama l'API Anthropic con header corretti e SSL certifi."""
     payload = json.dumps({
         "model": "claude-sonnet-4-20250514",
         "max_tokens": 1000,
@@ -198,9 +186,7 @@ def _chiama_claude(prompt: str, api_key: str) -> str:
         },
         method='POST'
     )
-
-    ctx = _get_ssl_context()
-    with urllib.request.urlopen(req, context=ctx, timeout=20) as resp:
+    with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=20) as resp:
         data = json.loads(resp.read().decode('utf-8'))
         return data['content'][0]['text']
 
