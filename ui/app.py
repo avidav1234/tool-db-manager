@@ -592,6 +592,87 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
 UPLOAD_DIR = tempfile.mkdtemp()
 
+@app.route('/importa_locale', methods=['GET','POST'])
+def importa_locale():
+    """Importa direttamente da un path file locale - bypassa upload browser."""
+    if request.method == 'POST':
+        filepath = request.form.get('filepath','').strip()
+        dry_run  = bool(request.form.get('dry_run'))
+        if not filepath or not os.path.exists(filepath):
+            return render_template_string(IMPORTA_LOCALE_HTML,
+                msg=f'File non trovato: {filepath}', risultato=None)
+        try:
+            _root    = os.path.join(os.path.dirname(__file__), '..')
+            _learner = os.path.join(_root, 'learner')
+            for _p in [_root, _learner]:
+                if _p not in sys.path: sys.path.insert(0, _p)
+            with open(filepath, 'rb') as f:
+                magic = f.read(2)
+            if magic in (b'\xff\xfe', b'\xfe\xff'):
+                from cimatron_importer import importa_file
+                r = importa_file(filepath, dry_run=dry_run)
+                risultato = {
+                    'inseriti':          r.get('utensili_inseriti', 0),
+                    'aggiornati':        r.get('utensili_aggiornati', 0),
+                    'errori':            r.get('utensili_errori', []),
+                    'dry_run':           dry_run,
+                    'versione':          r.get('versione', ''),
+                    'taglio_inserite':   r.get('taglio_inserite', 0),
+                    'taglio_aggiornate': r.get('taglio_aggiornate', 0),
+                }
+            else:
+                risultato = {'inseriti':0,'aggiornati':0,
+                             'errori':[f'Non riconosciuto come Cimatron. Magic: {magic.hex()}'],
+                             'dry_run':dry_run}
+        except Exception as e:
+            risultato = {'inseriti':0,'aggiornati':0,'errori':[str(e)],'dry_run':dry_run}
+        return render_template_string(IMPORTA_LOCALE_HTML, msg='', risultato=risultato)
+    return render_template_string(IMPORTA_LOCALE_HTML, msg='', risultato=None)
+
+IMPORTA_LOCALE_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<h2 style="margin:0 0 1.25rem;font-size:1.1rem">Import diretto da file locale</h2>
+<div class="card">
+  <p style="font-size:13px;color:#555;margin:0 0 1rem">
+    Inserisci il percorso completo del file sul Mac. Utile per file Cimatron CSV/ZIP/XLS.
+  </p>
+  <form method="post" action="/importa_locale">
+    <div class="field" style="margin-bottom:1rem">
+      <label style="font-size:12px;font-weight:600">Percorso file</label>
+      <input type="text" name="filepath" style="width:100%;font-family:monospace"
+             placeholder="/Users/iondodon/Documents/Cimatron_2025.csv">
+    </div>
+    <div style="display:flex;gap:1rem;align-items:center">
+      <button class="btn btn-s" type="submit">Importa</button>
+      <label style="font-size:13px;cursor:pointer">
+        <input type="checkbox" name="dry_run" value="1"> Simulazione
+      </label>
+    </div>
+  </form>
+</div>
+{% if risultato %}
+<div class="card">
+  <div class="grid4">
+    <div class="stat"><div class="stat-n" style="color:#1a6e35">{{ risultato.inseriti }}</div><div class="stat-l">Inseriti</div></div>
+    <div class="stat"><div class="stat-n" style="color:#854d0e">{{ risultato.aggiornati }}</div><div class="stat-l">Aggiornati</div></div>
+    <div class="stat"><div class="stat-n">{{ risultato.get('taglio_inserite',0) }}</div><div class="stat-l">Vc/Fz inserite</div></div>
+    <div class="stat"><div class="stat-n">{{ risultato.versione or '-' }}</div><div class="stat-l">Versione</div></div>
+  </div>
+  {% if risultato.errori %}
+  <div class="flash err" style="margin-top:1rem">
+    {% for e in risultato.errori[:5] %}<div>{{ e }}</div>{% endfor %}
+  </div>
+  {% endif %}
+  {% if risultato.dry_run %}
+  <div class="flash warn" style="margin-top:1rem">Simulazione — nessun dato scritto.</div>
+  {% else %}
+  <div class="flash" style="margin-top:1rem">Import completato nel database master.</div>
+  {% endif %}
+</div>
+{% endif %}
+{% if msg %}<div class="flash err">{{ msg }}</div>{% endif %}
+""")
+
+
 @app.route('/debug_test_cimatron')
 def debug_test_cimatron():
     import glob, tempfile, importlib
