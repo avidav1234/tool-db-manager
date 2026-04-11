@@ -8,6 +8,52 @@ from app_learner import app
 
 @app.route('/debug_orche')
 def debug_orche():
+    import importlib, traceback, json, pandas as pd, sys, os
+
+    # Forza reload dal file su disco (ignora cache in memoria)
+    _base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    oa_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'orchestrator_agent.py')
+    
+    # Rimuove il modulo dalla cache e reimporta
+    for key in list(sys.modules.keys()):
+        if 'orchestrator' in key:
+            del sys.modules[key]
+    
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, _base)
+    import orchestrator_agent as oa
+    
+    out = [f'File: {oa.__file__}']
+    out.append(f'MODEL_MAPPER esiste: {hasattr(oa, "MODEL_MAPPER")}')
+    out.append(f'MODEL_ANALISTA esiste: {hasattr(oa, "MODEL_ANALISTA")}')
+    out.append(f'BATCH_SIZE in codice: {"BATCH_SIZE" in open(oa.__file__).read()}')
+    
+    # Test L3 direttamente con 5 colonne semplici
+    analisi_test = {
+        'Nome Utensile': {'campo_master_suggerito': 'codice_interno', 'confidenza': 'alta'},
+        'Diametro': {'campo_master_suggerito': 'diametro_mm', 'confidenza': 'alta'},
+        'Lungh. Libera': {'campo_master_suggerito': 'fuori_pinza_mm', 'confidenza': 'alta'},
+        'Denti': {'campo_master_suggerito': 'num_taglienti', 'confidenza': 'alta'},
+        'Avanz.': {'campo_master_suggerito': 'vf_mm_min', 'confidenza': 'media'},
+    }
+    struttura_test = {'software_cam': 'CimatronE', 'tipo_contenuto': 'utensili'}
+    
+    log_ev = []
+    try:
+        res = oa._l3_mapping(analisi_test, struttura_test, oa._get_api_key(),
+                              lambda lv, msg: log_ev.append(f'[{lv}] {msg}'))
+        n = sum(1 for v in res.get('mapping',{}).values() if v.get('campo_master','ignora')!='ignora')
+        out.append(f'L3 test: {n}/5 mappati')
+        for col, info in res.get('mapping',{}).items():
+            out.append(f'  {col} -> {info.get("campo_master")} [{info.get("confidenza")}]')
+    except Exception as e:
+        out.append(f'L3 ERRORE: {traceback.format_exc()}')
+    
+    out.extend(log_ev)
+    return '<br>'.join(out)
+
+@app.route('/debug_orche_OLD')
+def debug_orche_old():
     import importlib, traceback, json, pandas as pd
     out = []
     try:
