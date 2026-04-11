@@ -102,24 +102,46 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
   <h2>{{ r.num_righe }} utensili | {{ r.num_colonne }} colonne</h2>
   <form method="post" action="/salva_profilo">
   <input type="hidden" name="filepath" value="{{ r.filepath }}">
+  {% if r.agente_usato %}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.6rem 1rem;margin-bottom:1rem;font-size:13px;color:#1d4ed8">
+    L'agente AI ha suggerito mapping per le colonne non identificate automaticamente.
+    I suggerimenti sono evidenziati in blu — verificali e correggi se necessario.
+  </div>
+  {% endif %}
+  {% if r.agente_errore %}
+  <div style="background:#fef9c3;border-radius:6px;padding:.6rem 1rem;margin-bottom:1rem;font-size:12px;color:#854d0e">
+    Agente non disponibile ({{ r.agente_errore }}). Mappa manualmente le colonne rimanenti.
+  </div>
+  {% endif %}
   <table style="margin-bottom:1rem">
-  <thead><tr><th>Colonna file</th><th>Campo master</th><th>Confidenza</th></tr></thead>
+  <thead><tr><th>Colonna file</th><th>Campo master</th><th>Confidenza</th><th>Note</th></tr></thead>
   <tbody>
   {% for campo, info in r.mapping.items() %}
-  <tr><td><code>{{ info.colonna_file }}</code></td>
-      <td><select name="map_{{ info.colonna_file }}">
-        <option value="">-- ignora --</option>
-        {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} — {{ v.label }}</option>{% endfor %}
-      </select></td>
-      <td><span class="badge b-{{ info.confidenza[0] }}">{{ info.confidenza }}</span></td></tr>
+  <tr {% if info.get('da_agente') %}style="background:#eff6ff"{% endif %}>
+    <td>
+      <code>{{ info.colonna_file }}</code>
+      {% if info.get('da_agente') %}
+      <span style="background:#1d4ed8;color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px">AI</span>
+      {% endif %}
+    </td>
+    <td><select name="map_{{ info.colonna_file }}">
+      <option value="">-- ignora --</option>
+      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} — {{ v.label }}</option>{% endfor %}
+    </select></td>
+    <td><span class="badge b-{{ info.confidenza[0] }}">{{ info.confidenza }}</span></td>
+    <td style="font-size:11px;color:#888">{{ info.get('motivazione','') }}</td>
+  </tr>
   {% endfor %}
   {% for col in r.colonne_non_mappate %}
-  <tr style="background:#fffde7"><td><code>{{ col }}</code></td>
-      <td><select name="map_{{ col }}">
-        <option value="">-- ignora --</option>
-        {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} — {{ v.label }}</option>{% endfor %}
-      </select></td>
-      <td><span class="badge b-n">non rilevata</span></td></tr>
+  <tr style="background:#fafaf0">
+    <td><code>{{ col }}</code></td>
+    <td><select name="map_{{ col }}">
+      <option value="">-- ignora --</option>
+      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} — {{ v.label }}</option>{% endfor %}
+    </select></td>
+    <td><span class="badge b-n">non rilevata</span></td>
+    <td></td>
+  </tr>
   {% endfor %}
   </tbody></table>
   {% if r.valori_categoria %}
