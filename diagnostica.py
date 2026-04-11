@@ -148,18 +148,11 @@ def check_agente_connessione():
 
     try:
         import ssl
-        # Fix SSL certificati Mac
         def _ssl_ctx():
             try:
                 import certifi
                 return ssl.create_default_context(cafile=certifi.where())
             except ImportError:
-                pass
-            try:
-                ctx = ssl.create_default_context()
-                ctx.load_verify_locations('/etc/ssl/cert.pem')
-                return ctx
-            except Exception:
                 pass
             return ssl.create_default_context()
 
