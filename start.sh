@@ -1,111 +1,116 @@
 #!/bin/bash
 # ============================================================
-# start.sh - Avvia Tool DB Manager completo
-# Uso: bash start.sh
+# start.sh - Avvio completo Tool DB Manager
+# Esegue: git pull, libera le porte, avvia i servizi
 # ============================================================
 
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR"
+set -e
+cd "$(dirname "$0")"
 
 echo ""
-echo "  Tool DB Manager"
-echo "  ==============="
+echo "  ╔══════════════════════════════════════╗"
+echo "  ║      Tool DB Manager - Avvio         ║"
+echo "  ╚══════════════════════════════════════╝"
 echo ""
 
-find_python() {
-  for cmd in python3.13 python3.12 python3.11 python3.10              /opt/homebrew/bin/python3.13 /opt/homebrew/bin/python3.12              /opt/homebrew/bin/python3.11 /usr/local/bin/python3.12; do
-    if command -v "$cmd" &>/dev/null; then
-      version=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
-      minor=$(echo $version | cut -d. -f2)
-      if [ "$minor" -ge 10 ] && [ "$minor" -le 13 ]; then
-        echo "$cmd"
-        return 0
-      fi
+# ── 1. Aggiorna dal repository ─────────────────────────────
+echo "  [1/4] Aggiornamento dal repository..."
+git fetch origin main1 --quiet
+git reset --hard origin/main1 --quiet
+echo "  ✓ Codice aggiornato"
+
+# ── 2. Carica variabili ambiente ───────────────────────────
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs) 2>/dev/null
+fi
+
+# ── 3. Libera le porte 5000 e 5001 ────────────────────────
+echo "  [2/4] Libero le porte..."
+for PORT in 5000 5001; do
+    PIDS=$(lsof -ti :$PORT 2>/dev/null) || true
+    if [ -n "$PIDS" ]; then
+        echo "  ✓ Porto $PORT: termino PID $PIDS"
+        kill -9 $PIDS 2>/dev/null || true
+        sleep 0.5
     fi
-  done
-  return 1
-}
+done
+echo "  ✓ Porte libere"
 
-PYTHON=$(find_python)
+# ── 4. Trova Python ────────────────────────────────────────
+echo "  [3/4] Cerco Python..."
+PYTHON=""
+for p in "venv/bin/python3" "venv/bin/python" "python3" "python"; do
+    if command -v $p &>/dev/null 2>&1 || [ -f "$p" ]; then
+        PYTHON=$p
+        break
+    fi
+done
 if [ -z "$PYTHON" ]; then
-  echo "ERRORE: Python 3.10-3.13 non trovato."
-  echo "Installa con: brew install python@3.12"
-  exit 1
+    echo "  ✗ Python non trovato"
+    exit 1
 fi
-echo "  Python: $($PYTHON --version)"
+echo "  ✓ Python: $PYTHON"
 
-if [ ! -f "venv/bin/activate" ]; then
-  echo "  Creo ambiente virtuale..."
-  "$PYTHON" -m venv venv
-fi
-# Carica variabili d'ambiente da .env se esiste (contiene ANTHROPIC_API_KEY, ecc.)
-if [ -f ".env" ]; then
-  export $(grep -v '^#' .env | xargs)
-  echo "  Variabili .env caricate"
-fi
-
-source venv/bin/activate
-
-if ! python -c "import flask, pandas, openpyxl" &>/dev/null; then
-  echo "  Installo dipendenze (un momento)..."
-  pip install -q flask pandas openpyxl schedule
-fi
-echo "  Dipendenze OK"
-
-if [ ! -f "database/tool_master.db" ]; then
-  echo "  Inizializzo database..."
-  python -c "
-import sqlite3, os
-os.makedirs('database', exist_ok=True)
-with open('database/schema.sql', encoding='utf-8') as f:
-    sql = f.read()
+# ── 5. Assicura che il DB esista ───────────────────────────
+mkdir -p database
+if [ ! -f database/tool_master.db ]; then
+    echo "  [3/4] DB non trovato, lo creo..."
+    $PYTHON -c "
+import sqlite3
+with open('database/schema.sql', encoding='utf-8') as f: sql = f.read()
 conn = sqlite3.connect('database/tool_master.db')
 conn.executescript(sql)
 conn.commit()
 conn.close()
-print('  DB creato.')
+print('  ✓ Database creato')
 "
 fi
-echo "  Database OK"
 
-mkdir -p output/auto output/manual logs
-lsof -ti:5000 | xargs kill -9 2>/dev/null || true
-lsof -ti:5001 | xargs kill -9 2>/dev/null || true
-sleep 0.5
+# ── 6. Avvia i servizi ─────────────────────────────────────
+echo "  [4/4] Avvio servizi..."
+mkdir -p logs
 
-echo ""
-echo "  Avvio servizi..."
+# App principale (porta 5000)
+nohup $PYTHON ui/app.py > logs/app_main.log 2>&1 &
+PID_MAIN=$!
 
-python ui/app.py > logs/app_main.log 2>&1 &
-MAIN_PID=$!
-python learner/app_learner.py > logs/app_learner.log 2>&1 &
-LEARNER_PID=$!
-sleep 2
+# Format Learner (porta 5001) - senza debug per evitare problemi background
+nohup $PYTHON -c "
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath('.')), 'tool-db-manager', 'learner'))
+sys.path.insert(0, 'learner')
+exec(open('learner/app_learner.py').read().replace('debug=True', 'debug=False'))
+" > logs/app_learner.log 2>&1 &
+PID_LEARNER=$!
 
+# Salva i PID per stop.sh
+echo $PID_MAIN > .pid_main
+echo $PID_LEARNER > .pid_learner
+
+# Aspetta che i servizi partano
+sleep 3
+
+# Verifica
 MAIN_OK=false
 LEARNER_OK=false
-kill -0 $MAIN_PID 2>/dev/null && MAIN_OK=true
-kill -0 $LEARNER_PID 2>/dev/null && LEARNER_OK=true
+for i in 1 2 3 4 5; do
+    if curl -s http://localhost:5000 > /dev/null 2>&1; then MAIN_OK=true; fi
+    if curl -s http://localhost:5001 > /dev/null 2>&1; then LEARNER_OK=true; fi
+    if $MAIN_OK && $LEARNER_OK; then break; fi
+    sleep 1
+done
 
-if $MAIN_OK && $LEARNER_OK; then
-  echo ""
-  echo "  Avviato con successo!"
-  echo ""
-  echo "  App principale  ->  http://localhost:5000"
-  echo "  Format Learner  ->  http://localhost:5001"
-  echo ""
-  echo "  Log: logs/app_main.log"
-  echo "  Per fermare: bash stop.sh  oppure Ctrl+C"
-  echo ""
-  open http://localhost:5000 2>/dev/null || true
-  trap "echo ''; echo '  Fermo i servizi...'; kill $MAIN_PID $LEARNER_PID 2>/dev/null; echo '  Fermato.'; exit 0" INT
-  wait $MAIN_PID
+echo ""
+if $MAIN_OK; then
+    echo "  ✓ App principale  ->  http://localhost:5000"
 else
-  echo ""
-  echo "  ERRORE nell'avvio. Dettagli:"
-  echo ""
-  cat logs/app_main.log 2>/dev/null | tail -30
-  echo ""
-  cat logs/app_learner.log 2>/dev/null | tail -10
-  exit 1
+    echo "  ✗ App principale non risponde (vedi logs/app_main.log)"
 fi
+if $LEARNER_OK; then
+    echo "  ✓ Format Learner  ->  http://localhost:5001"
+else
+    echo "  ✗ Format Learner non risponde (vedi logs/app_learner.log)"
+fi
+echo ""
+echo "  Per fermare: bash stop.sh"
+echo ""
