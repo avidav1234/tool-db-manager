@@ -1,0 +1,26 @@
+# Dipendenze Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Database locale
+database/tool_master.db
+
+# Output export
+output/
+
+# Log
+logs/
+
+# File di ambiente con secrets - MAI nel repo
+.env
+*.env
+config.local.json
+
+# File temporanei
+*.tmp
+*.bak
+.DS_Store
