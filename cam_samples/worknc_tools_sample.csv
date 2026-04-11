@@ -1,0 +1,13 @@
+ID,Name,Type,Radius,TipRadius,Length,UsefulLength,Teeth,Material,Vc,Fz,Rpm,Feed,Ap,Ae,HolderRef,Gauge,Notes
+1,FP-D10-R0-L75,FlatEndMill,5,0,75,22,4,CarbideCoated,150,0.05,4775,955,8,5,HSK63-10,35,
+2,BS-D10-R5-L75,BallEndMill,5,5,75,22,4,CarbideCoated,130,0.04,4138,662,3,5,HSK63-10,35,
+3,TE-D10-R1-L75,ToroidalEndMill,5,1,75,22,4,CarbideCoated,145,0.048,4616,885,6,5,HSK63-10,35,
+4,FP-D6-R0-L60,FlatEndMill,3,0,60,18,4,CarbideCoated,150,0.035,7958,1113,5,3,HSK63-6,25,
+5,BS-D6-R3-L60,BallEndMill,3,3,60,18,4,CarbideCoated,130,0.028,6902,772,2,3,HSK63-6,25,
+6,FP-D16-R0-L100,FlatEndMill,8,0,100,35,4,CarbideCoated,150,0.07,2984,835,12,8,HSK63-16,45,
+7,TE-D16-R2-L100,ToroidalEndMill,8,2,100,35,4,CarbideCoated,145,0.065,2888,750,10,8,HSK63-16,45,
+8,DR-D10-L120,Drill,5,0,120,60,2,CarbideCoated,80,0.15,2547,764,0,0,HSK63-10,50,
+9,DR-D6-L80,Drill,3,0,80,40,2,CarbideCoated,80,0.1,4244,849,0,0,HSK63-6,35,
+10,TA-M10-P1.5,Tap,0,0,90,30,2,HSS,20,0,636,954,0,0,HSK63-10,40,M10x1.5
+11,SD-D12,SpotDrill,6,0,60,10,2,CarbideCoated,100,0.08,2653,424,0,0,HSK63-12,25,
+12,RE-D10,Reamer,5,0,100,40,6,CarbideCoated,15,0.03,477,86,0,0,HSK63-10,45,H7
