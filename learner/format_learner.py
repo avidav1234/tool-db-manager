@@ -132,33 +132,63 @@ def _rileva_valori_categoria(df, colonna, campo_master):
             for v in df[colonna].dropna().unique()}
 
 
-def analizza_file(filepath: str) -> dict:
+
+def analizza_file(filepath: str, usa_agente: bool = True) -> dict:
     """
-    Analizza qualsiasi file CAM e ritorna la mappatura verso i campi master.
-    Rilevamento formato completamente automatico.
+    Analizza qualsiasi file CAM. Rilevamento formato completamente automatico.
+
+    Flusso:
+      1. Parser deterministico (Cimatron nativo o euristica generica)
+      2. Se colonne non mappate e usa_agente=True -> chiama mapping_agent
+      3. Ritorna mapping completo con flag 'da_agente' per i suggerimenti AI
     """
     ext = os.path.splitext(filepath)[1].lower()
 
-    # --- Importa il parser Cimatron ---
     try:
         from cimatron_parser import is_cimatron_file, leggi_cimatron_xls, leggi_cimatron_csv, leggi_cimatron_zip
-        _cimatron_available = True
+        _cimatron_ok = True
     except ImportError:
-        _cimatron_available = False
+        _cimatron_ok = False
 
-    # 1. ZIP Cimatron (contiene Cutters_*.csv)
-    if ext == '.zip' and _cimatron_available and is_cimatron_file(filepath):
-        return leggi_cimatron_zip(filepath)
+    # Routing automatico
+    if ext == '.zip' and _cimatron_ok and is_cimatron_file(filepath):
+        risultato = leggi_cimatron_zip(filepath)
+    elif ext == '.xls' and _cimatron_ok and is_cimatron_file(filepath):
+        risultato = leggi_cimatron_xls(filepath)
+    elif ext == '.csv' and _cimatron_ok and is_cimatron_file(filepath):
+        risultato = leggi_cimatron_csv(filepath)
+    else:
+        risultato = _analizza_generico(filepath, ext)
 
-    # 2. XLS Cimatron (foglio 'Cutters')
-    if ext == '.xls' and _cimatron_available and is_cimatron_file(filepath):
-        return leggi_cimatron_xls(filepath)
+    # Arricchimento con agente se ci sono colonne non mappate
+    if usa_agente and risultato.get('colonne_non_mappate'):
+        try:
+            from mapping_agent import arricchisci_mapping
+            mapping_arricchito = arricchisci_mapping(
+                risultato['mapping'],
+                risultato['colonne_non_mappate'],
+                risultato['df'],
+                usa_agente=True
+            )
+            # Aggiorna colonne non mappate dopo arricchimento
+            nuove_mappate = {v['colonna_file'] for v in mapping_arricchito.values()}
+            risultato['mapping'] = mapping_arricchito
+            risultato['colonne_non_mappate'] = [
+                c for c in risultato['colonne_originali']
+                if c not in nuove_mappate
+            ]
+            risultato['agente_usato'] = True
+        except Exception as e:
+            risultato['agente_errore'] = str(e)
+            risultato['agente_usato'] = False
+    else:
+        risultato['agente_usato'] = False
 
-    # 3. CSV Cimatron (UTF-16, pipe, righe //)
-    if ext == '.csv' and _cimatron_available and is_cimatron_file(filepath):
-        return leggi_cimatron_csv(filepath)
+    return risultato
 
-    # 4. ZIP generico
+
+def _analizza_generico(filepath: str, ext: str) -> dict:
+    """Parser euristico generico per file non Cimatron."""
     if ext == '.zip' or zipfile.is_zipfile(filepath):
         with zipfile.ZipFile(filepath, 'r') as z:
             csv_files = [f for f in z.namelist() if f.lower().endswith('.csv')]
@@ -171,7 +201,6 @@ def analizza_file(filepath: str) -> dict:
         lines = [l for l in content.splitlines() if not l.startswith('//')]
         from io import StringIO
         df = pd.read_csv(StringIO('\n'.join(lines)), sep=sep, on_bad_lines='skip')
-
     elif ext == '.csv':
         with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
             raw = f.read()
@@ -179,7 +208,6 @@ def analizza_file(filepath: str) -> dict:
         lines = [l for l in raw.splitlines() if not l.startswith('//')]
         from io import StringIO
         df = pd.read_csv(StringIO('\n'.join(lines)), sep=sep, on_bad_lines='skip')
-
     elif ext in ('.xls', '.xlsx'):
         df = pd.read_excel(filepath)
     else:
@@ -191,7 +219,7 @@ def analizza_file(filepath: str) -> dict:
     if len(df) == 0:
         raise ValueError(
             "Il file non contiene dati utensili riconoscibili.\n"
-            "Assicurati di esportare con utensili selezionati e non un template vuoto."
+            "Assicurati che il file contenga utensili e non sia un template vuoto."
         )
 
     mapping = _rileva_mappatura(df)
@@ -210,6 +238,8 @@ def analizza_file(filepath: str) -> dict:
         'df': df, 'software_rilevato': 'sconosciuto',
         'versione_rilevata': '', 'parser_usato': 'generico',
     }
+
+
 
 
 if __name__ == '__main__':
