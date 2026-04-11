@@ -127,7 +127,7 @@ def _parse_json(testo):
 
 
 # =====================================================================
--# LIVELLO 2a - ANALISTA STRUTTURA (Haiku)
+# LIVELLO 2a - ANALISTA STRUTTURA (Haiku)
 # =====================================================================
 
 def _l2a_struttura(df, api_key, log) -> dict:
@@ -250,7 +250,7 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
             'max': round(float(nums.max()), 3) if len(nums) > 0 else None,
         }
     prompt = (
-        'Software: %s\n\nMAPPIGF DA VERIFICARE (con valori reali):\n%s\n\n'
+        'Software: %s\n\nMAPPING DA VERIFICARE (con valori reali):\n%s\n\n'
         'RANGE RIFEIBÍENTO:\n'
         'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 (MAI uguale al diametro)\n'
         'fz_default: 0.001-0.5 (PICCOLI) | vf_mm_min: 50-10000 (GRANDI)\n'
