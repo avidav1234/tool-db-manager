@@ -1042,6 +1042,22 @@ def cam_genera(cam_key):
         return redirect(url_for('cam_page', msg=f'Errore: {e}', mtype='err'))
 
 
+@app.route('/debug_magic')
+def debug_magic():
+    import glob, tempfile
+    tmp = tempfile.gettempdir()
+    files = sorted(glob.glob(f'{tmp}/tmp*/Cimatron_2025.csv'), key=os.path.getmtime)
+    results = []
+    for f in files[-3:]:
+        try:
+            with open(f, 'rb') as fh:
+                raw = fh.read(20)
+            results.append(f"{os.path.basename(os.path.dirname(f))}: {raw.hex()} | size={os.path.getsize(f)}")
+        except Exception as e:
+            results.append(f"ERR: {e}")
+    return '<br>'.join(results) or 'nessun file trovato'
+
+
 @app.route('/version')
 def version():
     import importlib, importers.import_from_excel as ief
