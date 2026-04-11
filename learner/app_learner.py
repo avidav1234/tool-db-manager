@@ -270,9 +270,38 @@ def analizza():
     f.save(fp)
     try:
         r = analizza_file(fp)
+        r.pop('df', None)
+        # Prova orchestratore multilivello (usa API key dal .env automaticamente)
+        try:
+            _root = os.path.join(os.path.dirname(__file__), '..')
+            if _root not in sys.path: sys.path.insert(0, _root)
+            from orchestrator_agent import disponibile, orchestra_learning
+            if disponibile():
+                import pandas as pd
+                df_tmp = None
+                ext = os.path.splitext(fp)[1].lower()
+                sep = r.get('separatore', ',')
+                if ext == '.csv':
+                    df_tmp = pd.read_csv(fp, sep=sep, encoding='utf-8')
+                elif ext in ('.xlsx', '.xls'):
+                    df_tmp = pd.read_excel(fp)
+                if df_tmp is not None and len(df_tmp) > 0:
+                    log_ev = []
+                    res = orchestra_learning(df_tmp, nome_file=f.filename,
+                        log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg}))
+                    r['orchestratore'] = {
+                        'verificato': res.get('verificato', False),
+                        'score':      res.get('score', 0),
+                        'costo':      res.get('costo_stimato', 0),
+                        'struttura':  res.get('struttura', {}),
+                        'campi_mancanti': res.get('campi_mancanti', []),
+                        'warning':    res.get('warning', []),
+                        'log':        log_ev,
+                    }
+        except Exception:
+            pass  # fallback silenzioso all'euristica
     except Exception as e:
         return redirect(url_for('home', msg=f'Errore: {e}'))
-    r.pop('df', None)
     app.jinja_env.filters['basename'] = os.path.basename
     return render_template_string(ANALISI, r=r, fields=MASTER_FIELDS, msg='', mtype='')
 
