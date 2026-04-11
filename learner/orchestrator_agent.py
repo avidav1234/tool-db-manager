@@ -205,58 +205,73 @@ def _l2b_colonna(col_name, serie, contesto, api_key) -> dict:
 # =====================================================================
 
 def _l3_mapping(analisi, struttura, api_key, log) -> dict:
+    """
+    Mapping in batch da 15 colonne.
+    Evita prompt enormi che causano JSON malformato.
+    Con 100 colonne: 7 batch da 15 = 7 chiamate Haiku piccole e affidabili.
+    """
     log('L3', 'Produzione mapping strutturato (batch da 15)...')
-    software   = struttura.get('software_cam', 'sconosciuto')
-    colonne    = list(analisi.keys())
+    fields_desc = '\n'.join('%s: %s' % (k, v) for k, v in MASTER_FIELDS.items())
+    software = struttura.get('software_cam', 'sconosciuto')
+
+    # Dividi le colonne in batch da 15
+    colonne = list(analisi.keys())
     BATCH_SIZE = 15
-    batches    = [colonne[i:i+BATCH_SIZE] for i in range(0, len(colonne), BATCH_SIZE)]
-    mapping_totale    = {}
-    campi_gia_mappati = set()
+    batches = [colonne[i:i+BATCH_SIZE] for i in range(0, len(colonne), BATCH_SIZE)]
+
+    mapping_totale = {}
+    campi_gia_mappati = set()  # evita duplicati tra batch
+    ambigue = []
+    warnings = []
+
     for idx_batch, batch in enumerate(batches):
-        input_batch = {}
-        for col in batch:
-            info = analisi.get(col, {})
-            input_batch[col] = {
-                'suggerimento': info.get('campo_master_suggerito', 'ignora'),
-                'confidenza':   info.get('confidenza', 'bassa'),
-                'campioni':     info.get('campioni', []),
-            }
+        analisi_batch = {col: analisi[col] for col in batch}
+        # Esclude campi gia mappati dai batch precedenti
         campi_disponibili = {k: v for k, v in MASTER_FIELDS.items() if k not in campi_gia_mappati}
-        fields_list = ', '.join(campi_disponibili.keys())
-        ib_json = json.dumps(input_batch, ensure_ascii=False)
+        fields_batch = '\n'.join('%s: %s' % (k, v) for k, v in campi_disponibili.items())
+
         prompt = (
-            'Software: %s | Batch %d/%d\n\n'
-            'Per ogni colonna hai un suggerimento da L2b. Confermalo o correggilo.\n\n'
-            'COLONNE E SUGGERIMENTI L2b:\n%s\n\n'
-            'CAMPI DISPONIBILI: %s\n\n'
+            'File: %s | Batch %d/%d (%d colonne)\n\n'
+            'ANALISI COLONNE IN QUESTO BATCH:\n%s\n\n'
+            'CAMPI MASTER ANCORA DISPONIBILI:\n%s\n\n'
             'Regole:\n'
-            '- Ogni campo master usato UNA sola volta\n'
-            '- Se suggerimento L2b ha confidenza alta: CONFERMALO sempre\n'
-            '- Se suggerimento L2b ha confidenza media: confermalo se logico\n'
-            '- Radius senza Diameter = diametro_mm con moltiplica_2\n'
-            '- Gauge/Gauge Length = fuori_pinza_mm\n'
-            '- TipRadius/CornerRadius = raggio_punta_mm\n'
-            '- Ignora SOLO se il campo non ha corrispondenza nel master\n\n'
-            'Rispondi SOLO JSON (tutte le colonne del batch):\n'
-            '{"mapping":{"NomeCol":{"campo_master":"campo_o_ignora",'
-            '"confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/decodifica_tipo",'
-            '"motivazione":"breve"}}}'
-        ) % (software, idx_batch+1, len(batches), ib_json, fields_list)
+            '- Ogni campo master mappato UNA sola volta in tutto il file\n'
+            '- Colonna "Radius" senza Diameter = diametro_mm con moltiplica_2\n'
+            '- Colonna "Gauge"/"Gauge Length" = fuori_pinza_mm\n'
+            '- Se dubbio: ignora\n\n'
+            'Rispondi SOLO con JSON (solo le colonne di questo batch):\n'
+            '{"mapping":{"NomeCol":{"campo_master":"campo","confidenza":"alta/media/bassa",'
+            '"trasformazione":"nessuna/moltiplica_2/arrotonda/decodifica_tipo","motivazione":"perche"}},'
+            '"ambigue":["col"]}'
+        ) % (software, idx_batch+1, len(batches),
+             len(batch), json.dumps(analisi_batch, ensure_ascii=False),
+             fields_batch)
+
         try:
-            testo = _chiama(prompt, MODEL_ANALISTA, api_key, max_tokens=1200)
+            testo = _chiama(prompt, MODEL_ANALISTA, api_key, max_tokens=1000)
             result = _parse_json(testo)
-            for col, info in result.get('mapping', {}).items():
+            batch_mapping = result.get('mapping', {})
+
+            for col, info in batch_mapping.items():
                 campo = info.get('campo_master', 'ignora')
-                if campo == 'ignora' or campo in campi_gia_mappati or campo not in MASTER_FIELDS:
+                if campo == 'ignora' or campo in campi_gia_mappati:
                     continue
                 mapping_totale[col] = info
                 campi_gia_mappati.add(campo)
+
+            ambigue.extend(result.get('ambigue', []))
         except Exception as e:
             log('L3', 'Batch %d/%d errore: %s' % (idx_batch+1, len(batches), e))
-    n = len(mapping_totale)
-    log('L3', '%d colonne mappate su %d totali (%d batch)' % (n, len(colonne), len(batches)))
-    return {'mapping': mapping_totale, 'colonne_ambigue': [], 'warning': []}
 
+    n = sum(1 for v in mapping_totale.values() if v.get('campo_master','ignora') != 'ignora')
+    log('L3', '%d colonne mappate su %d totali (%d batch)' % (n, len(colonne), len(batches)))
+
+    return {'mapping': mapping_totale, 'colonne_ambigue': ambigue, 'warning': warnings}
+
+
+# =====================================================================
+# LIVELLO 4 - VERIFICATORE (Sonnet)
+# =====================================================================
 
 def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
     log('L4', 'Verifica logica mapping...')
@@ -284,16 +299,10 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
         'SE non esiste colonna Diameter/Diametro separata, mappa Radius->diametro_mm con moltiplica_2. CORRETTO.\n'
         '- "Gauge" o "Gauge Length" = fuori_pinza_mm sempre. Non e critico se manca trasformazione.\n'
         '- "TipRadius" o "CornerRadius" = raggio_punta_mm. NON e diametro.\n\n'
-        'PRINCIPIO FONDAMENTALE: Se un campo e nel file CAM, l\'utente lo considera utile. '
-        'NON ignorare campi solo perche sembrano secondari.\n'
-        'VERIFICA SOLO: valori numerici fuori range, Fz/Vf scambiati tra loro\n\n'
+        'VERIFICA SOLO: valori fuori range, Fz/Vf scambiati\n\n'
         'Rispondi SOLO con JSON:\n'
         '{"approvato":true,"score_confidenza":85,"errori_critici":[],'
-        '"warning":[],'
-        '"correzioni":{"NomeColonna":{"campo_master":"campo_corretto","trasformazione":"nessuna"}},'
-        '"campi_mancanti_critici":[],"note_finali":"valutazione"}\n\n'
-        'IMPORTANTE: le correzioni servono SOLO per cambiare un campo sbagliato con uno giusto. '
-        'Non usare correzioni per mettere campi a ignora.'
+        '"warning":[],"correzioni":{},"campi_mancanti_critici":[],"note_finali":"valutazione"}'
     ) % (struttura.get('software_cam', '?'), json.dumps(dettaglio, ensure_ascii=False))
     try:
         testo = _chiama(prompt, MODEL_VERIFICATORE, api_key, max_tokens=1500,
@@ -406,15 +415,10 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     verifica = None
     for tentativo in range(1, max_tentativi + 1):
         if verifica and verifica.get('correzioni'):
-            correzioni = verifica['correzioni']
-            # Protezione: correzioni deve essere un dict {col: {campo:val}}
-            if isinstance(correzioni, dict):
-                log('L1', 'Applico %d correzioni' % len(correzioni))
-                for col, corr in correzioni.items():
-                    if col in mapping_raw['mapping'] and isinstance(corr, dict):
-                        mapping_raw['mapping'][col].update(corr)
-            else:
-                log('L1', 'Correzioni in formato non valido - skip')
+            log('L1', 'Applico %d correzioni' % len(verifica['correzioni']))
+            for col, corr in verifica['correzioni'].items():
+                if col in mapping_raw['mapping']:
+                    mapping_raw['mapping'][col].update(corr)
         verifica = _l4_verifica(mapping_raw, struttura, df, key, log)
         token_stimati += 2000
         if verifica.get('approvato'):
@@ -427,9 +431,9 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
 
     # Assembla profilo finale
     mapping_finale = dict(mapping_raw.get('mapping', {}))
-    if verifica and verifica.get('correzioni') and isinstance(verifica['correzioni'], dict):
+    if verifica and verifica.get('correzioni'):
         for col, corr in verifica['correzioni'].items():
-            if col in mapping_finale and isinstance(corr, dict):
+            if col in mapping_finale:
                 mapping_finale[col].update(corr)
     profilo = {col: info for col, info in mapping_finale.items()
                if info.get('campo_master', 'ignora') != 'ignora'}
