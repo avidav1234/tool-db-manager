@@ -35,7 +35,7 @@ sys.path.insert(0, _BASE)
 
 MODEL_ORCHESTRATORE = 'claude-sonnet-4-20250514'
 MODEL_ANALISTA      = 'claude-haiku-4-5-20251001'
-MODEL_MAPPERE = 'claude-haiku-4-5-20251001'
+MODEL_ANALISTAE = 'claude-haiku-4-5-20251001'
 MODEL_VERIFICATORE  = 'claude-sonnet-4-20250514'
 
 MASTER_FIELDS = {
