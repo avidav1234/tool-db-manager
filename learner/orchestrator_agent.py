@@ -248,7 +248,7 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
              fields_batch)
 
         try:
-            testo = _chiama(prompt, MODEL_MAPPER, api_key, max_tokens=1000)
+            testo = _chiama(prompt, MODEL_ANALISTA, api_key, max_tokens=1000)
             result = _parse_json(testo)
             batch_mapping = result.get('mapping', {})
 
@@ -333,15 +333,17 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     def log(livello, msg):
         ts = time.strftime('%H:%M:%S')
         log_eventi.append({'ts': ts, 'livello': livello, 'msg': msg})
-        if log_callback:
-            log_callback(livello, msg)
-        else:
-            print('[%s][%s] %s' % (ts, livello, msg))
-    log('L1', 'Inizio orchestrazione: %s (%d colonne, %d righe)' % (
-        nome_file or livello, len(df.columns), len(df)))
+        if log_callback: log_callback(livello, msg)
+        else: print('[%s][%s] %s' % (ts, livello, msg))
+
+    log('L1', 'Inizio: %s (%d colonne, %d righe)' % (nome_file or 'file', len(df.columns), len(df)))
+
+    # L2a - struttura
     struttura = _l2a_struttura(df, key, log)
     token_stimati += 800
-    log('L2b', 'Analisi valori in batch L2b (veloce)...')
+
+    # L2b - analisi colonne in batch da 20 (veloce)
+    log('L2b', 'Analisi colonne in batch...')
     import pandas as _pd
     da_ignorare = set(struttura.get('colonne_da_ignorare', []))
     analisi = {}
@@ -349,12 +351,11 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     for col in df.columns:
         if col in da_ignorare:
             analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'esclusa'}
-        elif df[col].dropna().__len__() == 0:
+        elif len(df[col].dropna()) == 0:
             analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'vuota'}
         else:
             da_analizzare.append(col)
 
-    # Batch da 20 colonne - 5 chiamate invece di 100
     BATCH_L2B = 20
     fields_str = ', '.join(list(MASTER_FIELDS.keys()))
     for bi in range(0, len(da_analizzare), BATCH_L2B):
@@ -370,9 +371,9 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
                 'max': round(float(nums.max()),3) if len(nums)>0 else None,
             }
         prompt = (
-            'Software: %s. Analizza queste %d colonne e per ognuna indica il campo master.\n'
-            'COLONNE:\n%s\n\nCAMPI: %s\n\n'
-            'Rispondi SOLO JSON: {"analisi":{"Col":{"campo_master_suggerito":"campo","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2"}}}'
+            'Software: %s. Analizza queste %d colonne.\n'
+            'COLONNE:\n%s\n\nCAMPI DISPONIBILI: %s\n\n'
+            'Rispondi SOLO JSON: {"analisi":{"NomeColonna":{"campo_master_suggerito":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2"}}}'
         ) % (struttura.get('software_cam','CAM'), len(info_b), json.dumps(info_b, ensure_ascii=False), fields_str)
         try:
             testo = _chiama(prompt, MODEL_ANALISTA, key, max_tokens=1000)
@@ -384,41 +385,63 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
             for col in batch:
                 analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':str(e)})
         token_stimati += 800
+
     for col in df.columns:
-        analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':'no analisi'})
-    log('L2b', 'Analisi completata: %d colonne' % len(analisi))
+        analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':'non analizzata'})
+    log('L2b', 'Completato: %d colonne analizzate' % len(analisi))
+    log('L1', 'Token finora: ~%d | Costo ~$%.4f' % (token_stimati, token_stimati/1000*0.0025))
+
+    # L3 - mapping in batch da 15
+    mapping_raw = _l3_mapping(analisi, struttura, key, log)
+    token_stimati += 1500
+
+    if not mapping_raw or 'mapping' not in mapping_raw:
+        log('L1', 'ERRORE: L3 non ha prodotto mapping')
         return {'verificato': False, 'errore': 'Mapping non prodotto',
                 'struttura': struttura, 'log': log_eventi, 'costo_stimato': token_stimati}
+
+    # L4 - verifica con retry
     verifica = None
     for tentativo in range(1, max_tentativi + 1):
         if verifica and verifica.get('correzioni'):
-            log('L1', 'Applico %d correzioni dal tentativo %d' % (len(verifica['correzioni']), tentativo - 1))
+            log('L1', 'Applico %d correzioni' % len(verifica['correzioni']))
             for col, corr in verifica['correzioni'].items():
                 if col in mapping_raw['mapping']:
                     mapping_raw['mapping'][col].update(corr)
         verifica = _l4_verifica(mapping_raw, struttura, df, key, log)
         token_stimati += 2000
         if verifica.get('approvato'):
-            log('L1', 'Mapping APPROVATO al tentativo %d' % tentativo)
+            log('L1', 'APPROVATO al tentativo %d' % tentativo)
             break
         elif tentativo < max_tentativi:
-            log('L1', 'Tentativo %d fallito - preparo correzioni...' % tentativo)
+            log('L1', 'Tentativo %d fallito - riprovo' % tentativo)
         else:
-            log('L1', 'Max tentativi - utilizzo mapping parziale')
+            log('L1', 'Max tentativi - uso mapping parziale')
+
+    # Assembla profilo finale
     mapping_finale = dict(mapping_raw.get('mapping', {}))
     if verifica and verifica.get('correzioni'):
         for col, corr in verifica['correzioni'].items():
-            if col in mapping_finale: mapping_finale[col].update(corr)
+            if col in mapping_finale:
+                mapping_finale[col].update(corr)
     profilo = {col: info for col, info in mapping_finale.items()
                if info.get('campo_master', 'ignora') != 'ignora'}
-    log('L1', 'Profilo finale: %d colonne mappate | Token: ~%d | Costo: ~$%.4f' % (
-        len(profilo), token_stimati, token_stimati / 1000 * 0.0025))
-    return {'profilo': profilo, 'struttura': struttura, 'analisi_colonne': analisi,
-            'verifica': verifica, 'verificato': verifica.get('approvato', False) if verifica else False,
-            'score': verifica.get('score_confidenza', 0) if verifica else 0,
-            'log': log_eventi, 'costo_stimato': token_stimati,
-            'campi_mancanti': verifica.get('campi_mancanti_critici', []) if verifica else [],
-            'warning': (mapping_raw.get('warning', []) + (verifica.get('warning', []) if verifica else []))}
+
+    log('L1', 'Profilo finale: %d campi | Token: ~%d | Costo: ~$%.4f' % (
+        len(profilo), token_stimati, token_stimati/1000*0.0025))
+
+    return {
+        'profilo':        profilo,
+        'struttura':      struttura,
+        'analisi_colonne': analisi,
+        'verifica':       verifica,
+        'verificato':     verifica.get('approvato', False) if verifica else False,
+        'score':          verifica.get('score_confidenza', 0) if verifica else 0,
+        'log':            log_eventi,
+        'costo_stimato':  token_stimati,
+        'campi_mancanti': verifica.get('campi_mancanti_critici', []) if verifica else [],
+        'warning':        (mapping_raw.get('warning', []) + (verifica.get('warning', []) if verifica else [])),
+    }
 
 
 def disponibile(api_key=None) -> bool:
@@ -433,19 +456,11 @@ if __name__ == '__main__':
     key = _get_api_key()
     if not key: print('API key non configurata.'); sys.exit(1)
     sample = os.path.join(_BASE, 'cam_samples', 'worknc_tools_sample.csv')
-    if not os.path.exists(sample): print('File campione non trovato:', sample); sys.exit(1)
+    if not os.path.exists(sample): print('File non trovato:', sample); sys.exit(1)
     print('Test agente multilivello - WorkNC sample')
-    print('=' * 50)
     df = pd.read_csv(sample)
     r = orchestra_learning(df, key, 'worknc_tools_sample.csv')
-    print('\nRISULTATO:')
-    print('  Verificato: %s' % r['verificato'])
-    print('  Score:      %s%%' % r['score'])
-    print('  Mappati:    %d campi' % len(r.get('profilo', {})))
-    print('  Token:      ~%d' % r['costo_stimato'])
-    print('  Costo:      ~$%.4f' % (r['costo_stimato'] / 1000 * 0.0025))
-    print('\nMAPPING:')
+    print('Verificato:', r['verificato'], '| Score:', r['score'], '%')
+    print('Campi mappati:', len(r.get('profilo', {})))
     for col, info in r.get('profilo', {}).items():
-        print('  %-22s -> %-25s [%s] %s' % (
-            col, info['campo_master'], info['confidenza'],
-            info.get('trasformazione', 'nessuna')))
+        print(' ', col, '->', info['campo_master'], '['+info['confidenza']+']')
