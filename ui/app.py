@@ -602,8 +602,14 @@ def importa():
             import_path = os.path.join(UPLOAD_DIR, f.filename)
             f.save(import_path)
             try:
-                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'learner'))
+                import importlib, sys as _sys
+                _root = os.path.join(os.path.dirname(__file__), '..')
+                _learner = os.path.join(_root, 'learner')
+                for _p in [_root, _learner]:
+                    if _p not in _sys.path: _sys.path.insert(0, _p)
+                # Forza reload per evitare cache Python
+                if 'importers.import_from_excel' in _sys.modules:
+                    importlib.reload(_sys.modules['importers.import_from_excel'])
                 from importers.import_from_excel import importa as do_import
                 risultato = do_import(import_path, dry_run=dry_run)
                 risultato['dry_run'] = dry_run
@@ -1036,6 +1042,15 @@ def cam_genera(cam_key):
         return redirect(url_for('cam_page', msg=f'Errore: {e}', mtype='err'))
 
 
+@app.route('/version')
+def version():
+    import importlib, importers.import_from_excel as ief
+    importlib.reload(ief)  # forza reload del modulo
+    src = open(ief.__file__).read()
+    has_magic = "magic in (b" in src or "b'\\xff\\xfe'" in src or 'xff' in src
+    return f"import_from_excel: {'NUOVO (magic bytes)' if has_magic else 'VECCHIO'}<br>path: {ief.__file__}"
+
+
 # ---------------------------------------------------------------
 if __name__ == '__main__':
     init_db()
@@ -1045,4 +1060,4 @@ if __name__ == '__main__':
     print('  Tool DB Manager  ->  http://localhost:5000')
     print('  Format Learner   ->  python learner/app_learner.py  (porta 5001)')
     print('')
-    app.run(debug=True, port=5000, use_reloader=False)
+    app.run(debug=True, port=5000, use_reloader=True)
