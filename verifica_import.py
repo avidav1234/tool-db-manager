@@ -20,8 +20,19 @@ import sys
 import sqlite3
 from datetime import datetime
 
-_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-DB_PATH = os.path.join(_BASE, 'database', 'tool_master.db')
+# verifica_import.py puo essere nella root o in sottocartelle - cerca il DB in modo robusto
+def _trova_db():
+    """Cerca tool_master.db risalendo l'albero delle directory."""
+    start = os.path.dirname(os.path.abspath(__file__))
+    for base in [start, os.path.join(start, '..'), os.path.join(start, '..', '..')]:
+        candidate = os.path.join(base, 'database', 'tool_master.db')
+        if os.path.exists(candidate):
+            return candidate
+    # Fallback: usa la directory corrente
+    return os.path.join(start, 'database', 'tool_master.db')
+
+_BASE   = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = _trova_db()
 
 # Definizione campi con peso e criticita
 # critico=True -> mancanza = rosso
