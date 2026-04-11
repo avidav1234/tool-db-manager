@@ -469,38 +469,39 @@ def _salva_utensile(uid):
             try: return int(v) if v else default
             except: return default
 
-        params = (
-            f['codice_catalogo'].strip() or None,
-            f['descrizione'].strip() or None,
-            tipo_id, mat_id, forn_id,
-            flt('diametro_mm', 0),
-            flt('raggio_punta_mm', 0),
-            flt('angolo_punta_gradi'),
-            flt('lunghezza_totale_mm', 0),
-            flt('lunghezza_tagl_mm', 0),
-            intt('num_taglienti', 2),
-            flt('angolo_elica_gradi'),
-            flt('passo_mm'),
-            f.get('note','').strip() or None,
-        )
+        params = {
+            'codice_catalogo':    f.get('codice_catalogo','').strip() or None,
+            'descrizione':        f.get('descrizione','').strip() or None,
+            'id_tipo':            tipo_id,
+            'id_materiale':       mat_id,
+            'id_fornitore':       forn_id,
+            'diametro_mm':        flt('diametro_mm', 0),
+            'raggio_punta_mm':    flt('raggio_punta_mm', 0),
+            'angolo_punta_gradi': flt('angolo_punta_gradi'),
+            'lunghezza_totale_mm':flt('lunghezza_totale_mm', 0),
+            'lunghezza_tagl_mm':  flt('lunghezza_tagl_mm', 0),
+            'num_taglienti':      intt('num_taglienti', 2),
+            'angolo_elica_gradi': flt('angolo_elica_gradi'),
+            'passo_mm':           flt('passo_mm'),
+            'note':               f.get('note','').strip() or None,
+            # Assemblaggio pinza - DATO FONDAMENTALE
+            'nome_pinza':         f.get('nome_pinza','').strip() or None,
+            'lungh_presa_mm':     flt('lungh_presa_mm'),
+            'fuori_pinza_mm':     flt('fuori_pinza_mm'),
+        }
 
         if uid:
-            conn.execute("""UPDATE utensile SET
-                codice_catalogo=?,descrizione=?,id_tipo=?,id_materiale=?,id_fornitore=?,
-                diametro_mm=?,raggio_punta_mm=?,angolo_punta_gradi=?,
-                lunghezza_totale_mm=?,lunghezza_tagl_mm=?,num_taglienti=?,
-                angolo_elica_gradi=?,passo_mm=?,note=?
-                WHERE id=?""", (*params, uid))
-            msg = f'Utensile aggiornato.'
+            sets = ', '.join(f"{k}=:{k}" for k in params)
+            conn.execute(f"UPDATE utensile SET {sets} WHERE id=:uid",
+                         {**params, 'uid': uid})
+            msg = 'Utensile aggiornato.'
         else:
-            codice = f['codice_interno'].strip()
-            if not codice:
-                raise ValueError('Codice interno obbligatorio')
-            conn.execute("""INSERT INTO utensile
-                (codice_interno,codice_catalogo,descrizione,id_tipo,id_materiale,id_fornitore,
-                 diametro_mm,raggio_punta_mm,angolo_punta_gradi,lunghezza_totale_mm,
-                 lunghezza_tagl_mm,num_taglienti,angolo_elica_gradi,passo_mm,note)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (codice, *params))
+            codice = f.get('codice_interno','').strip()
+            if not codice: raise ValueError('Codice interno obbligatorio')
+            cols = 'codice_interno, ' + ', '.join(params.keys())
+            vals = ':codice_interno, ' + ', '.join(f':{k}' for k in params)
+            conn.execute(f"INSERT INTO utensile ({cols}) VALUES ({vals})",
+                         {'codice_interno': codice, **params})
             msg = f'Utensile {codice} aggiunto.'
         conn.commit()
         return redirect(url_for('home', msg=msg))
@@ -509,6 +510,7 @@ def _salva_utensile(uid):
         return redirect(url_for('home', msg=f'Errore: {e}', mtype='err'))
     finally:
         conn.close()
+
 
 @app.route('/utensile/<int:uid>/elimina')
 def utensile_elimina(uid):
