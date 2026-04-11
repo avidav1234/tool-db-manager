@@ -1536,7 +1536,9 @@ def test_agente():
             import pandas as pd
 
             # Carica il file campione WorkNC per i test
-            sample_path = os.path.join(_root, 'cam_samples', 'worknc_tools_sample.csv')
+            # Cerca cam_samples nella root del progetto
+            sample_path = os.path.join(os.path.dirname(__file__), '..', 'cam_samples', 'worknc_tools_sample.csv')
+            sample_path = os.path.abspath(sample_path)
             if not os.path.exists(sample_path):
                 raise FileNotFoundError('File campione non trovato: ' + sample_path)
             df = pd.read_csv(sample_path)
