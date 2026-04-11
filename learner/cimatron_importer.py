@@ -101,6 +101,7 @@ def importa_utensili(df_cutters, conn, dry_run=False):
         'raggio':     next((c for c in df_cutters.columns if 'raggio base' in c.lower() or 'corner radius' in c.lower()), None),
         'l_tot':      next((c for c in df_cutters.columns if 'lunghezza totale' in c.lower() or 'full cutter length' in c.lower()), None),
         'l_utile':    next((c for c in df_cutters.columns if 'lunghezza utile' in c.lower() or 'clear length' in c.lower()), None),
+        'num_tagl':   next((c for c in df_cutters.columns if c.lower() in ('denti','num. denti','flutes','num flutes','num_taglienti','number of flutes')), None),
         'ang_punta':  next((c for c in df_cutters.columns if 'angolo punta' in c.lower() or 'tip angle' in c.lower()), None),
     }
 
@@ -129,6 +130,7 @@ def importa_utensili(df_cutters, conn, dry_run=False):
                 lunghezza_totale_mm = _to_float(row.get(COL['l_tot'])) or 0,
                 lunghezza_tagl_mm = _to_float(row.get(COL['l_utile'])) or 0,
                 angolo_punta_gradi = _to_float(row.get(COL['ang_punta'])) if COL['ang_punta'] else None,
+                num_taglienti      = _to_int(row.get(COL.get('num_tagl', ''), 2), 2) if COL.get('num_tagl') else 2,
             )
 
             esistente = conn.execute(
@@ -143,7 +145,8 @@ def importa_utensili(df_cutters, conn, dry_run=False):
                         diametro_mm=:diametro_mm, raggio_punta_mm=:raggio_punta_mm,
                         lunghezza_totale_mm=:lunghezza_totale_mm,
                         lunghezza_tagl_mm=:lunghezza_tagl_mm,
-                        angolo_punta_gradi=:angolo_punta_gradi
+                        angolo_punta_gradi=:angolo_punta_gradi,
+                        num_taglienti=:num_taglienti
                         WHERE codice_interno=?""", (*params.values(), codice))
                     aggiornati += 1
                 else:
