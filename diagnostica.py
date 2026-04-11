@@ -147,6 +147,22 @@ def check_agente_connessione():
         return _warn("Test saltato — API key non configurata")
 
     try:
+        import ssl
+        # Fix SSL certificati Mac
+        def _ssl_ctx():
+            try:
+                import certifi
+                return ssl.create_default_context(cafile=certifi.where())
+            except ImportError:
+                pass
+            try:
+                ctx = ssl.create_default_context()
+                ctx.load_verify_locations('/etc/ssl/cert.pem')
+                return ctx
+            except Exception:
+                pass
+            return ssl.create_default_context()
+
         payload = json.dumps({
             "model": "claude-haiku-4-5-20251001",
             "max_tokens": 10,
@@ -163,7 +179,7 @@ def check_agente_connessione():
             },
             method='POST'
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=8) as resp:
             data = json.loads(resp.read())
             risposta = data['content'][0]['text'].strip()
             return _ok(f"Connessione OK — risposta test: '{risposta}'")
