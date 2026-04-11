@@ -1,127 +1,76 @@
 """
 format_learner.py
 =================
-Analizza automaticamente un file esportato da un CAM (CSV, XLS, XLSX, ZIP)
-e propone una mappatura verso i campi ISO 13399 del DB master.
+Analizza automaticamente un file esportato da qualsiasi CAM e propone
+la mappatura verso i campi ISO 13399 del DB master.
+
+Formati supportati:
+  - Cimatron XLS nativo  (rilevamento automatico, nessuna configurazione)
+  - Cimatron CSV pipe-separato  (rilevamento automatico)
+  - CSV generico (qualsiasi separatore)
+  - Excel .xlsx / .xls generico
+  - ZIP con CSV interno
 
 Uso standalone:
-    python format_learner.py --file export_hypermill.csv
-    python format_learner.py --file export_cimatron.zip
+    python format_learner.py --file export.xls
+    python format_learner.py --file export.csv
 """
 
 import os
-import json
 import zipfile
 import pandas as pd
-from typing import Optional
 
 # ---------------------------------------------------------------
-# Campi del DB master (ISO 13399) con metadati per il rilevamento
+# Campi del DB master (ISO 13399)
 # ---------------------------------------------------------------
 MASTER_FIELDS = {
-    'codice_interno': {
-        'label': 'Codice interno / Nome utensile',
-        'tipo': 'string',
-        'keywords': ['name', 'nome', 'codice', 'code', 'id', 'number', 'nummer', 'bezeichnung'],
-        'esempio': 'FP-D10-R0-L50'
-    },
-    'codice_catalogo': {
-        'label': 'Codice catalogo fornitore',
-        'tipo': 'string',
-        'keywords': ['catalog', 'catalogo', 'article', 'articolo', 'part', 'sku', 'ref'],
-        'esempio': 'R216.34-10030-AC10G'
-    },
-    'descrizione': {
-        'label': 'Descrizione utensile',
-        'tipo': 'string',
-        'keywords': ['descri', 'comment', 'commento', 'note', 'bemerkung', 'remark'],
-        'esempio': 'Fresa piatta D10 Z3'
-    },
-    'tipo': {
-        'label': 'Tipo utensile',
-        'tipo': 'categoria',
-        'keywords': ['type', 'tipo', 'art', 'cutter', 'tool_type', 'tooltype', 'typ'],
-        'valori_attesi': ['FLAT', 'BALL', 'BULL', 'DRILL', 'TAP', 'REAM', 'SPOT', 'TAPER'],
-        'esempio': 'BALL'
-    },
-    'diametro_mm': {
-        'label': 'Diametro [mm]',
-        'tipo': 'float',
-        'keywords': ['diam', 'diameter', 'durchmesser', 'dc', 'd1', 'd '],
-        'range': (0.1, 500.0),
-        'esempio': 10.0
-    },
-    'raggio_punta_mm': {
-        'label': 'Raggio punta / corner radius [mm]',
-        'tipo': 'float',
-        'keywords': ['corner', 'radius', 'raggio', 'rn', 're', 'r_', 'nose'],
-        'range': (0.0, 50.0),
-        'esempio': 1.0
-    },
-    'angolo_punta_gradi': {
-        'label': 'Angolo punta [gradi]',
-        'tipo': 'float',
-        'keywords': ['angle', 'angolo', 'point', 'spitze', 'tip'],
-        'range': (0.0, 180.0),
-        'esempio': 118.0
-    },
-    'lunghezza_totale_mm': {
-        'label': 'Lunghezza totale [mm]',
-        'tipo': 'float',
-        'keywords': ['overall', 'total', 'length', 'lunghezza', 'gesamtlaenge', 'oal', 'lt', 'l '],
-        'range': (1.0, 500.0),
-        'esempio': 75.0
-    },
-    'lunghezza_tagl_mm': {
-        'label': 'Lunghezza tagliente [mm]',
-        'tipo': 'float',
-        'keywords': ['flute', 'cutting', 'tagliente', 'schneiden', 'lc', 'lf', 'fl'],
-        'range': (1.0, 300.0),
-        'esempio': 22.0
-    },
-    'num_taglienti': {
-        'label': 'Numero taglienti',
-        'tipo': 'int',
-        'keywords': ['flute', 'zahn', 'denti', 'teeth', 'taglienti', 'num_fl', 'nf', 'z '],
-        'range': (1, 20),
-        'esempio': 4
-    },
-    'angolo_elica_gradi': {
-        'label': 'Angolo elica [gradi]',
-        'tipo': 'float',
-        'keywords': ['helix', 'elica', 'spiral', 'drall'],
-        'range': (0.0, 90.0),
-        'esempio': 30.0
-    },
-    'materiale': {
-        'label': 'Materiale tagliente',
-        'tipo': 'categoria',
-        'keywords': ['material', 'materiale', 'werkstoff', 'substrate'],
-        'valori_attesi': ['HM', 'HSS', 'HSCo', 'CBN', 'PCD', 'CER'],
-        'esempio': 'HM'
-    },
+    'codice_interno':     {'label': 'Codice interno / Nome utensile',   'tipo': 'string',
+                           'keywords': ['name','nome','codice','code','id','number','nummer','bezeichnung'], 'esempio': 'FP-D10-R0-L50'},
+    'codice_catalogo':    {'label': 'Codice catalogo fornitore',        'tipo': 'string',
+                           'keywords': ['catalog','catalogo','article','articolo','part','sku','ref'], 'esempio': 'R216.34-10030'},
+    'descrizione':        {'label': 'Descrizione utensile',             'tipo': 'string',
+                           'keywords': ['descri','comment','commento','note','bemerkung','remark'], 'esempio': 'Fresa piatta D10 Z3'},
+    'tipo':               {'label': 'Tipo utensile',                    'tipo': 'categoria',
+                           'keywords': ['type','tipo','art','cutter','tool_type','tooltype','tip','typ'],
+                           'valori_attesi': ['FLAT','BALL','BULL','DRILL','TAP','REAM','SPOT','TAPER'], 'esempio': 'BALL'},
+    'diametro_mm':        {'label': 'Diametro [mm]',                    'tipo': 'float',
+                           'keywords': ['diam','diameter','durchmesser','dc','d1','d '], 'range': (0.1,500.0), 'esempio': 10.0},
+    'raggio_punta_mm':    {'label': 'Raggio punta / corner radius [mm]','tipo': 'float',
+                           'keywords': ['corner','radius','raggio','rn','re','r_','nose'], 'range': (0.0,50.0), 'esempio': 1.0},
+    'angolo_punta_gradi': {'label': 'Angolo punta [gradi]',             'tipo': 'float',
+                           'keywords': ['angle','angolo','point','spitze','tip'], 'range': (0.0,180.0), 'esempio': 118.0},
+    'lunghezza_totale_mm':{'label': 'Lunghezza totale [mm]',            'tipo': 'float',
+                           'keywords': ['overall','total','length','lunghezza','oal','lt','l '], 'range': (1.0,500.0), 'esempio': 75.0},
+    'lunghezza_tagl_mm':  {'label': 'Lunghezza tagliente [mm]',         'tipo': 'float',
+                           'keywords': ['flute','cutting','tagliente','schneiden','lc','lf','fl'], 'range': (1.0,300.0), 'esempio': 22.0},
+    'num_taglienti':      {'label': 'Numero taglienti',                 'tipo': 'int',
+                           'keywords': ['flute','zahn','denti','teeth','taglienti','nf','z '], 'range': (1,20), 'esempio': 4},
+    'angolo_elica_gradi': {'label': 'Angolo elica [gradi]',             'tipo': 'float',
+                           'keywords': ['helix','elica','spiral','drall'], 'range': (0.0,90.0), 'esempio': 30.0},
+    'materiale':          {'label': 'Materiale tagliente',              'tipo': 'categoria',
+                           'keywords': ['material','materiale','werkstoff','substrate'],
+                           'valori_attesi': ['HM','HSS','HSCo','CBN','PCD','CER'], 'esempio': 'HM'},
 }
 
 TIPO_GUESS = {
-    '1': 'FLAT', '2': 'BALL', '3': 'BULL', '4': 'DRILL', '5': 'TAP', '6': 'REAM',
-    'flat': 'FLAT', 'mill': 'FLAT', 'endmill': 'FLAT', 'end_mill': 'FLAT',
-    'ball': 'BALL', 'ballnose': 'BALL', 'ball_nose': 'BALL', 'sphere': 'BALL',
-    'bull': 'BULL', 'bullnose': 'BULL', 'toroid': 'BULL', 'corner': 'BULL',
-    'drill': 'DRILL', 'punta': 'DRILL', 'twist': 'DRILL',
-    'tap': 'TAP', 'maschio': 'TAP', 'thread': 'TAP',
-    'ream': 'REAM', 'alesatore': 'REAM',
-    'spot': 'SPOT', 'center': 'SPOT',
-    'chamfer': 'TAPER', 'taper': 'TAPER',
+    '1':'FLAT','2':'BALL','3':'BULL','4':'DRILL','5':'TAP','6':'REAM',
+    'flat':'FLAT','mill':'FLAT','endmill':'FLAT','end_mill':'FLAT',
+    'ball':'BALL','ballnose':'BALL','ball_nose':'BALL','sphere':'BALL',
+    'bull':'BULL','bullnose':'BULL','toroid':'BULL','corner':'BULL',
+    'drill':'DRILL','punta':'DRILL','twist':'DRILL',
+    'tap':'TAP','maschio':'TAP','thread':'TAP',
+    'ream':'REAM','alesatore':'REAM',
+    'spot':'SPOT','center':'SPOT',
+    'chamfer':'TAPER','taper':'TAPER',
 }
-
 MAT_GUESS = {
-    '1': 'HM', '2': 'HSS', '3': 'HSCo', '4': 'CBN', '5': 'PCD',
-    'hm': 'HM', 'carbide': 'HM', 'widia': 'HM', 'vhm': 'HM',
-    'hss': 'HSS', 'hsco': 'HSCo', 'cbn': 'CBN', 'pcd': 'PCD', 'ceramic': 'CER',
+    '1':'HM','2':'HSS','3':'HSCo','4':'CBN','5':'PCD',
+    'hm':'HM','carbide':'HM','widia':'HM','vhm':'HM',
+    'hss':'HSS','hsco':'HSCo','cbn':'CBN','pcd':'PCD','ceramic':'CER',
 }
 
 
-def _score_column(col_name: str, series: pd.Series, field_key: str, field_meta: dict) -> float:
+def _score_column(col_name, series, field_key, field_meta):
     score = 0.0
     col_lower = col_name.lower().strip()
     for kw in field_meta.get('keywords', []):
@@ -134,8 +83,8 @@ def _score_column(col_name: str, series: pd.Series, field_key: str, field_meta: 
     if len(non_null) == 0:
         return score
     if tipo in ('float', 'int'):
-        numeric_ratio = pd.to_numeric(non_null, errors='coerce').notna().mean()
-        if numeric_ratio > 0.8:
+        nr = pd.to_numeric(non_null, errors='coerce').notna().mean()
+        if nr > 0.8:
             score += 2.0
             rng = field_meta.get('range')
             if rng:
@@ -151,13 +100,13 @@ def _score_column(col_name: str, series: pd.Series, field_key: str, field_meta: 
     return score
 
 
-def _rileva_mappatura(df: pd.DataFrame) -> dict:
+def _rileva_mappatura(df):
     mapping = {}
     used_cols = set()
-    priority = ['codice_interno', 'diametro_mm', 'tipo', 'materiale',
-                'lunghezza_totale_mm', 'lunghezza_tagl_mm', 'raggio_punta_mm',
-                'num_taglienti', 'angolo_punta_gradi', 'angolo_elica_gradi',
-                'codice_catalogo', 'descrizione']
+    priority = ['codice_interno','diametro_mm','tipo','materiale',
+                'lunghezza_totale_mm','lunghezza_tagl_mm','raggio_punta_mm',
+                'num_taglienti','angolo_punta_gradi','angolo_elica_gradi',
+                'codice_catalogo','descrizione']
     for field_key in priority:
         field_meta = MASTER_FIELDS[field_key]
         best_col, best_score = None, 0.0
@@ -170,7 +119,7 @@ def _rileva_mappatura(df: pd.DataFrame) -> dict:
                 best_col = col
         if best_col and best_score >= 2.0:
             mapping[field_key] = {
-                'colonna_file': best_col, 'score': round(best_score, 1),
+                'colonna_file': best_col, 'score': round(best_score,1),
                 'tipo': field_meta['tipo'], 'label': field_meta['label'],
                 'confidenza': 'alta' if best_score >= 5 else 'media' if best_score >= 3 else 'bassa'
             }
@@ -178,29 +127,84 @@ def _rileva_mappatura(df: pd.DataFrame) -> dict:
     return mapping
 
 
-def _rileva_valori_categoria(df: pd.DataFrame, colonna: str, campo_master: str) -> dict:
+def _rileva_valori_categoria(df, colonna, campo_master):
     guess_map = TIPO_GUESS if campo_master == 'tipo' else MAT_GUESS
-    valori = {}
-    for v in df[colonna].dropna().unique():
-        key = str(v).strip().lower()
-        valori[str(v)] = guess_map.get(key, '?')
-    return valori
+    return {str(v): guess_map.get(str(v).strip().lower(), '?')
+            for v in df[colonna].dropna().unique()}
+
+
+def _is_cimatron_xls(filepath):
+    if not filepath.lower().endswith('.xls'):
+        return False
+    try:
+        import xlrd
+        wb = xlrd.open_workbook(filepath)
+        return 'Cutters' in wb.sheet_names()
+    except Exception:
+        return False
+
+
+def _is_cimatron_csv(filepath):
+    if not filepath.lower().endswith('.csv'):
+        return False
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+            head = f.read(500)
+        return '|' in head and ('//' in head or 'CimatronE' in head)
+    except Exception:
+        return False
 
 
 def analizza_file(filepath: str) -> dict:
+    """
+    Analizza un file CAM e restituisce la mappatura verso i campi master.
+
+    Rilevamento automatico del formato:
+      1. Cimatron XLS nativo  -> usa cimatron_parser.leggi_cimatron_xls()
+      2. Cimatron CSV pipe    -> usa cimatron_parser.leggi_cimatron_csv()
+      3. ZIP con CSV          -> parsing generico
+      4. CSV/XLS/XLSX generico -> parsing euristico
+    """
+    # --- Cimatron XLS nativo ---
+    if _is_cimatron_xls(filepath):
+        try:
+            from cimatron_parser import leggi_cimatron_xls
+            return leggi_cimatron_xls(filepath)
+        except ImportError:
+            pass  # fallback al parser generico
+
+    # --- Cimatron CSV pipe-separato ---
+    if _is_cimatron_csv(filepath):
+        try:
+            from cimatron_parser import leggi_cimatron_csv
+            return leggi_cimatron_csv(filepath)
+        except ImportError:
+            pass
+
+    # --- ZIP ---
     ext = os.path.splitext(filepath)[1].lower()
-    if ext == '.zip':
+    if ext == '.zip' or zipfile.is_zipfile(filepath):
         with zipfile.ZipFile(filepath, 'r') as z:
-            csv_files = [f for f in z.namelist() if f.endswith('.csv')]
+            csv_files = [f for f in z.namelist() if f.lower().endswith('.csv')]
             if not csv_files:
                 raise ValueError("Nessun CSV nel ZIP")
             target = next((f for f in csv_files if 'cutter' in f.lower()), csv_files[0])
             with z.open(target) as f:
                 content = f.read().decode('utf-8', errors='replace')
+        if '|' in content and '//' in content:
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix='.csv', delete=False, mode='w', encoding='utf-8')
+            tmp.write(content); tmp.close()
+            try:
+                from cimatron_parser import leggi_cimatron_csv
+                return leggi_cimatron_csv(tmp.name)
+            except Exception:
+                pass
         sep = '|' if content.count('|') > content.count(',') else ','
         lines = [l for l in content.splitlines() if not l.startswith('//')]
         from io import StringIO
         df = pd.read_csv(StringIO('\n'.join(lines)), sep=sep, on_bad_lines='skip')
+
     elif ext == '.csv':
         with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
             raw = f.read()
@@ -208,8 +212,10 @@ def analizza_file(filepath: str) -> dict:
         lines = [l for l in raw.splitlines() if not l.startswith('//')]
         from io import StringIO
         df = pd.read_csv(StringIO('\n'.join(lines)), sep=sep, on_bad_lines='skip')
+
     elif ext in ('.xls', '.xlsx'):
         df = pd.read_excel(filepath)
+
     else:
         raise ValueError(f"Formato non supportato: {ext}")
 
@@ -224,15 +230,15 @@ def analizza_file(filepath: str) -> dict:
 
     colonne_mappate = {v['colonna_file'] for v in mapping.values()}
     return {
-        'filepath': filepath,
-        'num_righe': len(df),
-        'num_colonne': len(df.columns),
-        'colonne_originali': list(df.columns),
-        'mapping': mapping,
+        'filepath': filepath, 'num_righe': len(df), 'num_colonne': len(df.columns),
+        'colonne_originali': list(df.columns), 'mapping': mapping,
         'valori_categoria': valori_categoria,
         'colonne_non_mappate': [c for c in df.columns if c not in colonne_mappate],
         'anteprima': df.head(5).to_dict(orient='records'),
         'df': df,
+        'software_rilevato': 'sconosciuto',
+        'versione_rilevata': '',
+        'parser_usato': 'generico',
     }
 
 
@@ -244,9 +250,16 @@ if __name__ == '__main__':
     if not os.path.exists(args.file):
         print(f"File non trovato: {args.file}"); sys.exit(1)
     r = analizza_file(args.file)
-    print(f"\nFile: {r['filepath']} | Righe: {r['num_righe']} | Colonne: {r['num_colonne']}")
+    print(f"\nFile:    {r['filepath']}")
+    print(f"Parser:  {r.get('parser_usato','?')}")
+    print(f"Software:{r.get('software_rilevato','?')}  Versione: {r.get('versione_rilevata','?')}")
+    print(f"Righe:   {r['num_righe']}  |  Colonne: {r['num_colonne']}")
     print(f"\nMappatura ({len(r['mapping'])} campi):")
     for campo, info in r['mapping'].items():
-        print(f"  {info['colonna_file']:25} -> {campo:25} [{info['confidenza']}]")
+        print(f"  {info['colonna_file']:30} -> {campo:25} [{info['confidenza']}]")
     if r['colonne_non_mappate']:
-        print(f"\nNon mappate: {r['colonne_non_mappate']}")
+        print(f"\nNon mappate: {r['colonne_non_mappate'][:10]}")
+    if r['valori_categoria']:
+        print("\nValori categorici:")
+        for campo, vals in r['valori_categoria'].items():
+            print(f"  {campo}: {vals}")
