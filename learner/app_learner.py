@@ -282,6 +282,22 @@ def analizza():
 
         if usa_orche:
             # PERCORSO 1: Orchestratore L1->L4 (autorevole)
+            # SKIP per Cimatron: ha parser nativo dedicato, l'orchestratore spreca token
+            is_cimatron = False
+            try:
+                with open(fp, 'rb') as fh:
+                    magic = fh.read(2)
+                if magic in (b'\xff\xfe', b'\xfe\xff'):
+                    is_cimatron = True
+                elif fp.lower().endswith('.zip'):
+                    import zipfile as _zf
+                    with _zf.ZipFile(fp) as z:
+                        is_cimatron = any('Cutters' in n for n in z.namelist())
+            except Exception:
+                pass
+            if is_cimatron:
+                usa_orche = False  # Usa euristica nativa Cimatron
+
             import pandas as pd
             ext = os.path.splitext(fp)[1].lower()
             df_tmp = None
