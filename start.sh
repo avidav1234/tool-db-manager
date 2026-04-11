@@ -74,13 +74,16 @@ mkdir -p logs
 nohup $PYTHON ui/app.py > logs/app_main.log 2>&1 &
 PID_MAIN=$!
 
-# Format Learner (porta 5001) - senza debug per evitare problemi background
-nohup $PYTHON -c "
+# Format Learner (porta 5001) - avviato direttamente come modulo
+LEARNER_SCRIPT=$(cat <<'PYEOF'
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath('.')), 'tool-db-manager', 'learner'))
-sys.path.insert(0, 'learner')
-exec(open('learner/app_learner.py').read().replace('debug=True', 'debug=False'))
-" > logs/app_learner.log 2>&1 &
+_base = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+sys.path.insert(0, os.path.join(_base, 'learner'))
+from learner.app_learner import app
+app.run(debug=False, port=5001, host='127.0.0.1')
+PYEOF
+)
+nohup $PYTHON learner/app_learner_prod.py > logs/app_learner.log 2>&1 &
 PID_LEARNER=$!
 
 # Salva i PID per stop.sh
