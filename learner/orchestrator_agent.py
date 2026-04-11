@@ -223,31 +223,21 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
             }
         campi_disponibili = {k: v for k, v in MASTER_FIELDS.items() if k not in campi_gia_mappati}
         fields_list = ', '.join(campi_disponibili.keys())
+        ib_json = json.dumps(input_batch, ensure_ascii=False)
         prompt = (
             'Software: %s | Batch %d/%d\n\n'
             'Per ogni colonna hai un suggerimento da L2b. Confermalo o correggilo.\n\n'
-            'COLONNE E SUGGERIMENTI:\n%s\n\n'
+            'COLONNE E SUGGERIMENTI L2b:\n%s\n\n'
             'CAMPI DISPONIBILI: %s\n\n'
-            'Regole: ogni campo UNA volta. Radius=diametro_mm con moltiplica_2 se non c\'e Diameter. '
-            'Gauge=fuori_pinza_mm. TipRadius=raggio_punta_mm.\n\n'
+            'Regole: ogni campo UNA volta. '
+            'Radius senza Diameter = diametro_mm con moltiplica_2. '
+            'Gauge = fuori_pinza_mm. TipRadius = raggio_punta_mm.\n\n'
             'Rispondi SOLO JSON (tutte le colonne del batch):\n'
-            '{"mapping":{"NomeCol":{"campo_master":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/decodifica_tipo","motivazione":"breve"}}}'
-        ) % (software, idx_batch+1, len(batches), JSON.stringify(input_batch), fields_list)
-        # NOTA: JSON.stringify usato nel template - viene sostituito sotto
-        prompt = prompt  # placeholder
+            '{"mapping":{"NomeCol":{"campo_master":"campo_o_ignora",'
+            '"confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/decodifica_tipo",'
+            '"motivazione":"breve"}}}'
+        ) % (software, idx_batch+1, len(batches), ib_json, fields_list)
         try:
-            import json as _json
-            ib_json = _json.dumps(input_batch, ensure_ascii=False)
-            prompt = (
-                'Software: %s | Batch %d/%d\n\n'
-                'Per ogni colonna hai un suggerimento da L2b. Confermalo o correggilo.\n\n'
-                'COLONNE E SUGGERIMENTI:\n%s\n\n'
-                'CAMPI DISPONIBILI: %s\n\n'
-                'Regole: ogni campo UNA volta. Radius=diametro_mm+moltiplica_2 se non c\'e Diameter. '
-                'Gauge=fuori_pinza_mm. TipRadius=raggio_punta_mm.\n\n'
-                'Rispondi SOLO JSON (tutte le colonne del batch):\n'
-                '{"mapping":{"NomeCol":{"campo_master":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/decodifica_tipo","motivazione":"breve"}}}'
-            ) % (software, idx_batch+1, len(batches), ib_json, fields_list)
             testo = _chiama(prompt, MODEL_ANALISTA, api_key, max_tokens=1200)
             result = _parse_json(testo)
             for col, info in result.get('mapping', {}).items():
