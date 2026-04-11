@@ -33,17 +33,26 @@ MASTER_FIELDS = {
                            'keywords': ['type','tipo','art','cutter','tool_type','tooltype','tip','typ'],
                            'valori_attesi': ['FLAT','BALL','BULL','DRILL','TAP','REAM','SPOT','TAPER'], 'esempio': 'BALL'},
     'diametro_mm':        {'label': 'Diametro [mm]',                    'tipo': 'float',
-                           'keywords': ['diam','diameter','durchmesser','dc','d1','d '], 'range': (0.1,500.0), 'esempio': 10.0},
+                           'keywords': ['diam','diameter','durchmesser','cutter_diam','tool_diameter',
+                                        'dc','d1','d ','fraesdurchmesser'],
+                           'range': (0.1,500.0), 'esempio': 10.0},
     'raggio_punta_mm':    {'label': 'Raggio punta / corner radius [mm]','tipo': 'float',
-                           'keywords': ['corner','radius','raggio','rn','re','r_','nose'], 'range': (0.0,50.0), 'esempio': 1.0},
+                           'keywords': ['corner','tip_radius','tipradius','corner_radius',
+                                        'nose_radius','nose radius','raggio punta','eckenradius'],
+                           'range': (0.0,50.0), 'esempio': 1.0},
     'angolo_punta_gradi': {'label': 'Angolo punta [gradi]',             'tipo': 'float',
                            'keywords': ['angle','angolo','point','spitze','tip'], 'range': (0.0,180.0), 'esempio': 118.0},
     'lunghezza_totale_mm':{'label': 'Lunghezza totale [mm]',            'tipo': 'float',
                            'keywords': ['overall','total','length','lunghezza','oal','lt','l '], 'range': (1.0,500.0), 'esempio': 75.0},
     'lunghezza_tagl_mm':  {'label': 'Lunghezza tagliente [mm]',         'tipo': 'float',
-                           'keywords': ['flute','cutting','tagliente','schneiden','lc','lf','fl'], 'range': (1.0,300.0), 'esempio': 22.0},
+                           'keywords': ['flute','cutting','tagliente','schneiden','lc','lf','fl',
+                                        'useful','usefullength','useful_length','flute_length',
+                                        'schnittlaenge'],
+                           'range': (1.0,300.0), 'esempio': 22.0},
     'num_taglienti':      {'label': 'Numero taglienti',                 'tipo': 'int',
-                           'keywords': ['flute','zahn','denti','teeth','taglienti','nf','z '], 'range': (1,20), 'esempio': 4},
+                           'keywords': ['flute','zahn','denti','teeth','taglienti','nf','z ',
+                                        'num_flutes','number of flutes','schneiden anzahl'],
+                           'range': (1,20), 'esempio': 4},
     'angolo_elica_gradi': {'label': 'Angolo elica [gradi]',             'tipo': 'float',
                            'keywords': ['helix','elica','spiral','drall'], 'range': (0.0,90.0), 'esempio': 30.0},
     'materiale':          {'label': 'Materiale tagliente',              'tipo': 'categoria',
@@ -57,7 +66,9 @@ MASTER_FIELDS = {
                            'keywords': ['rpm','spindle','rotaz','rotation','drehzahl','spindle speed','spindle_speed'],
                            'range': (100.0, 30000.0), 'esempio': 5000.0},
     'fz_default':         {'label': 'Avanzamento per dente Fz [mm/z]',    'tipo': 'float',
-                           'keywords': ['fz','feed per tooth','feed_per_tooth','avanzamento dente'],
+                           'keywords': [' fz ',' fz,','(fz)','fz_','_fz',
+                                        'feed per tooth','feed_per_tooth','zahnvorschub',
+                                        'avanzamento dente','fz'],
                            'range': (0.001, 1.0), 'esempio': 0.05},
     'vf_mm_min':          {'label': 'Avanzamento tavola Vf [mm/min]',     'tipo': 'float',
                            'keywords': ['feed','feed rate','feedrate','feed_rate','avanz','vorschub','vf','table feed'],
@@ -69,7 +80,9 @@ MASTER_FIELDS = {
                            'keywords': ['ae','radial','lateral','passo lat','radial depth','radial_depth','stepover','woc'],
                            'range': (0.1, 30.0), 'esempio': 3.0},
     'fuori_pinza_mm':     {'label': 'Fuori pinza - distanza punta/pinza', 'tipo': 'float',
-                           'keywords': ['gauge','gauge length','fuori pinza','projection','proj_length','reach','auskragung'],
+                           'keywords': ['gauge length','gauge_length','fuori pinza','projection length',
+                                        'proj_length','reach','auskragung','free length',
+                                        'lungh. libera','lunghezza libera'],
                            'range': (5.0, 300.0), 'esempio': 35.0},
     'nome_pinza':         {'label': 'Nome portautensile / pinza',         'tipo': 'string',
                            'keywords': ['holder','holder name','holder_name','pinza','portautensile','holderref','spannmittel'],
@@ -142,6 +155,29 @@ MAT_GUESS = {
 def _score_column(col_name, series, field_key, field_meta):
     score = 0.0
     col_lower = col_name.lower().strip()
+
+    # Penalita per mapping noti come sbagliati
+    # 'Radius' da solo = raggio utensile (= diam/2) in WorkNC/hyperMILL
+    # NON è raggio punta (tipicamente piccolo) né un angolo
+    PENALITA = {
+        ('radius',  'angolo_punta_gradi'):  -10.0,
+        ('radius',  'angolo_elica_gradi'):  -10.0,
+        ('radius',  'raggio_punta_mm'):      -3.0,  # Radius in WorkNC = diam/2
+        ('usefullength', 'angolo_punta_gradi'): -10.0,
+        ('usefullength', 'angolo_elica_gradi'): -10.0,
+        ('gauge',   'angolo_punta_gradi'):  -10.0,
+        ('gauge',   'angolo_elica_gradi'):  -10.0,
+        ('holderref', 'codice_catalogo'):    -5.0,  # HolderRef = nome pinza, non catalogo
+        ('holderref', 'codice_interno'):     -5.0,
+        ('fz',      'angolo_elica_gradi'):  -10.0,
+        ('fz',      'angolo_punta_gradi'):  -10.0,
+        (' id',     'diametro_mm'):         -10.0,
+        (' id',     'lunghezza_totale_mm'): -10.0,
+    }
+    for (col_pat, campo_pat), penalty in PENALITA.items():
+        if col_pat in col_lower and campo_pat == field_key:
+            score += penalty
+
     for kw in field_meta.get('keywords', []):
         if kw.lower() in col_lower:
             score += 3.0
