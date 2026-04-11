@@ -1,0 +1,6 @@
+Tool Name;Tool Type;Diameter;Corner Radius;Total Length;Flute Length;Number of Flutes;Material;Spindle Speed;Feed Rate;Axial Depth;Radial Depth;Holder Name;Gauge Length;Comment
+EM_D10_R0_Z4_HM;End Mill;10;0;75;22;4;Carbide;5000;1200;10;5;HSK63A_D10;35;Fresa piatta D10
+EM_D10_R5_Z4_HM;Ball Nose;10;5;75;22;4;Carbide;5500;900;3;5;HSK63A_D10;35;Sferica D10 R5
+EM_D6_R0_Z4_HM;End Mill;6;0;60;18;4;Carbide;8000;1000;6;3;HSK63A_D6;25;Fresa piatta D6
+EM_D16_R0_Z4_HM;End Mill;16;0;100;35;4;Carbide;3200;1500;16;8;HSK63A_D16;45;Fresa piatta D16
+DRL_D10_5VD;Drill;10;0;120;60;2;Carbide;4000;500;0;0;HSK63A_D10;50;Punta D10
