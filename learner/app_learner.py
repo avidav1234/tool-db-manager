@@ -113,6 +113,29 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     Agente non disponibile ({{ r.agente_errore }}). Mappa manualmente le colonne rimanenti.
   </div>
   {% endif %}
+  {% if r.orchestratore %}
+  <div style="background:{% if r.orchestratore.verificato %}#f0fdf4{% else %}#fefce8{% endif %};border:1px solid {% if r.orchestratore.verificato %}#86efac{% else %}#fde047{% endif %};border-radius:8px;padding:.75rem;margin-bottom:1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+    <span style="font-weight:600;font-size:13px">&#129516; Agente Multilivello:</span>
+    {% if r.orchestratore.verificato %}
+    <span style="background:#dcfce7;color:#166534;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">&#10003; APPROVATO {{r.orchestratore.score}}%</span>
+    {% else %}
+    <span style="background:#fef9c3;color:#854d0e;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600">&#9888; PARZIALE {{r.orchestratore.score}}%</span>
+    {% endif %}
+    <span style="font-size:12px;color:#888">~{{r.orchestratore.costo}} token | {{r.orchestratore.struttura.get('software_cam','?')}}</span>
+    {% if r.orchestratore.campi_mancanti %}
+    <span style="font-size:12px;color:#854d0e">&#9888; Mancanti: {{r.orchestratore.campi_mancanti|join(', ')}}</span>
+    {% endif %}
+    <details style="width:100%">
+      <summary style="cursor:pointer;font-size:11px;color:#888">Log</summary>
+      <div style="background:#1a1a1a;border-radius:4px;padding:.4rem;margin-top:.3rem;max-height:150px;overflow-y:auto">
+      {% for e in r.orchestratore.log %}
+      <div style="font-family:monospace;font-size:10px;color:{% if e.livello=='L1' %}#60a5fa{% elif 'L2' in e.livello %}#4ade80{% elif e.livello=='L3' %}#fbbf24{% else %}#c084fc{% endif %}">[{{e.livello}}] {{e.msg}}</div>
+      {% endfor %}
+      </div>
+    </details>
+  </div>
+  {% endif %}
+
   <table style="margin-bottom:1rem">
   <thead><tr><th>Colonna file</th><th>Campo master</th><th>Confidenza</th><th>Note</th></tr></thead>
   <tbody>
