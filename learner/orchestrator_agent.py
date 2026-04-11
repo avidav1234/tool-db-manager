@@ -50,7 +50,7 @@ MASTER_FIELDS = {
     'angolo_punta_gradi':   'Angolo punta gradi (118-140 per punte)',
     'lunghezza_totale_mm':  'Lunghezza totale mm',
     'lunghezza_tagl_mm':    'Lunghezza utile/tagliente mm',
-    'num_taglienti':        'Numero taglienti/flute (1-20, intero);,
+    'num_taglienti':        'Numero taglienti/flute (1-20, intero)',
     'nome_pinza':           'Nome portautensile. Es: HSK63A_D10',
     'lungh_presa_mm':       'Quanto utensile entra nella pinza mm',
     'fuori_pinza_mm':       'CRITCIOK: distanza punta->pinza mm. Per sicurezza lavorazione',
@@ -251,7 +251,7 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
         }
     prompt = (
         'Software: %s\n\nMAPPIGF DA VERIFICARE (con valori reali):\n%s\n\n'
-        'RANGE RIFEIBÕENTO:\n'
+        'RANGE RIFEIB√çENTO:\n'
         'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 (MAI uguale al diametro)\n'
         'fz_default: 0.001-0.5 (PICCOLI) | vf_mm_min: 50-10000 (GRANDI)\n'
         'vc_default: 10-1000 | n_rpm: 100-30000 | num_taglienti: 1-20\n\n'
