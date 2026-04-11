@@ -19,9 +19,24 @@ app = Flask(__name__)
 # ---------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------
+def _ensure_db():
+    """Crea cartella e DB automaticamente se non esistono."""
+    db_dir = os.path.dirname(DB_PATH)
+    os.makedirs(db_dir, exist_ok=True)
+    if not os.path.exists(DB_PATH):
+        schema_path = os.path.join(db_dir, 'schema.sql')
+        conn_tmp = sqlite3.connect(DB_PATH)
+        if os.path.exists(schema_path):
+            with open(schema_path, encoding='utf-8') as f:
+                conn_tmp.executescript(f.read())
+            conn_tmp.commit()
+        conn_tmp.close()
+
 def get_conn():
+    _ensure_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 def init_db():
