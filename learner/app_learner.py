@@ -289,6 +289,33 @@ def analizza():
                     log_ev = []
                     res = orchestra_learning(df_tmp, nome_file=f.filename,
                         log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg}))
+                    profilo = res.get('profilo', {})
+                    if profilo:
+                        # Converti profilo orchestratore nel formato r['mapping']
+                        # Orchestratore: {colonna_file: {campo_master, confidenza, ...}}
+                        # Format learner: {campo_master: {colonna_file, score, label, ...}}
+                        mapping_orche = {}
+                        for col_file, info in profilo.items():
+                            campo = info.get('campo_master', 'ignora')
+                            if campo == 'ignora': continue
+                            mapping_orche[campo] = {
+                                'colonna_file':   col_file,
+                                'score':          9.0 if info.get('confidenza') == 'alta' else 6.0,
+                                'tipo':           'string',
+                                'label':          col_file,
+                                'confidenza':     info.get('confidenza', 'media'),
+                                'motivazione':    info.get('motivazione', ''),
+                                'trasformazione': info.get('trasformazione', 'nessuna'),
+                                'da_agente':      True,
+                            }
+                        # Aggiorna il mapping con quello dell'orchestratore
+                        r['mapping'].update(mapping_orche)
+                        # Rimuovi colonne non piu ignorate dall'orchestratore
+                        colonne_mappate_orche = set(v['colonna_file'] for v in mapping_orche.values())
+                        r['colonne_non_mappate'] = [
+                            c for c in r.get('colonne_non_mappate', [])
+                            if c not in colonne_mappate_orche
+                        ]
                     r['orchestratore'] = {
                         'verificato': res.get('verificato', False),
                         'score':      res.get('score', 0),
