@@ -195,7 +195,9 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <table id="tbl">
 <thead><tr>
   <th>Codice</th><th>Descrizione</th><th>Tipo</th>
-  <th>Diam.</th><th>R.punta</th><th>L.tot.</th><th>Tag.</th><th>Mat.</th><th></th>
+  <th>Diam.</th><th>R.punta</th><th>L.tot.</th>
+  <th style="background:#f0fdf4;color:#166534">Fuori pinza</th>
+  <th>Pinza</th><th>Tag.</th><th>Mat.</th><th></th>
 </tr></thead>
 <tbody>
 {% for u in utensili %}
@@ -207,6 +209,10 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <td>{{ u.diametro_mm }}</td>
   <td>{{ u.raggio_punta_mm }}</td>
   <td>{{ u.lunghezza_totale_mm }}</td>
+  <td style="background:#f0fdf4;font-weight:600;color:#166534">
+    {{ u.fuori_pinza_mm if u.fuori_pinza_mm else '-' }} {% if u.fuori_pinza_mm %}mm{% endif %}
+  </td>
+  <td style="font-size:12px;color:#888">{{ u.nome_pinza or '-' }}</td>
   <td>{{ u.num_taglienti }}</td>
   <td>{{ u.materiale }}</td>
   <td style="white-space:nowrap">
@@ -364,6 +370,28 @@ FORM_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <label>Passo filetto (mm)</label>
       <input type="number" step="0.01" min="0" name="passo_mm"
              value="{{ u.passo_mm or '' }}" placeholder="Solo per maschi">
+    </div>
+  </div>
+
+  <p class="section-title">Assemblaggio con pinza</p>
+  <div class="form-row col3">
+    <div class="field">
+      <label>Portautensile / Pinza</label>
+      <input name="nome_pinza" value="{{ u.nome_pinza or '' }}"
+             placeholder="es. HSL_D6-NEW">
+    </div>
+    <div class="field">
+      <label>Lunghezza presa (mm)</label>
+      <input type="number" step="0.01" min="0" name="lungh_presa_mm"
+             value="{{ u.lungh_presa_mm or '' }}" placeholder="36.0">
+      <p class="hint">Quanto utensile entra nella pinza</p>
+    </div>
+    <div class="field">
+      <label style="color:#1a6e35;font-weight:700">Fuori pinza (mm) ★</label>
+      <input type="number" step="0.01" min="0" name="fuori_pinza_mm"
+             value="{{ u.fuori_pinza_mm or '' }}" placeholder="20.0"
+             style="border-color:#1a6e35">
+      <p class="hint" style="color:#1a6e35">Distanza dalla punta all'inizio della pinza</p>
     </div>
   </div>
 
