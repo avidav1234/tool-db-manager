@@ -206,7 +206,7 @@ def _l2b_colonna(col_name, serie, contesto, api_key) -> dict:
 
 def _l3_mapping(analisi, struttura, api_key, log) -> dict:
     log('L3', 'Produzione mapping strutturato...')
-    fields_desc = '\n'.join('%s: %s' % (k, v) for key, val in MASTER_FIELDS.items())
+    fields_desc = '\n'.join('%s: %s' % (k, v) for k, v in MASTER_FIELDS.items())
 
     prompt = (
         'File: %s\n\nANALISI COLONNE:\n%s\n\nCAMPI MASTER:\n%s\n\n'
