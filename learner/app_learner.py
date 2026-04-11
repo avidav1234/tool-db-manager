@@ -269,69 +269,96 @@ def analizza():
     fp = os.path.join(UPLOAD_FOLDER, f.filename)
     f.save(fp)
     try:
+        # Tenta orchestratore multilivello
+        _root = os.path.join(os.path.dirname(__file__), '..')
+        if _root not in sys.path: sys.path.insert(0, _root)
+
+        usa_orche = False
+        try:
+            from orchestrator_agent import disponibile, orchestra_learning
+            usa_orche = disponibile()
+        except Exception:
+            usa_orche = False
+
+        if usa_orche:
+            # PERCORSO 1: Orchestratore L1->L4 (autorevole)
+            import pandas as pd
+            ext = os.path.splitext(fp)[1].lower()
+            df_tmp = None
+            if ext == '.csv':
+                # Rileva separatore
+                for sep in [',', ';', '\t', '|']:
+                    try:
+                        test = pd.read_csv(fp, sep=sep, nrows=3)
+                        if len(test.columns) > 2:
+                            df_tmp = pd.read_csv(fp, sep=sep)
+                            break
+                    except Exception:
+                        pass
+            elif ext in ('.xlsx', '.xls'):
+                df_tmp = pd.read_excel(fp)
+
+            if df_tmp is not None and len(df_tmp) > 0:
+                log_ev = []
+                res = orchestra_learning(
+                    df_tmp, nome_file=f.filename,
+                    log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg})
+                )
+                profilo = res.get('profilo', {})
+
+                # Costruisce r nel formato che la template si aspetta
+                mapping = {}
+                for col_file, info in profilo.items():
+                    campo = info.get('campo_master', 'ignora')
+                    if campo == 'ignora':
+                        continue
+                    mapping[campo] = {
+                        'colonna_file':   col_file,
+                        'score':          9.0 if info.get('confidenza') == 'alta' else 6.0,
+                        'tipo':           'string',
+                        'label':          col_file,
+                        'confidenza':     info.get('confidenza', 'media'),
+                        'motivazione':    info.get('motivazione', ''),
+                        'trasformazione': info.get('trasformazione', 'nessuna'),
+                        'da_agente':      True,
+                    }
+
+                # Colonne non mappate = quelle nel file che non hanno un campo master
+                colonne_mappate = set(v['colonna_file'] for v in mapping.values())
+                r = {
+                    'filepath':            fp,
+                    'num_righe':           len(df_tmp),
+                    'num_colonne':         len(df_tmp.columns),
+                    'colonne_originali':   list(df_tmp.columns),
+                    'mapping':             mapping,
+                    'valori_categoria':    {},
+                    'colonne_non_mappate': [c for c in df_tmp.columns if c not in colonne_mappate],
+                    'anteprima':           df_tmp.head(5).to_dict(orient='records'),
+                    'software_rilevato':   res.get('struttura', {}).get('software_cam', 'sconosciuto'),
+                    'versione_rilevata':   res.get('struttura', {}).get('versione', ''),
+                    'parser_usato':        'orchestratore_ai',
+                    'orchestratore': {
+                        'verificato':      res.get('verificato', False),
+                        'score':           res.get('score', 0),
+                        'costo':           res.get('costo_stimato', 0),
+                        'struttura':       res.get('struttura', {}),
+                        'campi_mancanti':  res.get('campi_mancanti', []),
+                        'warning':         res.get('warning', []),
+                        'log':             log_ev,
+                    },
+                }
+                app.jinja_env.filters['basename'] = os.path.basename
+                return render_template_string(ANALISI, r=r, fields=MASTER_FIELDS, msg='', mtype='')
+
+        # PERCORSO 2: Euristica (fallback se orchestratore non disponibile o file non leggibile)
         r = analizza_file(fp)
         r.pop('df', None)
-        # Prova orchestratore multilivello (usa API key dal .env automaticamente)
-        try:
-            _root = os.path.join(os.path.dirname(__file__), '..')
-            if _root not in sys.path: sys.path.insert(0, _root)
-            from orchestrator_agent import disponibile, orchestra_learning
-            if disponibile():
-                import pandas as pd
-                df_tmp = None
-                ext = os.path.splitext(fp)[1].lower()
-                sep = r.get('separatore', ',')
-                if ext == '.csv':
-                    df_tmp = pd.read_csv(fp, sep=sep, encoding='utf-8')
-                elif ext in ('.xlsx', '.xls'):
-                    df_tmp = pd.read_excel(fp)
-                if df_tmp is not None and len(df_tmp) > 0:
-                    log_ev = []
-                    res = orchestra_learning(df_tmp, nome_file=f.filename,
-                        log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg}))
-                    profilo = res.get('profilo', {})
-                    if profilo:
-                        # Converti profilo orchestratore nel formato r['mapping']
-                        # Orchestratore: {colonna_file: {campo_master, confidenza, ...}}
-                        # Format learner: {campo_master: {colonna_file, score, label, ...}}
-                        mapping_orche = {}
-                        for col_file, info in profilo.items():
-                            campo = info.get('campo_master', 'ignora')
-                            if campo == 'ignora': continue
-                            mapping_orche[campo] = {
-                                'colonna_file':   col_file,
-                                'score':          9.0 if info.get('confidenza') == 'alta' else 6.0,
-                                'tipo':           'string',
-                                'label':          col_file,
-                                'confidenza':     info.get('confidenza', 'media'),
-                                'motivazione':    info.get('motivazione', ''),
-                                'trasformazione': info.get('trasformazione', 'nessuna'),
-                                'da_agente':      True,
-                            }
-                        # Aggiorna il mapping con quello dell'orchestratore
-                        r['mapping'].update(mapping_orche)
-                        # Rimuovi colonne non piu ignorate dall'orchestratore
-                        colonne_mappate_orche = set(v['colonna_file'] for v in mapping_orche.values())
-                        r['colonne_non_mappate'] = [
-                            c for c in r.get('colonne_non_mappate', [])
-                            if c not in colonne_mappate_orche
-                        ]
-                    r['orchestratore'] = {
-                        'verificato': res.get('verificato', False),
-                        'score':      res.get('score', 0),
-                        'costo':      res.get('costo_stimato', 0),
-                        'struttura':  res.get('struttura', {}),
-                        'campi_mancanti': res.get('campi_mancanti', []),
-                        'warning':    res.get('warning', []),
-                        'log':        log_ev,
-                    }
-        except Exception:
-            pass  # fallback silenzioso all'euristica
+        r['orchestratore'] = None
+
     except Exception as e:
         return redirect(url_for('home', msg=f'Errore: {e}'))
     app.jinja_env.filters['basename'] = os.path.basename
     return render_template_string(ANALISI, r=r, fields=MASTER_FIELDS, msg='', mtype='')
-
 @app.route('/salva_profilo', methods=['POST'])
 def salva_profilo_route():
     form = request.form
