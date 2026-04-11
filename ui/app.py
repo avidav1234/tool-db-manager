@@ -512,7 +512,7 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
           <div id="dz-label">Trascina qui il file o clicca per sceglierlo</div>
           <div style="font-size:12px;color:#aaa;margin-top:.4rem">.xlsx  .xls  .csv</div>
           <input type="file" id="file_input" name="file"
-                 accept=".xlsx,.xls,.csv" style="display:none"
+                 accept=".xlsx,.xls,.csv,.zip" style="display:none"
                  onchange="document.getElementById('dz-label').textContent=this.files[0].name">
         </label>
         <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
@@ -702,7 +702,9 @@ def importa():
         f = request.files.get('file')
         dry_run = bool(request.form.get('dry_run'))
         if f and f.filename:
-            import_path = os.path.join(UPLOAD_DIR, f.filename)
+            # Preserva nome originale con estensione
+            safe_name = f.filename.replace(' ', '_')
+            import_path = os.path.join(UPLOAD_DIR, safe_name)
             f.save(import_path)
             try:
                 # Aggiungi path necessari
