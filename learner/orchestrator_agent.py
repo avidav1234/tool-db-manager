@@ -342,8 +342,8 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     struttura = _l2a_struttura(df, key, log)
     token_stimati += 800
 
-    # L2b - analisi colonne in batch da 20 (veloce)
-    log('L2b', 'Analisi colonne in batch...')
+    # L2b - ibrido: singole per <=30 colonne (preciso), batch per >30 (veloce)
+    log('L2b', 'Analisi colonne (%d totali)...' % len(df.columns))
     import pandas as _pd
     da_ignorare = set(struttura.get('colonne_da_ignorare', []))
     analisi = {}
@@ -356,35 +356,46 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
         else:
             da_analizzare.append(col)
 
-    BATCH_L2B = 20
     fields_str = ', '.join(list(MASTER_FIELDS.keys()))
-    for bi in range(0, len(da_analizzare), BATCH_L2B):
-        batch = da_analizzare[bi:bi+BATCH_L2B]
-        info_b = {}
-        for col in batch:
-            s = df[col].dropna()
-            nums = _pd.to_numeric(s, errors='coerce').dropna()
-            info_b[col] = {
-                'campioni': [str(v)[:15] for v in s.head(3).tolist()],
-                'tipo': 'num' if len(nums)/max(len(s),1)>0.7 else 'testo',
-                'min': round(float(nums.min()),3) if len(nums)>0 else None,
-                'max': round(float(nums.max()),3) if len(nums)>0 else None,
-            }
-        prompt = (
-            'Software: %s. Analizza queste %d colonne.\n'
-            'COLONNE:\n%s\n\nCAMPI DISPONIBILI: %s\n\n'
-            'Rispondi SOLO JSON: {"analisi":{"NomeColonna":{"campo_master_suggerito":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2"}}}'
-        ) % (struttura.get('software_cam','CAM'), len(info_b), json.dumps(info_b, ensure_ascii=False), fields_str)
-        try:
-            testo = _chiama(prompt, MODEL_ANALISTA, key, max_tokens=1000)
-            res = _parse_json(testo)
-            for col, inf in res.get('analisi', {}).items():
-                if col in df.columns and inf:
-                    analisi[col] = inf
-        except Exception as e:
+
+    if len(da_analizzare) <= 30:
+        # MODALITA' PRECISA: una chiamata per colonna (WorkNC, hyperMILL)
+        log('L2b', 'Modalita precisa (%d colonne)' % len(da_analizzare))
+        for col in da_analizzare:
+            analisi[col] = _l2b_colonna(col, df[col], struttura, key)
+            token_stimati += 250
+            time.sleep(0.05)
+    else:
+        # MODALITA' VELOCE: batch da 20 (Cimatron 100 colonne)
+        BATCH_L2B = 20
+        log('L2b', 'Modalita batch (%d colonne, batch da %d)' % (len(da_analizzare), BATCH_L2B))
+        for bi in range(0, len(da_analizzare), BATCH_L2B):
+            batch = da_analizzare[bi:bi+BATCH_L2B]
+            info_b = {}
             for col in batch:
-                analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':str(e)})
-        token_stimati += 800
+                s = df[col].dropna()
+                nums = _pd.to_numeric(s, errors='coerce').dropna()
+                info_b[col] = {
+                    'campioni': [str(v)[:15] for v in s.head(3).tolist()],
+                    'tipo': 'num' if len(nums)/max(len(s),1)>0.7 else 'testo',
+                    'min': round(float(nums.min()),3) if len(nums)>0 else None,
+                    'max': round(float(nums.max()),3) if len(nums)>0 else None,
+                }
+            prompt = (
+                'Software: %s. Analizza queste %d colonne.\n'
+                'COLONNE:\n%s\n\nCAMPI DISPONIBILI: %s\n\n'
+                'Rispondi SOLO JSON: {"analisi":{"NomeColonna":{"campo_master_suggerito":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2"}}}'
+            ) % (struttura.get('software_cam','CAM'), len(info_b), json.dumps(info_b, ensure_ascii=False), fields_str)
+            try:
+                testo = _chiama(prompt, MODEL_ANALISTA, key, max_tokens=1000)
+                res = _parse_json(testo)
+                for col, inf in res.get('analisi', {}).items():
+                    if col in df.columns and inf:
+                        analisi[col] = inf
+            except Exception as e:
+                for col in batch:
+                    analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':str(e)})
+            token_stimati += 800
 
     for col in df.columns:
         analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':'non analizzata'})
