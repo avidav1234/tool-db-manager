@@ -1,19 +1,18 @@
 """
 format_learner.py
 =================
-Analizza automaticamente un file esportato da qualsiasi CAM e propone
-la mappatura verso i campi ISO 13399 del DB master.
+Punto di ingresso unico per l'analisi di qualsiasi file CAM.
 
-Formati supportati:
-  - Cimatron XLS nativo  (rilevamento automatico, nessuna configurazione)
-  - Cimatron CSV pipe-separato  (rilevamento automatico)
-  - CSV generico (qualsiasi separatore)
-  - Excel .xlsx / .xls generico
-  - ZIP con CSV interno
+Logica di rilevamento automatico (in ordine di priorita'):
+  1. Cimatron ZIP  -> cimatron_parser.leggi_cimatron_zip()
+  2. Cimatron XLS  -> cimatron_parser.leggi_cimatron_xls()
+  3. Cimatron CSV  -> cimatron_parser.leggi_cimatron_csv()
+  4. ZIP generico  -> parsing euristico CSV interno
+  5. CSV generico  -> parsing euristico
+  6. XLSX/XLS      -> parsing euristico
 
-Uso standalone:
-    python format_learner.py --file export.xls
-    python format_learner.py --file export.csv
+Nessuna configurazione richiesta: il sistema riconosce il formato
+dal contenuto del file, non dall'estensione o dal nome.
 """
 
 import os
@@ -54,13 +53,13 @@ MASTER_FIELDS = {
 
 TIPO_GUESS = {
     '1':'FLAT','2':'BALL','3':'BULL','4':'DRILL','5':'TAP','6':'REAM',
-    'flat':'FLAT','mill':'FLAT','endmill':'FLAT','end_mill':'FLAT',
-    'ball':'BALL','ballnose':'BALL','ball_nose':'BALL','sphere':'BALL',
-    'bull':'BULL','bullnose':'BULL','toroid':'BULL','corner':'BULL',
-    'drill':'DRILL','punta':'DRILL','twist':'DRILL',
-    'tap':'TAP','maschio':'TAP','thread':'TAP',
-    'ream':'REAM','alesatore':'REAM',
-    'spot':'SPOT','center':'SPOT',
+    'flat':'FLAT','mill':'FLAT','endmill':'FLAT','piana':'FLAT',
+    'ball':'BALL','ballnose':'BALL','sferica':'BALL','sfera':'BALL',
+    'bull':'BULL','bullnose':'BULL','torica':'BULL',
+    'drill':'DRILL','punta':'DRILL','foratura':'DRILL',
+    'tap':'TAP','maschio':'TAP','filettatura':'TAP',
+    'ream':'REAM','alesatura':'REAM',
+    'spot':'SPOT','center':'SPOT','centratura':'SPOT',
     'chamfer':'TAPER','taper':'TAPER',
 }
 MAT_GUESS = {
@@ -107,20 +106,20 @@ def _rileva_mappatura(df):
                 'lunghezza_totale_mm','lunghezza_tagl_mm','raggio_punta_mm',
                 'num_taglienti','angolo_punta_gradi','angolo_elica_gradi',
                 'codice_catalogo','descrizione']
-    for field_key in priority:
-        field_meta = MASTER_FIELDS[field_key]
+    for fk in priority:
+        fm = MASTER_FIELDS[fk]
         best_col, best_score = None, 0.0
         for col in df.columns:
             if col in used_cols:
                 continue
-            score = _score_column(col, df[col], field_key, field_meta)
-            if score > best_score:
-                best_score = score
+            sc = _score_column(col, df[col], fk, fm)
+            if sc > best_score:
+                best_score = sc
                 best_col = col
         if best_col and best_score >= 2.0:
-            mapping[field_key] = {
+            mapping[fk] = {
                 'colonna_file': best_col, 'score': round(best_score,1),
-                'tipo': field_meta['tipo'], 'label': field_meta['label'],
+                'tipo': fm['tipo'], 'label': fm['label'],
                 'confidenza': 'alta' if best_score >= 5 else 'media' if best_score >= 3 else 'bassa'
             }
             used_cols.add(best_col)
@@ -133,56 +132,33 @@ def _rileva_valori_categoria(df, colonna, campo_master):
             for v in df[colonna].dropna().unique()}
 
 
-def _is_cimatron_xls(filepath):
-    if not filepath.lower().endswith('.xls'):
-        return False
-    try:
-        import xlrd
-        wb = xlrd.open_workbook(filepath)
-        return 'Cutters' in wb.sheet_names()
-    except Exception:
-        return False
-
-
-def _is_cimatron_csv(filepath):
-    if not filepath.lower().endswith('.csv'):
-        return False
-    try:
-        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
-            head = f.read(500)
-        return '|' in head and ('//' in head or 'CimatronE' in head)
-    except Exception:
-        return False
-
-
 def analizza_file(filepath: str) -> dict:
     """
-    Analizza un file CAM e restituisce la mappatura verso i campi master.
-
-    Rilevamento automatico del formato:
-      1. Cimatron XLS nativo  -> usa cimatron_parser.leggi_cimatron_xls()
-      2. Cimatron CSV pipe    -> usa cimatron_parser.leggi_cimatron_csv()
-      3. ZIP con CSV          -> parsing generico
-      4. CSV/XLS/XLSX generico -> parsing euristico
+    Analizza qualsiasi file CAM e ritorna la mappatura verso i campi master.
+    Rilevamento formato completamente automatico.
     """
-    # --- Cimatron XLS nativo ---
-    if _is_cimatron_xls(filepath):
-        try:
-            from cimatron_parser import leggi_cimatron_xls
-            return leggi_cimatron_xls(filepath)
-        except ImportError:
-            pass  # fallback al parser generico
-
-    # --- Cimatron CSV pipe-separato ---
-    if _is_cimatron_csv(filepath):
-        try:
-            from cimatron_parser import leggi_cimatron_csv
-            return leggi_cimatron_csv(filepath)
-        except ImportError:
-            pass
-
-    # --- ZIP ---
     ext = os.path.splitext(filepath)[1].lower()
+
+    # --- Importa il parser Cimatron ---
+    try:
+        from cimatron_parser import is_cimatron_file, leggi_cimatron_xls, leggi_cimatron_csv, leggi_cimatron_zip
+        _cimatron_available = True
+    except ImportError:
+        _cimatron_available = False
+
+    # 1. ZIP Cimatron (contiene Cutters_*.csv)
+    if ext == '.zip' and _cimatron_available and is_cimatron_file(filepath):
+        return leggi_cimatron_zip(filepath)
+
+    # 2. XLS Cimatron (foglio 'Cutters')
+    if ext == '.xls' and _cimatron_available and is_cimatron_file(filepath):
+        return leggi_cimatron_xls(filepath)
+
+    # 3. CSV Cimatron (UTF-16, pipe, righe //)
+    if ext == '.csv' and _cimatron_available and is_cimatron_file(filepath):
+        return leggi_cimatron_csv(filepath)
+
+    # 4. ZIP generico
     if ext == '.zip' or zipfile.is_zipfile(filepath):
         with zipfile.ZipFile(filepath, 'r') as z:
             csv_files = [f for f in z.namelist() if f.lower().endswith('.csv')]
@@ -191,15 +167,6 @@ def analizza_file(filepath: str) -> dict:
             target = next((f for f in csv_files if 'cutter' in f.lower()), csv_files[0])
             with z.open(target) as f:
                 content = f.read().decode('utf-8', errors='replace')
-        if '|' in content and '//' in content:
-            import tempfile
-            tmp = tempfile.NamedTemporaryFile(suffix='.csv', delete=False, mode='w', encoding='utf-8')
-            tmp.write(content); tmp.close()
-            try:
-                from cimatron_parser import leggi_cimatron_csv
-                return leggi_cimatron_csv(tmp.name)
-            except Exception:
-                pass
         sep = '|' if content.count('|') > content.count(',') else ','
         lines = [l for l in content.splitlines() if not l.startswith('//')]
         from io import StringIO
@@ -215,12 +182,17 @@ def analizza_file(filepath: str) -> dict:
 
     elif ext in ('.xls', '.xlsx'):
         df = pd.read_excel(filepath)
-
     else:
         raise ValueError(f"Formato non supportato: {ext}")
 
     df.columns = [str(c).strip() for c in df.columns]
     df = df.dropna(how='all').reset_index(drop=True)
+
+    if len(df) == 0:
+        raise ValueError(
+            "Il file non contiene dati utensili riconoscibili.\n"
+            "Assicurati di esportare con utensili selezionati e non un template vuoto."
+        )
 
     mapping = _rileva_mappatura(df)
     valori_categoria = {}
@@ -230,36 +202,38 @@ def analizza_file(filepath: str) -> dict:
 
     colonne_mappate = {v['colonna_file'] for v in mapping.values()}
     return {
-        'filepath': filepath, 'num_righe': len(df), 'num_colonne': len(df.columns),
-        'colonne_originali': list(df.columns), 'mapping': mapping,
-        'valori_categoria': valori_categoria,
+        'filepath': filepath, 'num_righe': len(df),
+        'num_colonne': len(df.columns), 'colonne_originali': list(df.columns),
+        'mapping': mapping, 'valori_categoria': valori_categoria,
         'colonne_non_mappate': [c for c in df.columns if c not in colonne_mappate],
         'anteprima': df.head(5).to_dict(orient='records'),
-        'df': df,
-        'software_rilevato': 'sconosciuto',
-        'versione_rilevata': '',
-        'parser_usato': 'generico',
+        'df': df, 'software_rilevato': 'sconosciuto',
+        'versione_rilevata': '', 'parser_usato': 'generico',
     }
 
 
 if __name__ == '__main__':
     import argparse, sys
-    parser = argparse.ArgumentParser(description='Analizza un file CAM e propone mappatura')
+    parser = argparse.ArgumentParser(description='Analizza file CAM - rileva formato automaticamente')
     parser.add_argument('--file', required=True)
     args = parser.parse_args()
     if not os.path.exists(args.file):
         print(f"File non trovato: {args.file}"); sys.exit(1)
     r = analizza_file(args.file)
-    print(f"\nFile:    {r['filepath']}")
-    print(f"Parser:  {r.get('parser_usato','?')}")
-    print(f"Software:{r.get('software_rilevato','?')}  Versione: {r.get('versione_rilevata','?')}")
-    print(f"Righe:   {r['num_righe']}  |  Colonne: {r['num_colonne']}")
-    print(f"\nMappatura ({len(r['mapping'])} campi):")
+    sw  = r.get('software_rilevato','?')
+    ver = r.get('versione_rilevata','?')
+    par = r.get('parser_usato','?')
+    print(f"\nFile:     {os.path.basename(r['filepath'])}")
+    print(f"Software: {sw} {ver}  (parser: {par})")
+    print(f"Utensili: {r['num_righe']}  |  Colonne: {r['num_colonne']}")
+    if r.get('extra_info'):
+        for k,v in r['extra_info'].items():
+            print(f"Extra:    {v}")
+    print(f"\nMappatura ({len(r['mapping'])} campi su 12 possibili):")
     for campo, info in r['mapping'].items():
-        print(f"  {info['colonna_file']:30} -> {campo:25} [{info['confidenza']}]")
-    if r['colonne_non_mappate']:
-        print(f"\nNon mappate: {r['colonne_non_mappate'][:10]}")
+        print(f"  {info['colonna_file']:35} -> {campo:25} [{info['confidenza']}]")
     if r['valori_categoria']:
-        print("\nValori categorici:")
+        print("\nValori tipo utensile rilevati:")
         for campo, vals in r['valori_categoria'].items():
-            print(f"  {campo}: {vals}")
+            for vf, vm in list(vals.items())[:8]:
+                print(f"  {vf:15} -> {vm}")
