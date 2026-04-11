@@ -1495,6 +1495,13 @@ function svFiltra(){
 """)
 
 
+
+@app.route('/dev/leggi_file')
+def dev_leggi_file():
+    p = request.args.get('p','')
+    if not p or not os.path.exists(p): return 'NOT FOUND', 404
+    with open(p, encoding='utf-8') as f: return f.read(), 200, {'Content-Type':'text/plain'}
+
 @app.route('/debug_magic')
 def debug_magic():
     import glob, tempfile
