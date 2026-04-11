@@ -274,14 +274,16 @@ def analizza():
         if _root not in sys.path: sys.path.insert(0, _root)
 
         usa_orche = False
+        _oa_module = None
         try:
-            # Forza reimport per usare codice aggiornato su disco
-            import sys as _sys
+            import sys as _sys, os as _os
             for _k in list(_sys.modules.keys()):
                 if 'orchestrator' in _k:
                     del _sys.modules[_k]
-            from orchestrator_agent import disponibile, orchestra_learning
-            usa_orche = disponibile()
+            _ld = _os.path.dirname(_os.path.abspath(__file__))
+            if _ld not in _sys.path: _sys.path.insert(0, _ld)
+            import orchestrator_agent as _oa_module
+            usa_orche = _oa_module.disponibile()
         except Exception:
             usa_orche = False
 
@@ -347,7 +349,7 @@ def analizza():
 
             if df_tmp is not None and len(df_tmp) > 0:
                 log_ev = []
-                res = orchestra_learning(
+                res = _oa_module.orchestra_learning(
                     df_tmp, nome_file=f.filename,
                     log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg})
                 )
