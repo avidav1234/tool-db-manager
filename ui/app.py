@@ -151,7 +151,9 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
   <a href="/cam" class="{{ 'active' if active=='cam' }}">CAM</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
   <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
-  <a href="/verifica" class="{{ 'active' if active=='verifica' }}"
+  <a href="/test-agente" {% if active=='test' %}class="active"{% endif %}
+       style="color:{% if active=='test' %}#fff{% else %}#fbbf24{% endif %}">&#129516; Test AI</a>
+    <a href="/verifica" class="{{ 'active' if active=='verifica' }}"
      style="color:{% if active=='verifica' %}#fff{% else %}#4ade80{% endif %}">&#9989; Verifica</a>
   <a href="/log" class="{{ 'active' if active=='log' }}">Log</a>
   <span style="margin-left:auto">
@@ -1501,6 +1503,292 @@ def dev_leggi_file():
     p = request.args.get('p','')
     if not p or not os.path.exists(p): return 'NOT FOUND', 404
     with open(p, encoding='utf-8') as f: return f.read(), 200, {'Content-Type':'text/plain'}
+
+@app.route('/test-agente', methods=['GET','POST'])
+def test_agente():
+    """Pagina di test per l'agente multilivello - verifica ogni livello separatamente."""
+    import sys as _sys
+    _root = os.path.join(os.path.dirname(__file__), '..')
+    if _root not in _sys.path: _sys.path.insert(0, _root)
+
+    risultato = None
+    errore = None
+    log_html = ''
+
+    if request.method == 'POST':
+        azione = request.form.get('azione', '')
+        try:
+            import pandas as pd
+
+            # Carica il file campione WorkNC per i test
+            sample_path = os.path.join(_root, 'cam_samples', 'worknc_tools_sample.csv')
+            if not os.path.exists(sample_path):
+                raise FileNotFoundError('File campione non trovato: ' + sample_path)
+            df = pd.read_csv(sample_path)
+
+            from learner.orchestrator_agent import (
+                _get_api_key, _l2a_struttura, _l2b_colonna,
+                _l3_mapping, _l4_verifica, orchestra_learning
+            )
+            key = _get_api_key()
+            if not key:
+                raise ValueError('API key non configurata')
+
+            log_eventi = []
+            def log_cb(livello, msg):
+                log_eventi.append({'livello': livello, 'msg': msg})
+
+            if azione == 'test_l2a':
+                r = _l2a_struttura(df, key, log_cb)
+                risultato = {'livello': 'L2a - Analista Struttura', 'output': r}
+
+            elif azione == 'test_l2b':
+                col = request.form.get('colonna', 'Radius')
+                contesto = {'software_cam': 'WorkNC'}
+                r = _l2b_colonna(col, df[col] if col in df.columns else df.iloc[:,0], contesto, key)
+                risultato = {'livello': f'L2b - Analista Valori: colonna "{col}"', 'output': r}
+
+            elif azione == 'test_l3':
+                struttura = {'software_cam': 'WorkNC'}
+                analisi = {}
+                for col in df.columns:
+                    analisi[col] = _l2b_colonna(col, df[col], struttura, key)
+                r = _l3_mapping(analisi, struttura, key, log_cb)
+                risultato = {'livello': 'L3 - Mapper', 'output': r, 'log': log_eventi}
+
+            elif azione == 'test_completo':
+                r = orchestra_learning(df, key, 'worknc_tools_sample.csv', log_cb)
+                risultato = {
+                    'livello': 'Test Completo L1→L4',
+                    'verificato': r.get('verificato'),
+                    'score': r.get('score'),
+                    'n_mappati': len(r.get('profilo', {})),
+                    'costo_token': r.get('costo_stimato'),
+                    'profilo': r.get('profilo', {}),
+                    'campi_mancanti': r.get('campi_mancanti', []),
+                    'warning': r.get('warning', []),
+                    'log': log_eventi,
+                }
+
+        except Exception as e:
+            import traceback
+            errore = traceback.format_exc()
+
+    # Colonne del file campione per il select
+    colonne_sample = []
+    try:
+        import pandas as pd
+        sp = os.path.join(os.path.join(os.path.dirname(__file__), '..'), 'cam_samples', 'worknc_tools_sample.csv')
+        if os.path.exists(sp):
+            colonne_sample = list(pd.read_csv(sp).columns)
+    except: pass
+
+    return render_template_string(TEST_AGENTE_HTML,
+        risultato=risultato, errore=errore,
+        colonne_sample=colonne_sample,
+        active='test', msg='', mtype='')
+
+TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">&#129516; Test Agente Multilivello</h2>
+    <p style="margin:4px 0 0;color:#888;font-size:13px">
+      Verifica ogni livello dell'orchestratore separatamente o esegui il test completo.
+      File usato: <code>cam_samples/worknc_tools_sample.csv</code>
+    </p>
+  </div>
+</div>
+
+<!-- Architettura visiva -->
+<div class="card" style="margin-bottom:1.25rem;background:#1a1a1a;color:#fff">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;font-size:12px;text-align:center">
+    <div style="background:#1d4ed8;border-radius:8px;padding:.75rem">
+      <div style="font-size:1.5rem">&#127757;</div>
+      <div style="font-weight:700;margin:.3rem 0">L1 — Orchestratore</div>
+      <div style="color:#93c5fd">Sonnet</div>
+      <div style="color:#bfdbfe;margin-top:.3rem">Strategia + verifica finale</div>
+    </div>
+    <div style="background:#166534;border-radius:8px;padding:.75rem">
+      <div style="font-size:1.5rem">&#128300;</div>
+      <div style="font-weight:700;margin:.3rem 0">L2a — Struttura</div>
+      <div style="color:#86efac">Haiku &#128176;</div>
+      <div style="color:#bbf7d0;margin-top:.3rem">Software CAM + gruppi colonne</div>
+    </div>
+    <div style="background:#166534;border-radius:8px;padding:.75rem">
+      <div style="font-size:1.5rem">&#128202;</div>
+      <div style="font-weight:700;margin:.3rem 0">L2b — Valori</div>
+      <div style="color:#86efac">Haiku &#128176;&#128176;</div>
+      <div style="color:#bbf7d0;margin-top:.3rem">Analisi colonna per colonna</div>
+    </div>
+    <div style="background:#7c3aed;border-radius:8px;padding:.75rem">
+      <div style="font-size:1.5rem">&#128270;</div>
+      <div style="font-weight:700;margin:.3rem 0">L4 — Verificatore</div>
+      <div style="color:#c4b5fd">Sonnet</div>
+      <div style="color:#ddd6fe;margin-top:.3rem">Controllo logico + correzioni</div>
+    </div>
+  </div>
+</div>
+
+<!-- Pulsanti test -->
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.25rem">
+
+  <form method="post">
+    <div class="card" style="height:100%">
+      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9312; Test L2a — Analisi Struttura</h3>
+      <p style="font-size:12px;color:#666;margin:0 0 1rem">
+        Haiku analizza il file WorkNC e identifica: software CAM, lingua,
+        gruppi di colonne (geometria, taglio, assemblaggio).
+        <br><b>Costo stimato: ~800 token</b>
+      </p>
+      <button class="btn btn-p" type="submit" name="azione" value="test_l2a">
+        &#9654; Esegui L2a
+      </button>
+    </div>
+  </form>
+
+  <form method="post">
+    <div class="card" style="height:100%">
+      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9313; Test L2b — Analisi Colonna</h3>
+      <p style="font-size:12px;color:#666;margin:0 0 .75rem">
+        Haiku analizza una singola colonna. Scegli una colonna "difficile" come
+        <code>Radius</code> o <code>Fz</code> per vedere se capisce il significato.
+        <br><b>Costo stimato: ~250 token</b>
+      </p>
+      <div style="display:flex;gap:.5rem;align-items:center">
+        <select name="colonna" style="padding:6px;border:1px solid #ddd;border-radius:5px;font-size:13px;flex:1">
+          {% for col in colonne_sample %}
+          <option value="{{ col }}" {% if col=='Radius' %}selected{% endif %}>{{ col }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-p" type="submit" name="azione" value="test_l2b">
+          &#9654; Esegui L2b
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <form method="post">
+    <div class="card" style="height:100%">
+      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9314; Test L3 — Mapping</h3>
+      <p style="font-size:12px;color:#666;margin:0 0 1rem">
+        Haiku produce il mapping completo dopo aver analizzato tutte le colonne.
+        Verifica se <code>Radius→diametro_mm</code>, <code>Gauge→fuori_pinza_mm</code>, ecc.
+        <br><b>Costo stimato: ~4500 + 1500 token</b>
+      </p>
+      <button class="btn btn-p" type="submit" name="azione" value="test_l3">
+        &#9654; Esegui L3
+      </button>
+    </div>
+  </form>
+
+  <form method="post">
+    <div class="card" style="border:2px solid #1d4ed8;height:100%">
+      <h3 style="margin:0 0 .5rem;font-size:.95rem;color:#1d4ed8">
+        &#9315; Test Completo L1→L4
+      </h3>
+      <p style="font-size:12px;color:#666;margin:0 0 1rem">
+        L'orchestratore esegue tutti i livelli in sequenza e produce il profilo
+        validato con score di confidenza. Se L4 rifiuta, L3 corregge e riprova.
+        <br><b>Costo stimato: ~$0.003-0.008 USD totali</b>
+      </p>
+      <button class="btn" style="background:#1d4ed8;color:#fff" type="submit" name="azione" value="test_completo">
+        &#9654; Esegui test completo
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<!-- Risultato -->
+{% if errore %}
+<div class="card" style="border-left:4px solid #991b1b">
+  <h3 style="color:#991b1b;margin:0 0 .75rem">&#10060; Errore</h3>
+  <pre style="font-size:11px;background:#fef2f2;padding:1rem;border-radius:6px;overflow-x:auto;white-space:pre-wrap">{{ errore }}</pre>
+</div>
+{% endif %}
+
+{% if risultato %}
+<div class="card" style="border-left:4px solid {% if risultato.get('verificato') %}#166534{% else %}#1d4ed8{% endif %}">
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+    <h3 style="margin:0">{{ risultato.livello }}</h3>
+    {% if risultato.get('verificato') is not none %}
+      {% if risultato.verificato %}
+        <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600">
+          &#10003; APPROVATO — Score: {{ risultato.score }}%
+        </span>
+      {% else %}
+        <span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600">
+          &#10060; NON APPROVATO — Score: {{ risultato.score }}%
+        </span>
+      {% endif %}
+    {% endif %}
+    {% if risultato.get('n_mappati') %}
+      <span style="background:#dbeafe;color:#1d4ed8;padding:3px 10px;border-radius:10px;font-size:12px">
+        {{ risultato.n_mappati }} campi mappati
+      </span>
+    {% endif %}
+    {% if risultato.get('costo_token') %}
+      <span style="background:#f0fdf4;color:#166534;padding:3px 10px;border-radius:10px;font-size:12px">
+        ~{{ risultato.costo_token }} token
+      </span>
+    {% endif %}
+  </div>
+
+  {% if risultato.get('log') %}
+  <details style="margin-bottom:1rem">
+    <summary style="cursor:pointer;font-weight:600;font-size:13px;color:#555">
+      &#128196; Log esecuzione ({{ risultato.log|length }} eventi)
+    </summary>
+    <div style="background:#1a1a1a;border-radius:6px;padding:.75rem;margin-top:.5rem;max-height:300px;overflow-y:auto">
+      {% for e in risultato.log %}
+      <div style="font-family:monospace;font-size:11px;margin:.2rem 0;
+           color:{% if e.livello=='L1' %}#60a5fa{% elif e.livello in ('L2a','L2b') %}#4ade80{% elif e.livello=='L3' %}#fbbf24{% else %}#c084fc{% endif %}">
+        [{{ e.livello }}] {{ e.msg }}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% if risultato.get('profilo') %}
+  <h4 style="margin:.5rem 0;font-size:.9rem">Mapping prodotto:</h4>
+  <table style="font-size:12px;width:100%">
+  <thead><tr>
+    <th>Colonna file</th><th>Campo master</th>
+    <th style="text-align:center">Confidenza</th>
+    <th>Trasformazione</th><th>Motivazione</th>
+  </tr></thead>
+  <tbody>
+  {% for col, info in risultato.profilo.items() %}
+  <tr>
+    <td style="font-family:monospace">{{ col }}</td>
+    <td><b>{{ info.campo_master }}</b></td>
+    <td style="text-align:center">
+      <span style="background:{% if info.confidenza=='alta' %}#dcfce7;color:#166534{% elif info.confidenza=='media' %}#fef9c3;color:#854d0e{% else %}#fee2e2;color:#991b1b{% endif %};padding:1px 8px;border-radius:8px;font-size:11px">
+        {{ info.confidenza }}
+      </span>
+    </td>
+    <td style="color:#7c3aed;font-size:11px">{{ info.get('trasformazione','nessuna') }}</td>
+    <td style="color:#666;font-size:11px">{{ info.get('motivazione','')[:80] }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  {% endif %}
+
+  {% if risultato.get('campi_mancanti') %}
+  <div style="margin-top:.75rem;background:#fef9c3;border-radius:6px;padding:.75rem">
+    <b style="font-size:12px;color:#854d0e">&#9888; Campi critici non coperti:</b>
+    <span style="font-size:12px;color:#854d0e"> {{ risultato.campi_mancanti|join(', ') }}</span>
+  </div>
+  {% endif %}
+
+  {% if risultato.get('output') and not risultato.get('profilo') %}
+  <pre style="font-size:11px;background:#f8f8f6;padding:1rem;border-radius:6px;overflow-x:auto;white-space:pre-wrap">{{ risultato.output | tojson(indent=2) }}</pre>
+  {% endif %}
+</div>
+{% endif %}
+""")
+
 
 @app.route('/debug_magic')
 def debug_magic():
