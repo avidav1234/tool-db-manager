@@ -683,13 +683,23 @@ def utensile_dettaglio(uid):
         if not u:
             return redirect(url_for('home', msg='Utensile non trovato', mtype='err'))
         taglio = conn.execute(
-            "SELECT * FROM condizioni_taglio WHERE id_utensile=? ORDER BY materiale_pezzo",
-            (uid,)
+            "SELECT * FROM condizioni_taglio WHERE id_utensile=? ORDER BY materiale_pezzo", (uid,)
         ).fetchall()
+        # Segmenti portautensile se presente
+        holder_segs = []
+        if dict(u).get('portautensile'):
+            ph = conn.execute("SELECT id FROM portautensile WHERE codice_interno=?",
+                              (u['portautensile'],)).fetchone()
+            if ph:
+                holder_segs = conn.execute(
+                    "SELECT * FROM portautensile_segmento WHERE id_portautensile=? AND altezza_totale_mm>0 ORDER BY numero_segmento",
+                    (ph['id'],)
+                ).fetchall()
     finally:
         conn.close()
     return render_template_string(DETTAGLIO_HTML,
         u=dict(u), taglio=[dict(t) for t in taglio],
+        holder_segs=[dict(s) for s in holder_segs],
         active='home', msg='', mtype='')
 
 DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
@@ -697,63 +707,155 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <a href="/" class="btn">&#8592; Lista</a>
   <h2 style="margin:0;font-size:1.1rem">{{ u.codice_interno }}</h2>
   <span class="badge b-ok">{{ u.tipo }}</span>
+  {% if u.tecnologia %}<span class="badge b-off">{{ u.tecnologia }}</span>{% endif %}
   <a class="btn" style="margin-left:auto" href="/utensile/{{ u.id }}/modifica">Modifica</a>
 </div>
 
-<div class="grid2">
-  <div class="card">
-    <h2>Geometria</h2>
-    <table>
-    <tbody>
-      <tr><td style="color:#888;width:50%">Codice catalogo</td><td>{{ u.codice_catalogo or '-' }}</td></tr>
-      <tr><td style="color:#888">Descrizione</td><td>{{ u.descrizione or '-' }}</td></tr>
-      <tr><td style="color:#888">Tipo</td><td>{{ u.tipo }}</td></tr>
-      <tr><td style="color:#888">Materiale</td><td>{{ u.materiale }}</td></tr>
-      <tr><td style="color:#888">Diametro</td><td><b>{{ u.diametro_mm }} mm</b></td></tr>
-      <tr><td style="color:#888">Raggio punta</td><td>{{ u.raggio_punta_mm }} mm</td></tr>
-      <tr><td style="color:#888">Lunghezza totale</td><td>{{ u.lunghezza_totale_mm }} mm</td></tr>
-      <tr><td style="color:#888">Lunghezza tagliente</td><td>{{ u.lunghezza_tagl_mm }} mm</td></tr>
-      <tr><td style="color:#888">N. taglienti</td><td>{{ u.num_taglienti }}</td></tr>
-      {% if u.angolo_punta_gradi %}<tr><td style="color:#888">Angolo punta</td><td>{{ u.angolo_punta_gradi }}°</td></tr>{% endif %}
-      {% if u.angolo_elica_gradi %}<tr><td style="color:#888">Angolo elica</td><td>{{ u.angolo_elica_gradi }}°</td></tr>{% endif %}
-      {% if u.passo_mm %}<tr><td style="color:#888">Passo</td><td>{{ u.passo_mm }} mm</td></tr>{% endif %}
-    </tbody>
-    </table>
-  </div>
+<div class="grid2" style="margin-bottom:1.25rem">
 
-  <div class="card">
-    <h2>Condizioni di taglio ({{ taglio|length }} materiali)</h2>
-    {% if taglio %}
-    <table>
-    <thead><tr>
-      <th>Materiale pezzo</th>
-      <th>Vc (m/min)</th>
-      <th>Fz (mm/z)</th>
-      <th>N (rpm)</th>
-      <th>Vf (mm/min)</th>
-      <th>ap (mm)</th>
-      <th>ae (mm)</th>
-    </tr></thead>
-    <tbody>
-    {% for t in taglio %}
-    <tr>
-      <td><b>{{ t.materiale_pezzo }}</b></td>
-      <td>{{ '%.1f'|format(t.vc_m_min) if t.vc_m_min else '-' }}</td>
-      <td>{{ '%.4f'|format(t.fz_mm) if t.fz_mm else '-' }}</td>
-      <td>{{ t.n_rpm|int if t.n_rpm else '-' }}</td>
-      <td>{{ t.vf_mm_min|int if t.vf_mm_min else '-' }}</td>
-      <td>{{ '%.2f'|format(t.ap_mm) if t.ap_mm else '-' }}</td>
-      <td>{{ '%.2f'|format(t.ae_mm) if t.ae_mm else '-' }}</td>
-    </tr>
-    {% endfor %}
-    </tbody>
-    </table>
-    {% else %}
-    <p style="color:#aaa;font-size:13px;text-align:center;padding:2rem">
-      Nessuna condizione di taglio. Importa il file ZIP da Cimatron per includerle.
-    </p>
+  <!-- COLONNA SINISTRA: geometria + stelo -->
+  <div>
+    <div class="card">
+      <h2>Geometria utensile</h2>
+      <table><tbody>
+        <tr><td style="color:#888;width:55%">Codice catalogo</td><td>{{ u.codice_catalogo or '-' }}</td></tr>
+        <tr><td style="color:#888">Descrizione</td><td>{{ u.descrizione or '-' }}</td></tr>
+        <tr><td style="color:#888">Sito web</td><td>{% if u.sito_web %}<a href="{{ u.sito_web }}" target="_blank">{{ u.sito_web }}</a>{% else %}-{% endif %}</td></tr>
+        <tr><td style="color:#888">Tipo</td><td><span class="badge b-ok">{{ u.tipo }}</span></td></tr>
+        <tr><td style="color:#888">Materiale tagliente</td><td>{{ u.materiale }}</td></tr>
+        <tr style="background:#f8f8f6"><td style="color:#555;font-weight:600">Diametro</td><td><b>{{ u.diametro_mm }} mm</b></td></tr>
+        <tr><td style="color:#888">Raggio punta</td><td>{{ u.raggio_punta_mm }} mm</td></tr>
+        {% if u.angolo_punta_gradi %}<tr><td style="color:#888">Angolo punta</td><td>{{ u.angolo_punta_gradi }}°</td></tr>{% endif %}
+        {% if u.angolo_conico_gradi and u.conico %}<tr><td style="color:#888">Angolo conico</td><td>{{ u.angolo_conico_gradi }}°</td></tr>{% endif %}
+        <tr style="background:#f8f8f6"><td style="color:#555;font-weight:600">Lunghezza totale</td><td><b>{{ u.lunghezza_totale_mm }} mm</b></td></tr>
+        <tr><td style="color:#888">Lunghezza utile</td><td>{{ u.lunghezza_tagl_mm }} mm</td></tr>
+        {% if u.lunghezza_tagl2_mm %}<tr><td style="color:#888">Lunghezza tagliente</td><td>{{ u.lunghezza_tagl2_mm }} mm</td></tr>{% endif %}
+        <tr><td style="color:#888">Numero taglienti</td><td>{{ u.num_taglienti }}</td></tr>
+        {% if u.passo_mm %}<tr><td style="color:#888">Passo filetto</td><td>{{ u.passo_mm }} mm</td></tr>{% endif %}
+      </tbody></table>
+    </div>
+
+    {% if u.diam_stelo_sup_mm %}
+    <div class="card">
+      <h2>Stelo</h2>
+      <table><tbody>
+        <tr><td style="color:#888;width:55%">Diam. superiore stelo</td><td>{{ u.diam_stelo_sup_mm }} mm</td></tr>
+        <tr><td style="color:#888">Diam. inferiore stelo</td><td>{{ u.diam_stelo_inf_mm }} mm</td></tr>
+        {% if u.lungh_libera_stelo_mm %}<tr><td style="color:#888">Lungh. libera stelo</td><td>{{ u.lungh_libera_stelo_mm }} mm</td></tr>{% endif %}
+        {% if u.lungh_cono_stelo_mm %}<tr><td style="color:#888">Lungh. cono stelo</td><td>{{ u.lungh_cono_stelo_mm }} mm</td></tr>{% endif %}
+        {% if u.diam_stelo2_sup_mm %}
+        <tr><td colspan="2" style="font-size:11px;color:#888;padding-top:.5rem">— Stelo secondario —</td></tr>
+        <tr><td style="color:#888">Diam. sup. stelo 2</td><td>{{ u.diam_stelo2_sup_mm }} mm</td></tr>
+        <tr><td style="color:#888">Diam. inf. stelo 2</td><td>{{ u.diam_stelo2_inf_mm }} mm</td></tr>
+        {% if u.lungh_libera_stelo2_mm %}<tr><td style="color:#888">Lungh. libera stelo 2</td><td>{{ u.lungh_libera_stelo2_mm }} mm</td></tr>{% endif %}
+        {% endif %}
+      </tbody></table>
+    </div>
     {% endif %}
   </div>
+
+  <!-- COLONNA DESTRA: assemblaggio + taglio default -->
+  <div>
+    <!-- FUORI PINZA - dato critico evidenziato -->
+    <div class="card" style="border-left:4px solid #1a6e35">
+      <h2>Assemblaggio con pinza</h2>
+      {% if u.nome_pinza %}
+      <div style="background:#f0fdf4;border-radius:8px;padding:1rem;margin-bottom:1rem">
+        <div style="font-size:12px;color:#888;margin-bottom:.25rem">Portautensile / Pinza</div>
+        <div style="font-weight:600;font-size:1rem">{{ u.nome_pinza }}</div>
+        {% if u.adattatore %}<div style="font-size:12px;color:#666;margin-top:.2rem">{{ u.adattatore }}</div>{% endif %}
+      </div>
+      <table><tbody>
+        <tr><td style="color:#888;width:55%">Lunghezza presa</td><td>{{ u.lungh_presa_mm }} mm <span style="font-size:11px;color:#aaa">(quanto entra nella pinza)</span></td></tr>
+        <tr style="background:#f0fdf4">
+          <td style="color:#155724;font-weight:700;font-size:14px">FUORI PINZA</td>
+          <td>
+            <b style="font-size:18px;color:#1a6e35">{{ u.fuori_pinza_mm }} mm</b>
+            <span style="font-size:11px;color:#888;display:block">dalla punta all'inizio della pinza</span>
+          </td>
+        </tr>
+        {% if u.lungh_libera_prolunga_mm %}<tr><td style="color:#888">Con prolunga</td><td>{{ u.lungh_libera_prolunga_mm }} mm</td></tr>{% endif %}
+      </tbody></table>
+      {% else %}
+      <p style="color:#aaa;font-size:13px">Nessuna pinza associata.</p>
+      {% endif %}
+
+      {% if holder_segs %}
+      <p style="font-size:12px;font-weight:600;margin:1rem 0 .5rem;color:#555">Geometria portautensile ({{ holder_segs|length }} segmenti)</p>
+      <table style="font-size:12px">
+      <thead><tr><th>Seg.</th><th>Ø inf (mm)</th><th>Ø sup (mm)</th><th>H cono (mm)</th><th>H tot (mm)</th></tr></thead>
+      <tbody>
+      {% for s in holder_segs %}
+      <tr>
+        <td>{{ s.numero_segmento }}</td>
+        <td>{{ '%.3f'|format(s.diametro_inf_mm) if s.diametro_inf_mm else '-' }}</td>
+        <td>{{ '%.3f'|format(s.diametro_sup_mm) if s.diametro_sup_mm else '-' }}</td>
+        <td>{{ '%.3f'|format(s.altezza_cono_mm) if s.altezza_cono_mm else '-' }}</td>
+        <td>{{ '%.3f'|format(s.altezza_totale_mm) if s.altezza_totale_mm else '-' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody></table>
+      {% endif %}
+    </div>
+
+    <!-- Parametri taglio di default -->
+    {% if u.vc_default or u.fz_default %}
+    <div class="card">
+      <h2>Parametri taglio di default <span style="font-size:11px;color:#888;font-weight:400">(dal profilo utensile)</span></h2>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:.75rem">
+        {% if u.vc_default %}<div class="stat"><div class="stat-n">{{ '%.1f'|format(u.vc_default) }}</div><div class="stat-l">Vc (m/min)</div></div>{% endif %}
+        {% if u.fz_default %}<div class="stat"><div class="stat-n">{{ '%.4f'|format(u.fz_default) }}</div><div class="stat-l">Fz (mm/z)</div></div>{% endif %}
+        {% if u.rotazione_default %}<div class="stat"><div class="stat-n">{{ u.rotazione_default|int }}</div><div class="stat-l">N (rpm)</div></div>{% endif %}
+        {% if u.avanzamento_default %}<div class="stat"><div class="stat-n">{{ u.avanzamento_default|int }}</div><div class="stat-l">Vf (mm/min)</div></div>{% endif %}
+        {% if u.passo_z_default %}<div class="stat"><div class="stat-n">{{ '%.2f'|format(u.passo_z_default) }}</div><div class="stat-l">ap (mm)</div></div>{% endif %}
+        {% if u.passo_lat_default %}<div class="stat"><div class="stat-n">{{ '%.3f'|format(u.passo_lat_default) }}</div><div class="stat-l">ae (mm)</div></div>{% endif %}
+      </div>
+      <div style="font-size:12px;color:#888">
+        {% if u.dir_rotazione %}Dir: {{ u.dir_rotazione }}{% endif %}
+        {% if u.refrigerante %} | Refrigerante: {{ u.refrigerante }}{% endif %}
+        {% if u.vita_utensile %} | Vita: {{ u.vita_utensile }} min{% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- CONDIZIONI DI TAGLIO PER MATERIALE -->
+<div class="card">
+  <h2>Condizioni di taglio per materiale pezzo ({{ taglio|length }} materiali)</h2>
+  {% if taglio %}
+  <div style="overflow-x:auto">
+  <table>
+  <thead><tr>
+    <th>Materiale pezzo</th>
+    <th>Vc (m/min)</th>
+    <th>Fz (mm/z)</th>
+    <th>N (rpm)</th>
+    <th>Vf (mm/min)</th>
+    <th>ap (mm)</th>
+    <th>ae (mm)</th>
+    <th>Refrigerante</th>
+  </tr></thead>
+  <tbody>
+  {% for t in taglio %}
+  <tr>
+    <td><b>{{ t.materiale_pezzo }}</b></td>
+    <td>{{ '%.1f'|format(t.vc_m_min) if t.vc_m_min else '-' }}</td>
+    <td>{{ '%.4f'|format(t.fz_mm) if t.fz_mm else '-' }}</td>
+    <td>{{ t.n_rpm|int if t.n_rpm else '-' }}</td>
+    <td>{{ t.vf_mm_min|int if t.vf_mm_min else '-' }}</td>
+    <td>{{ '%.2f'|format(t.ap_mm) if t.ap_mm else '-' }}</td>
+    <td>{{ '%.2f'|format(t.ae_mm) if t.ae_mm else '-' }}</td>
+    <td style="font-size:12px;color:#888">{{ t.refrigerante or '-' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  </div>
+  {% else %}
+  <p style="color:#aaa;font-size:13px;text-align:center;padding:2rem">
+    Nessuna condizione di taglio. Importa il file ZIP per includerle (287 combinazioni disponibili).
+  </p>
+  {% endif %}
 </div>
 """)
 
