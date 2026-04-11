@@ -230,21 +230,33 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
         campi_disponibili = {k: v for k, v in MASTER_FIELDS.items() if k not in campi_gia_mappati}
         fields_batch = '\n'.join('%s: %s' % (k, v) for k, v in campi_disponibili.items())
 
+        # Prepara analisi batch evidenziando il suggerimento di L2b
+        analisi_con_suggerimento = {}
+        for col, info in analisi_batch.items():
+            suggerimento = info.get('campo_master_suggerito', 'ignora')
+            analisi_con_suggerimento[col] = {
+                'suggerimento_L2b': suggerimento,
+                'confidenza_L2b': info.get('confidenza', 'bassa'),
+                'campioni': info.get('campioni', []),
+                'trasformazione': info.get('trasformazione', 'nessuna'),
+            }
+
         prompt = (
             'File: %s | Batch %d/%d (%d colonne)\n\n'
-            'ANALISI COLONNE IN QUESTO BATCH:\n%s\n\n'
-            'CAMPI MASTER ANCORA DISPONIBILI:\n%s\n\n'
-            'Regole:\n'
-            '- Ogni campo master mappato UNA sola volta in tutto il file\n'
-            '- Colonna "Radius" senza Diameter = diametro_mm con moltiplica_2\n'
-            '- Colonna "Gauge"/"Gauge Length" = fuori_pinza_mm\n'
-            '- Se dubbio: ignora\n\n'
-            'Rispondi SOLO con JSON (solo le colonne di questo batch):\n'
+            'SUGGERIMENTI L2b PER QUESTE COLONNE:\n%s\n\n'
+            'CAMPI MASTER DISPONIBILI:\n%s\n\n'
+            'Istruzioni:\n'
+            '- Usa i suggerimenti L2b come base, correggili solo se sbagliati\n'
+            '- Ogni campo master mappato UNA sola volta\n'
+            '- "Radius" senza Diameter = diametro_mm con moltiplica_2\n'
+            '- "Gauge"/"Gauge Length" = fuori_pinza_mm\n'
+            '- Se campo_master_suggerito e "ignora" o non utile: ignora\n\n'
+            'Rispondi SOLO con JSON:\n'
             '{"mapping":{"NomeCol":{"campo_master":"campo","confidenza":"alta/media/bassa",'
-            '"trasformazione":"nessuna/moltiplica_2/arrotonda/decodifica_tipo","motivazione":"perche"}},'
+            '"trasformazione":"nessuna/moltiplica_2/decodifica_tipo","motivazione":"perche"}},'
             '"ambigue":["col"]}'
         ) % (software, idx_batch+1, len(batches),
-             len(batch), json.dumps(analisi_batch, ensure_ascii=False),
+             len(batch), json.dumps(analisi_con_suggerimento, ensure_ascii=False),
              fields_batch)
 
         try:
@@ -415,10 +427,15 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     verifica = None
     for tentativo in range(1, max_tentativi + 1):
         if verifica and verifica.get('correzioni'):
-            log('L1', 'Applico %d correzioni' % len(verifica['correzioni']))
-            for col, corr in verifica['correzioni'].items():
-                if col in mapping_raw['mapping']:
-                    mapping_raw['mapping'][col].update(corr)
+            correzioni = verifica['correzioni']
+            # Protezione: correzioni deve essere un dict {col: {campo:val}}
+            if isinstance(correzioni, dict):
+                log('L1', 'Applico %d correzioni' % len(correzioni))
+                for col, corr in correzioni.items():
+                    if col in mapping_raw['mapping'] and isinstance(corr, dict):
+                        mapping_raw['mapping'][col].update(corr)
+            else:
+                log('L1', 'Correzioni in formato non valido - skip')
         verifica = _l4_verifica(mapping_raw, struttura, df, key, log)
         token_stimati += 2000
         if verifica.get('approvato'):
@@ -431,9 +448,9 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
 
     # Assembla profilo finale
     mapping_finale = dict(mapping_raw.get('mapping', {}))
-    if verifica and verifica.get('correzioni'):
+    if verifica and verifica.get('correzioni') and isinstance(verifica['correzioni'], dict):
         for col, corr in verifica['correzioni'].items():
-            if col in mapping_finale:
+            if col in mapping_finale and isinstance(corr, dict):
                 mapping_finale[col].update(corr)
     profilo = {col: info for col, info in mapping_finale.items()
                if info.get('campo_master', 'ignora') != 'ignora'}
