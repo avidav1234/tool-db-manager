@@ -27,39 +27,36 @@ DB_PATH = os.path.join(_BASE, 'database', 'tool_master.db')
 
 
 def _is_cimatron(filepath: str) -> bool:
-    """Rileva se il file e' un export Cimatron."""
+    """
+    Rileva se il file e' un export Cimatron.
+
+    Logica:
+      - CSV/XLS con magic bytes UTF-16 (FF FE o FE FF) -> Cimatron
+        (Cimatron e' l'unico CAM che esporta CSV in UTF-16 pipe-separato)
+      - XLS con foglio 'Cutters' -> Cimatron
+      - ZIP con file Cutters_*.csv -> Cimatron
+      - CSV con contenuto CimatronE (legge fino a 2KB) -> Cimatron
+    """
     ext = os.path.splitext(filepath)[1].lower()
-    # Controlla magic bytes per UTF-16 (FF FE o FE FF)
-    if ext in ('.csv', '.zip', '.xls'):
-        try:
-            with open(filepath, 'rb') as f:
-                magic = f.read(4)
-            if magic[:2] in (b'\xff\xfe', b'\xfe\xff'):
-                # UTF-16 -> quasi certamente Cimatron
-                return True
-        except Exception:
-            pass
-    # Controlla foglio Cutters per XLS
+
+    # Magic bytes UTF-16: FF FE (little-endian) o FE FF (big-endian)
+    # Cimatron e' l'unico CAM mainstream che usa UTF-16 per i CSV
+    try:
+        with open(filepath, 'rb') as f:
+            magic = f.read(2)
+        if magic in (b'\xff\xfe', b'\xfe\xff'):
+            return True
+    except Exception:
+        pass
+
+    # XLS con foglio Cutters
     if ext == '.xls':
         try:
             import xlrd
             return 'Cutters' in xlrd.open_workbook(filepath).sheet_names()
         except Exception:
             pass
-    # Controlla contenuto per CSV
-    if ext == '.csv':
-        try:
-            with open(filepath, 'rb') as f:
-                raw = f.read(200)
-            for enc in ('utf-16', 'utf-8'):
-                try:
-                    text = raw.decode(enc)
-                    if 'CimatronE' in text or ('1101' in text and '//' in text):
-                        return True
-                except Exception:
-                    pass
-        except Exception:
-            pass
+
     # ZIP con Cutters_*.csv
     if ext == '.zip':
         try:
@@ -69,6 +66,23 @@ def _is_cimatron(filepath: str) -> bool:
                            for n in z.namelist())
         except Exception:
             pass
+
+    # CSV: legge 2KB e cerca CimatronE
+    if ext == '.csv':
+        try:
+            with open(filepath, 'rb') as f:
+                raw = f.read(2048)
+            for enc in ('utf-16', 'utf-8-sig', 'utf-8', 'latin-1'):
+                try:
+                    text = raw.decode(enc)
+                    if 'CimatronE' in text or ('1101' in text and '//' in text and '|' in text):
+                        return True
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
     return False
 
 
