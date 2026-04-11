@@ -7,5 +7,7 @@
   ],
   "notify_on_change": true,
   "keep_last_n": 7,
-  "_note": "Aggiungi profili in formati_attivi dopo averli creati con il Format Learner. Es: ['cimatron_v26', 'hypermill_2024', 'worknc_v30']"
+  "anthropic_api_key": "",
+  "_note_api_key": "Inserisci qui la tua API key Anthropic (sk-ant-...) per abilitare il mapping automatico AI. Oppure usa: export ANTHROPIC_API_KEY=sk-ant-...",
+  "_note": "Aggiungi profili in formati_attivi dopo averli creati con il Format Learner"
 }
