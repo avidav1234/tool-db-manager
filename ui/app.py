@@ -148,6 +148,7 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
   <h1>Tool DB Manager</h1>
   <a href="/" class="{{ 'active' if active=='home' }}">Utensili</a>
   <a href="/export" class="{{ 'active' if active=='export' }}">Export</a>
+  <a href="/cam" class="{{ 'active' if active=='cam' }}">CAM</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
   <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
   <a href="/log" class="{{ 'active' if active=='log' }}">Log</a>
@@ -892,6 +893,147 @@ def log_page():
         conn.close()
     except: logs=[]
     return render_template_string(LOG_HTML,logs=logs,active='log',msg='',mtype='')
+
+
+# ---------------------------------------------------------------
+# PAGINA CAM — stato decoder/generator per ogni CAM
+# ---------------------------------------------------------------
+CAM_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">Formati CAM</h2>
+    <p style="margin:4px 0 0;color:#888;font-size:13px">
+      Stato decoder e generator per ogni sistema CAM configurato
+    </p>
+  </div>
+  <a href="http://localhost:5001" target="_blank" class="btn">
+    + Impara nuovo formato &#8599;
+  </a>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:1rem">
+{% for cam in cams %}
+<div class="card" style="border-left:4px solid {{ cam.colore }}">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <div style="width:10px;height:10px;border-radius:50%;background:{{ cam.colore }}"></div>
+      <span style="font-weight:600;font-size:1rem">{{ cam.nome }}</span>
+      <span style="font-size:12px;color:#888">{{ cam.versioni }}</span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+
+    <!-- DECODER -->
+    <div style="background:#f8f8f6;border-radius:8px;padding:1rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
+        <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#555">
+          Decoder
+        </span>
+        <span style="background:{{ cam.decoder_bg }};color:{{ cam.decoder_color }};
+                     font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500">
+          {{ cam.decoder_label }}
+        </span>
+      </div>
+      <p style="font-size:12px;color:#666;margin:0 0 .5rem">{{ cam.decoder_desc }}</p>
+      <p style="font-size:11px;color:#aaa;margin:0">Formati: {{ cam.decoder_fmt }}</p>
+      {% if cam.decoder_stato in ('in_attesa', 'agente') %}
+      <form method="post" action="/cam/{{ cam.key }}/impara" enctype="multipart/form-data"
+            style="margin-top:.75rem">
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <input type="file" name="file" style="font-size:12px;flex:1"
+                 accept=".csv,.xls,.xlsx,.zip,.xml">
+          <button class="btn btn-p" type="submit"
+                  style="padding:5px 10px;font-size:12px;white-space:nowrap">
+            Carica campione
+          </button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- GENERATOR -->
+    <div style="background:#f8f8f6;border-radius:8px;padding:1rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem">
+        <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#555">
+          Generator
+        </span>
+        <span style="background:{{ cam.generator_bg }};color:{{ cam.generator_color }};
+                     font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500">
+          {{ cam.generator_label }}
+        </span>
+      </div>
+      <p style="font-size:12px;color:#666;margin:0 0 .5rem">{{ cam.generator_desc }}</p>
+      <p style="font-size:11px;color:#aaa;margin:0">Formati: {{ cam.generator_fmt }}</p>
+      {% if cam.generator_stato == 'completo' %}
+      <form method="post" action="/cam/{{ cam.key }}/genera" style="margin-top:.75rem">
+        <button class="btn btn-s" type="submit"
+                style="padding:5px 10px;font-size:12px">
+          Genera file
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endfor %}
+</div>
+
+<div class="card" style="margin-top:1rem;background:#f8f8f6">
+  <p style="font-size:13px;color:#666;margin:0">
+    <b>Come aggiungere un CAM non in lista:</b>
+    Esporta un file campione dal software CAM → caricalo nel
+    <a href="http://localhost:5001" target="_blank">Format Learner</a> →
+    il sistema impara il formato e lo aggiunge automaticamente alla lista.
+    Una volta che il decoder e il generator sono attivi, il CAM appare qui completo.
+  </p>
+</div>
+""")
+
+
+@app.route('/cam')
+def cam_page():
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    try:
+        from cam_registry import stato_sistema
+        cams = stato_sistema()
+    except Exception as e:
+        cams = []
+    return render_template_string(CAM_HTML,
+        cams=cams, active='cam',
+        msg=request.args.get('msg',''), mtype=request.args.get('mtype',''))
+
+
+@app.route('/cam/<cam_key>/impara', methods=['POST'])
+def cam_impara(cam_key):
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return redirect(url_for('cam_page', msg='Nessun file selezionato', mtype='err'))
+    # Salva e manda al Format Learner
+    import_path = os.path.join(UPLOAD_DIR, f.filename)
+    f.save(import_path)
+    return redirect(f'http://localhost:5001?file={import_path}',
+                    code=302)
+
+
+@app.route('/cam/<cam_key>/genera', methods=['POST'])
+def cam_genera(cam_key):
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    try:
+        from cam_registry import genera
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        out = os.path.join(tmp, f'{cam_key}_export.csv')
+        conn = get_conn()
+        path = genera(cam_key, out, conn)
+        conn.close()
+        return send_file(path, as_attachment=True, download_name=os.path.basename(path))
+    except NotImplementedError as e:
+        return redirect(url_for('cam_page', msg=str(e), mtype='warn'))
+    except Exception as e:
+        return redirect(url_for('cam_page', msg=f'Errore: {e}', mtype='err'))
+
 
 # ---------------------------------------------------------------
 if __name__ == '__main__':
