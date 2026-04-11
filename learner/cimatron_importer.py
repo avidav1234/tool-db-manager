@@ -63,7 +63,7 @@ CUTTERS_MAP = {
     # Pinza inline
     '3101': 'nome_pinza',
     '3102': 'lungh_presa_mm',
-    '3103': 'lungh_libera_pinza_mm',
+    '3103': 'fuori_pinza_mm',         # DISTANZA PUNTA->INIZIO PINZA (dato critico CAM)
     # Parametri taglio di default
     '4101': 'avanzamento_default',
     '4102': 'rotazione_default',
@@ -242,10 +242,10 @@ def importa_holders(rows, conn, dry_run=False):
                 conn.execute("DELETE FROM portautensile_segmento WHERE id_portautensile=?", (pid,))
                 for seg in range(1, 21):
                     base = str(7000 + seg * 10)
-                    di = _to_float(row.get(str(int(base)+1)))
-                    ds = _to_float(row.get(str(int(base)+2)))
-                    ac = _to_float(row.get(str(int(base)+3)))
-                    at = _to_float(row.get(str(int(base)+4)))
+                    di = _to_float(row.get(str(base + 1)))
+                    ds = _to_float(row.get(str(base + 2)))
+                    ac = _to_float(row.get(str(base + 3)))
+                    at = _to_float(row.get(str(base + 4)))
                     if at and at > 0:
                         conn.execute("""INSERT OR REPLACE INTO portautensile_segmento
                             (id_portautensile,numero_segmento,diametro_inf_mm,diametro_sup_mm,altezza_cono_mm,altezza_totale_mm)
@@ -371,6 +371,28 @@ def importa_cutters(rows, conn, dry_run=False):
 def importa_material(rows, conn, dry_run=False):
     ins = agg = 0
     errori = []
+    # Crea tabella se non esiste (DB fresh o prima importazione)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS condizione_taglio (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_utensile     INTEGER NOT NULL REFERENCES utensile(id) ON DELETE CASCADE,
+            materiale_pezzo TEXT NOT NULL,
+            applicazione    TEXT,
+            vf_mm_min       REAL,
+            n_rpm           REAL,
+            vc_m_min        REAL,
+            fz_mm           REAL,
+            ap_mm           REAL,
+            ae_mm           REAL,
+            passo_lat       REAL,
+            rompitruciolo   REAL,
+            decrementa      REAL,
+            refrigerante    TEXT,
+            UNIQUE(id_utensile, materiale_pezzo, applicazione)
+        )
+    """)
+    conn.commit()
+
     for row in rows:
         nome  = _to_str(row.get('8001', ''))
         mater = _to_str(row.get('8002', ''))
@@ -390,22 +412,23 @@ def importa_material(rows, conn, dry_run=False):
                 ae_mm         = _to_float(row.get('8202')),
                 rompitruciolo = _to_float(row.get('8301')),
                 decrementa    = _to_float(row.get('8302')),
+                passo_lat     = _to_float(row.get('8105')),
                 refrigerante  = _to_str(row.get('8401')),
             )
             esiste = conn.execute(
-                "SELECT id FROM condizioni_taglio WHERE id_utensile=? AND materiale_pezzo=? AND applicazione IS NULL",
+                "SELECT id FROM condizione_taglio WHERE id_utensile=? AND materiale_pezzo=? AND applicazione IS NULL",
                 (u['id'], mater)
             ).fetchone()
             if not dry_run:
                 if esiste:
-                    conn.execute("""UPDATE condizioni_taglio SET
+                    conn.execute("""UPDATE condizione_taglio SET
                         vc_m_min=:vc_m_min, n_rpm=:n_rpm, fz_mm=:fz_mm, vf_mm_min=:vf_mm_min,
                         ap_mm=:ap_mm, ae_mm=:ae_mm, rompitruciolo=:rompitruciolo,
                         decrementa=:decrementa, refrigerante=:refrigerante
                         WHERE id=?""", {**params, 'id': esiste['id']})
                     agg += 1
                 else:
-                    conn.execute("""INSERT INTO condizioni_taglio
+                    conn.execute("""INSERT INTO condizione_taglio
                         (id_utensile,materiale_pezzo,applicazione,vc_m_min,n_rpm,fz_mm,vf_mm_min,ap_mm,ae_mm,rompitruciolo,decrementa,refrigerante)
                         VALUES (:id_utensile,:materiale_pezzo,:applicazione,:vc_m_min,:n_rpm,:fz_mm,:vf_mm_min,:ap_mm,:ae_mm,:rompitruciolo,:decrementa,:refrigerante)""", params)
                     ins += 1
