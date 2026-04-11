@@ -341,31 +341,52 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
         nome_file or livello, len(df.columns), len(df)))
     struttura = _l2a_struttura(df, key, log)
     token_stimati += 800
-    log('L2b', 'Analisi valori colonna per colonna...')
+    log('L2b', 'Analisi valori in batch L2b (veloce)...')
+    import pandas as _pd
     da_ignorare = set(struttura.get('colonne_da_ignorare', []))
     analisi = {}
+    da_analizzare = []
     for col in df.columns:
         if col in da_ignorare:
-            analisi[col] = {
-                'campo_master_suggerito': 'ignora',
-                'confidenza': 'alta',
-                'nota': 'esclusa da analisi struttura'
-            }
+            analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'esclusa'}
+        elif df[col].dropna().__len__() == 0:
+            analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'vuota'}
         else:
-            serie = df[col].dropna()
-            # Skip colonne completamente vuote
-            if len(serie) == 0:
-                analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'colonna vuota'}
-            else:
-                analisi[col] = _l2b_colonna(col, serie, struttura, key)
-            token_stimati += 250
-        time.sleep(0.05)
+            da_analizzare.append(col)
+
+    # Batch da 20 colonne - 5 chiamate invece di 100
+    BATCH_L2B = 20
+    fields_str = ', '.join(list(MASTER_FIELDS.keys()))
+    for bi in range(0, len(da_analizzare), BATCH_L2B):
+        batch = da_analizzare[bi:bi+BATCH_L2B]
+        info_b = {}
+        for col in batch:
+            s = df[col].dropna()
+            nums = _pd.to_numeric(s, errors='coerce').dropna()
+            info_b[col] = {
+                'campioni': [str(v)[:15] for v in s.head(3).tolist()],
+                'tipo': 'num' if len(nums)/max(len(s),1)>0.7 else 'testo',
+                'min': round(float(nums.min()),3) if len(nums)>0 else None,
+                'max': round(float(nums.max()),3) if len(nums)>0 else None,
+            }
+        prompt = (
+            'Software: %s. Analizza queste %d colonne e per ognuna indica il campo master.\n'
+            'COLONNE:\n%s\n\nCAMPI: %s\n\n'
+            'Rispondi SOLO JSON: {"analisi":{"Col":{"campo_master_suggerito":"campo","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2"}}}'
+        ) % (struttura.get('software_cam','CAM'), len(info_b), json.dumps(info_b, ensure_ascii=False), fields_str)
+        try:
+            testo = _chiama(prompt, MODEL_ANALISTA, key, max_tokens=1000)
+            res = _parse_json(testo)
+            for col, inf in res.get('analisi', {}).items():
+                if col in df.columns and inf:
+                    analisi[col] = inf
+        except Exception as e:
+            for col in batch:
+                analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':str(e)})
+        token_stimati += 800
+    for col in df.columns:
+        analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':'no analisi'})
     log('L2b', 'Analisi completata: %d colonne' % len(analisi))
-    log('L1', 'Token finora: ~%d | Costo ~$%.4f' % (token_stimati, token_stimati / 1000 * 0.0025))
-    mapping_raw = _l3_mapping(analisi, struttura, key, log)
-    token_stimati += 1500
-    if not mapping_raw or 'mapping' not in mapping_raw:
-        log('L1', 'ERRORE: L3 non ha prodotto mapping valido')
         return {'verificato': False, 'errore': 'Mapping non prodotto',
                 'struttura': struttura, 'log': log_eventi, 'costo_stimato': token_stimati}
     verifica = None
