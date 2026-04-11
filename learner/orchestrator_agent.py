@@ -242,7 +242,7 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
         campioni = [str(v) for v in df[col].dropna().head(3).tolist()] if col in df.columns else []
         nums = pd.to_numeric(df[col].dropna(), errors='coerce').dropna() if col in df.columns else pd.Series()
         dettaglio[col] = {
-+            'campo_master': info.get('campo_master'),
+            'campo_master': info.get('campo_master'),
             'confidenza': info.get('confidenza'),
             'trasformazione': info.get('trasformazione', 'nessuna'),
             'campioni': campioni,
@@ -303,7 +303,7 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     for col in df.columns:
         if col in da_ignorare:
             analisi[col] = {
-+                'campo_master_suggerito': 'ignora',
+                'campo_master_suggerito': 'ignora',
                 'confidenza': 'alta',
                 'nota': 'esclusa da analisi struttura'
             }
