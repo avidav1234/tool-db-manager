@@ -274,12 +274,11 @@ def importa_cutters(rows, conn, dry_run=False):
             tipo_raw = row.get('2102', '')
             tipo_cod = TIPO_ID_MAP.get(tipo_raw, 'FLAT')
             tipo_id  = _get_tipo_id(conn, tipo_cod)
-
             tecnologia = TECNOLOGIA_MAP.get(row.get('2101', ''), None)
             dir_rot    = DIR_ROT_MAP.get(row.get('4203', ''), None)
             refrig     = REFRIG_MAP.get(row.get('4204', ''), None)
 
-            # Cerca portautensile se presente
+            # Cerca portautensile per nome pinza
             nome_pinza = _to_str(row.get('3101'))
             pid = None
             if nome_pinza:
@@ -287,48 +286,59 @@ def importa_cutters(rows, conn, dry_run=False):
                 if r: pid = r['id']
 
             params = dict(
-                codice_catalogo         = _to_str(row.get('2103')),
-                descrizione             = _to_str(row.get('1102')),
-                sito_web                = _to_str(row.get('1103')),
-                id_tipo                 = tipo_id,
-                id_materiale            = mat_id_hm,
-                id_portautensile        = pid,
-                tecnologia              = tecnologia,
-                diametro_mm             = _to_float(row.get('2105'), 0),
-                raggio_punta_mm         = _to_float(row.get('2106'), 0),
-                angolo_punta_gradi      = _to_float(row.get('2113')),
-                lunghezza_totale_mm     = _to_float(row.get('2108'), 0),
-                lunghezza_tagl_mm       = _to_float(row.get('2109'), 0),
-                lunghezza_tagl2_mm      = _to_float(row.get('2110')),
-                num_taglienti           = _to_int(row.get('4106'), 2),
-                angolo_elica_gradi      = _to_float(row.get('2112')),
-                conico                  = _to_int(row.get('2111'), 0),
-                angolo_conico_gradi     = _to_float(row.get('2112')),
-                diam_stelo_mm           = _to_float(row.get('2202')),
-                diam_stelo_inf_mm       = _to_float(row.get('2203')),
-                lungh_cono_stelo_mm     = _to_float(row.get('2206')),
-                lungh_libera_stelo_mm   = _to_float(row.get('2207')),
-                angolo_cono_stelo_gradi = _to_float(row.get('2205')),
-                usa_angolo_cono_stelo   = _to_int(row.get('2204'), 0),
-                diam_stelo2_mm          = _to_float(row.get('2209')),
-                diam_stelo2_inf_mm      = _to_float(row.get('2210')),
-                lungh_cono_stelo2_mm    = _to_float(row.get('2212')),
-                lungh_libera_stelo2_mm  = _to_float(row.get('2213')),
-                angolo_cono_stelo2_gradi= _to_float(row.get('2211')),
-                nome_pinza              = nome_pinza,
-                lungh_presa_mm          = _to_float(row.get('3102')),
-                lungh_libera_pinza_mm   = _to_float(row.get('3103')),
-                avanzamento_default     = _to_float(row.get('4101')),
-                rotazione_default       = _to_float(row.get('4102')),
-                vc_default              = _to_float(row.get('4103')),
-                fz_default              = _to_float(row.get('4104')),
-                passo_z_default         = _to_float(row.get('5101')),
-                passo_lat_default       = _to_float(row.get('5102')),
-                num_magazzino           = _to_int(row.get('1201')),
-                vita_utensile           = _to_int(row.get('4202')),
-                dir_rotazione           = dir_rot,
-                refrigerante            = refrig,
-                passo_mm                = _to_float(row.get('2123')),
+                # Identificazione
+                codice_catalogo          = _to_str(row.get('2103')),
+                descrizione              = _to_str(row.get('1102')),
+                sito_web                 = _to_str(row.get('1103')),
+                num_magazzino            = _to_int(row.get('1201')),
+                # Classificazione
+                id_tipo                  = tipo_id,
+                id_materiale             = mat_id_hm,
+                id_portautensile         = pid,
+                tecnologia               = tecnologia,
+                # Geometria corpo
+                diametro_mm              = _to_float(row.get('2105'), 0),
+                raggio_punta_mm          = _to_float(row.get('2106'), 0),
+                angolo_punta_gradi       = _to_float(row.get('2113')),
+                lunghezza_totale_mm      = _to_float(row.get('2108'), 0),
+                lunghezza_tagl_mm        = _to_float(row.get('2109'), 0),
+                lunghezza_tagl2_mm       = _to_float(row.get('2110')),
+                num_taglienti            = _to_int(row.get('4106'), 2),
+                conico                   = _to_int(row.get('2111'), 0),
+                angolo_conico_gradi      = _to_float(row.get('2112')),
+                # Assemblaggio pinza - DATI CRITICI
+                nome_pinza               = nome_pinza,
+                lungh_presa_mm           = _to_float(row.get('3102')),
+                fuori_pinza_mm           = _to_float(row.get('3103')),   # distanza punta -> inizio pinza
+                lungh_libera_prolunga_mm = _to_float(row.get('3105')),
+                # Stelo principale
+                diam_stelo_sup_mm        = _to_float(row.get('2202')),
+                diam_stelo_inf_mm        = _to_float(row.get('2203')),
+                lungh_cono_stelo_mm      = _to_float(row.get('2206')),
+                lungh_libera_stelo_mm    = _to_float(row.get('2207')),
+                angolo_cono_stelo_gradi  = _to_float(row.get('2205')),
+                usa_angolo_cono_stelo    = _to_int(row.get('2204'), 0),
+                # Stelo secondario
+                diam_stelo2_sup_mm       = _to_float(row.get('2209')),
+                diam_stelo2_inf_mm       = _to_float(row.get('2210')),
+                lungh_cono_stelo2_mm     = _to_float(row.get('2212')),
+                lungh_libera_stelo2_mm   = _to_float(row.get('2213')),
+                angolo_cono_stelo2_gradi = _to_float(row.get('2211')),
+                # Parametri taglio default
+                avanzamento_default      = _to_float(row.get('4101')),
+                rotazione_default        = _to_float(row.get('4102')),
+                vc_default               = _to_float(row.get('4103')),
+                fz_default               = _to_float(row.get('4104')),
+                passo_z_default          = _to_float(row.get('5101')),
+                passo_lat_default        = _to_float(row.get('5102')),
+                tolleranza_default       = _to_float(row.get('5106')),
+                vita_utensile            = _to_int(row.get('4202')),
+                # Macchina
+                dir_rotazione            = dir_rot,
+                refrigerante             = refrig,
+                distanza_pivot           = _to_float(row.get('4205')),
+                # Filettatura
+                passo_mm                 = _to_float(row.get('2123')),
             )
 
             esiste = conn.execute("SELECT id FROM utensile WHERE codice_interno=?", (codice,)).fetchone()
