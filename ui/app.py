@@ -211,6 +211,8 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <td>{{ u.materiale }}</td>
   <td style="white-space:nowrap">
     <a class="btn" style="padding:4px 9px;font-size:12px"
+       href="/utensile/{{ u.id }}">Dettaglio</a>
+    <a class="btn" style="padding:4px 9px;font-size:12px"
        href="/utensile/{{ u.id }}/modifica">Modifica</a>
     <a class="btn btn-d" style="padding:4px 9px;font-size:12px"
        href="/utensile/{{ u.id }}/elimina"
@@ -670,6 +672,89 @@ IMPORTA_LOCALE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 </div>
 {% endif %}
 {% if msg %}<div class="flash err">{{ msg }}</div>{% endif %}
+""")
+
+
+@app.route('/utensile/<int:uid>')
+def utensile_dettaglio(uid):
+    conn = get_conn()
+    try:
+        u = conn.execute("SELECT * FROM utensile_completo WHERE id=?", (uid,)).fetchone()
+        if not u:
+            return redirect(url_for('home', msg='Utensile non trovato', mtype='err'))
+        taglio = conn.execute(
+            "SELECT * FROM condizioni_taglio WHERE id_utensile=? ORDER BY materiale_pezzo",
+            (uid,)
+        ).fetchall()
+    finally:
+        conn.close()
+    return render_template_string(DETTAGLIO_HTML,
+        u=dict(u), taglio=[dict(t) for t in taglio],
+        active='home', msg='', mtype='')
+
+DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+  <a href="/" class="btn">&#8592; Lista</a>
+  <h2 style="margin:0;font-size:1.1rem">{{ u.codice_interno }}</h2>
+  <span class="badge b-ok">{{ u.tipo }}</span>
+  <a class="btn" style="margin-left:auto" href="/utensile/{{ u.id }}/modifica">Modifica</a>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Geometria</h2>
+    <table>
+    <tbody>
+      <tr><td style="color:#888;width:50%">Codice catalogo</td><td>{{ u.codice_catalogo or '-' }}</td></tr>
+      <tr><td style="color:#888">Descrizione</td><td>{{ u.descrizione or '-' }}</td></tr>
+      <tr><td style="color:#888">Tipo</td><td>{{ u.tipo }}</td></tr>
+      <tr><td style="color:#888">Materiale</td><td>{{ u.materiale }}</td></tr>
+      <tr><td style="color:#888">Diametro</td><td><b>{{ u.diametro_mm }} mm</b></td></tr>
+      <tr><td style="color:#888">Raggio punta</td><td>{{ u.raggio_punta_mm }} mm</td></tr>
+      <tr><td style="color:#888">Lunghezza totale</td><td>{{ u.lunghezza_totale_mm }} mm</td></tr>
+      <tr><td style="color:#888">Lunghezza tagliente</td><td>{{ u.lunghezza_tagl_mm }} mm</td></tr>
+      <tr><td style="color:#888">N. taglienti</td><td>{{ u.num_taglienti }}</td></tr>
+      {% if u.angolo_punta_gradi %}<tr><td style="color:#888">Angolo punta</td><td>{{ u.angolo_punta_gradi }}°</td></tr>{% endif %}
+      {% if u.angolo_elica_gradi %}<tr><td style="color:#888">Angolo elica</td><td>{{ u.angolo_elica_gradi }}°</td></tr>{% endif %}
+      {% if u.passo_mm %}<tr><td style="color:#888">Passo</td><td>{{ u.passo_mm }} mm</td></tr>{% endif %}
+    </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Condizioni di taglio ({{ taglio|length }} materiali)</h2>
+    {% if taglio %}
+    <table>
+    <thead><tr>
+      <th>Materiale pezzo</th>
+      <th>Vc (m/min)</th>
+      <th>Fz (mm/z)</th>
+      <th>N (rpm)</th>
+      <th>Vf (mm/min)</th>
+      <th>ap (mm)</th>
+      <th>ae (mm)</th>
+    </tr></thead>
+    <tbody>
+    {% for t in taglio %}
+    <tr>
+      <td><b>{{ t.materiale_pezzo }}</b></td>
+      <td>{{ '%.1f'|format(t.vc_m_min) if t.vc_m_min else '-' }}</td>
+      <td>{{ '%.4f'|format(t.fz_mm) if t.fz_mm else '-' }}</td>
+      <td>{{ t.n_rpm|int if t.n_rpm else '-' }}</td>
+      <td>{{ t.vf_mm_min|int if t.vf_mm_min else '-' }}</td>
+      <td>{{ '%.2f'|format(t.ap_mm) if t.ap_mm else '-' }}</td>
+      <td>{{ '%.2f'|format(t.ae_mm) if t.ae_mm else '-' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    </table>
+    {% else %}
+    <p style="color:#aaa;font-size:13px;text-align:center;padding:2rem">
+      Nessuna condizione di taglio. Importa il file ZIP da Cimatron per includerle.
+    </p>
+    {% endif %}
+  </div>
+</div>
 """)
 
 
