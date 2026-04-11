@@ -603,6 +603,7 @@ def importa():
             f.save(import_path)
             try:
                 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+                sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'learner'))
                 from importers.import_from_excel import importa as do_import
                 risultato = do_import(import_path, dry_run=dry_run)
                 risultato['dry_run'] = dry_run
