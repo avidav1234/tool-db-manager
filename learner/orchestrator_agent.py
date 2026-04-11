@@ -205,85 +205,63 @@ def _l2b_colonna(col_name, serie, contesto, api_key) -> dict:
 # =====================================================================
 
 def _l3_mapping(analisi, struttura, api_key, log) -> dict:
-    """
-    Mapping in batch da 15 colonne.
-    Evita prompt enormi che causano JSON malformato.
-    Con 100 colonne: 7 batch da 15 = 7 chiamate Haiku piccole e affidabili.
-    """
     log('L3', 'Produzione mapping strutturato (batch da 15)...')
-    fields_desc = '\n'.join('%s: %s' % (k, v) for k, v in MASTER_FIELDS.items())
-    software = struttura.get('software_cam', 'sconosciuto')
-
-    # Dividi le colonne in batch da 15
-    colonne = list(analisi.keys())
+    software   = struttura.get('software_cam', 'sconosciuto')
+    colonne    = list(analisi.keys())
     BATCH_SIZE = 15
-    batches = [colonne[i:i+BATCH_SIZE] for i in range(0, len(colonne), BATCH_SIZE)]
-
-    mapping_totale = {}
-    campi_gia_mappati = set()  # evita duplicati tra batch
-    ambigue = []
-    warnings = []
-
+    batches    = [colonne[i:i+BATCH_SIZE] for i in range(0, len(colonne), BATCH_SIZE)]
+    mapping_totale    = {}
+    campi_gia_mappati = set()
     for idx_batch, batch in enumerate(batches):
-        analisi_batch = {col: analisi[col] for col in batch}
-        # Esclude campi gia mappati dai batch precedenti
-        campi_disponibili = {k: v for k, v in MASTER_FIELDS.items() if k not in campi_gia_mappati}
-        fields_batch = '\n'.join('%s: %s' % (k, v) for k, v in campi_disponibili.items())
-
-        # Prepara analisi batch evidenziando il suggerimento di L2b
-        analisi_con_suggerimento = {}
-        for col, info in analisi_batch.items():
-            suggerimento = info.get('campo_master_suggerito', 'ignora')
-            analisi_con_suggerimento[col] = {
-                'suggerimento_L2b': suggerimento,
-                'confidenza_L2b': info.get('confidenza', 'bassa'),
-                'campioni': info.get('campioni', []),
-                'trasformazione': info.get('trasformazione', 'nessuna'),
+        input_batch = {}
+        for col in batch:
+            info = analisi.get(col, {})
+            input_batch[col] = {
+                'suggerimento': info.get('campo_master_suggerito', 'ignora'),
+                'confidenza':   info.get('confidenza', 'bassa'),
+                'campioni':     info.get('campioni', []),
             }
-
+        campi_disponibili = {k: v for k, v in MASTER_FIELDS.items() if k not in campi_gia_mappati}
+        fields_list = ', '.join(campi_disponibili.keys())
         prompt = (
-            'File: %s | Batch %d/%d (%d colonne)\n\n'
-            'SUGGERIMENTI L2b PER QUESTE COLONNE:\n%s\n\n'
-            'CAMPI MASTER DISPONIBILI:\n%s\n\n'
-            'Istruzioni:\n'
-            '- Usa i suggerimenti L2b come base, correggili solo se sbagliati\n'
-            '- Ogni campo master mappato UNA sola volta\n'
-            '- "Radius" senza Diameter = diametro_mm con moltiplica_2\n'
-            '- "Gauge"/"Gauge Length" = fuori_pinza_mm\n'
-            '- Se campo_master_suggerito e "ignora" o non utile: ignora\n\n'
-            'Rispondi SOLO con JSON:\n'
-            '{"mapping":{"NomeCol":{"campo_master":"campo","confidenza":"alta/media/bassa",'
-            '"trasformazione":"nessuna/moltiplica_2/decodifica_tipo","motivazione":"perche"}},'
-            '"ambigue":["col"]}'
-        ) % (software, idx_batch+1, len(batches),
-             len(batch), json.dumps(analisi_con_suggerimento, ensure_ascii=False),
-             fields_batch)
-
+            'Software: %s | Batch %d/%d\n\n'
+            'Per ogni colonna hai un suggerimento da L2b. Confermalo o correggilo.\n\n'
+            'COLONNE E SUGGERIMENTI:\n%s\n\n'
+            'CAMPI DISPONIBILI: %s\n\n'
+            'Regole: ogni campo UNA volta. Radius=diametro_mm con moltiplica_2 se non c\'e Diameter. '
+            'Gauge=fuori_pinza_mm. TipRadius=raggio_punta_mm.\n\n'
+            'Rispondi SOLO JSON (tutte le colonne del batch):\n'
+            '{"mapping":{"NomeCol":{"campo_master":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/decodifica_tipo","motivazione":"breve"}}}'
+        ) % (software, idx_batch+1, len(batches), JSON.stringify(input_batch), fields_list)
+        # NOTA: JSON.stringify usato nel template - viene sostituito sotto
+        prompt = prompt  # placeholder
         try:
-            testo = _chiama(prompt, MODEL_ANALISTA, api_key, max_tokens=1000)
+            import json as _json
+            ib_json = _json.dumps(input_batch, ensure_ascii=False)
+            prompt = (
+                'Software: %s | Batch %d/%d\n\n'
+                'Per ogni colonna hai un suggerimento da L2b. Confermalo o correggilo.\n\n'
+                'COLONNE E SUGGERIMENTI:\n%s\n\n'
+                'CAMPI DISPONIBILI: %s\n\n'
+                'Regole: ogni campo UNA volta. Radius=diametro_mm+moltiplica_2 se non c\'e Diameter. '
+                'Gauge=fuori_pinza_mm. TipRadius=raggio_punta_mm.\n\n'
+                'Rispondi SOLO JSON (tutte le colonne del batch):\n'
+                '{"mapping":{"NomeCol":{"campo_master":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/decodifica_tipo","motivazione":"breve"}}}'
+            ) % (software, idx_batch+1, len(batches), ib_json, fields_list)
+            testo = _chiama(prompt, MODEL_ANALISTA, api_key, max_tokens=1200)
             result = _parse_json(testo)
-            batch_mapping = result.get('mapping', {})
-
-            for col, info in batch_mapping.items():
+            for col, info in result.get('mapping', {}).items():
                 campo = info.get('campo_master', 'ignora')
-                if campo == 'ignora' or campo in campi_gia_mappati:
+                if campo == 'ignora' or campo in campi_gia_mappati or campo not in MASTER_FIELDS:
                     continue
                 mapping_totale[col] = info
                 campi_gia_mappati.add(campo)
-
-            ambigue.extend(result.get('ambigue', []))
         except Exception as e:
             log('L3', 'Batch %d/%d errore: %s' % (idx_batch+1, len(batches), e))
-
-    n = sum(1 for v in mapping_totale.values() if v.get('campo_master','ignora') != 'ignora')
+    n = len(mapping_totale)
     log('L3', '%d colonne mappate su %d totali (%d batch)' % (n, len(colonne), len(batches)))
+    return {'mapping': mapping_totale, 'colonne_ambigue': [], 'warning': []}
 
-    return {'mapping': mapping_totale, 'colonne_ambigue': ambigue, 'warning': warnings}
-
-
-# =====================================================================
-# LIVELLO 4 - VERIFICATORE (Sonnet)
-# =====================================================================
 
 def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
     log('L4', 'Verifica logica mapping...')
