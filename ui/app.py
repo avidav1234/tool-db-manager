@@ -224,6 +224,13 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
     data-tipo="{{ u.tipo }}"
     data-pinza="{{ u.nome_pinza or '' }}">
   <td>
+    {% if u.fuori_pinza_mm and u.nome_pinza and u.num_taglienti %}
+      <span title="Dati completi" style="color:#166534;font-size:10px">&#9679;</span>
+    {% elif u.fuori_pinza_mm %}
+      <span title="Dati parziali" style="color:#854d0e;font-size:10px">&#9679;</span>
+    {% else %}
+      <span title="Fuori pinza mancante!" style="color:#991b1b;font-size:10px">&#9888;</span>
+    {% endif %}
     <a href="/utensile/{{ u.id }}" style="font-weight:600;font-size:13px;color:#1a1a1a;text-decoration:none">
       {{ u.codice_interno }}
     </a>
@@ -1294,6 +1301,196 @@ def cam_genera(cam_key):
         return redirect(url_for('cam_page', msg=str(e), mtype='warn'))
     except Exception as e:
         return redirect(url_for('cam_page', msg=f'Errore: {e}', mtype='err'))
+
+
+@app.route('/verifica')
+def verifica():
+    """Pagina qualita dati - semaforo per ogni utensile."""
+    import sys as _sys
+    _root = os.path.join(os.path.dirname(__file__), '..')
+    if _root not in _sys.path: _sys.path.insert(0, _root)
+    try:
+        from verifica_import import genera_report, CAMPI
+        conn = get_conn()
+        report = genera_report(conn)
+        conn.close()
+    except Exception as e:
+        return render_template_string(BASE.replace(
+            '{% block content %}{% endblock %}',
+            f'<div class="card"><div class="flash err">Errore: {e}</div></div>'
+        ), active='verifica', msg='', mtype='')
+    return render_template_string(VERIFICA_HTML,
+        report=report, active='verifica', msg='', mtype='')
+
+@app.route('/verifica/report')
+def verifica_report_html():
+    """Scarica il report HTML completo."""
+    import sys as _sys
+    _root = os.path.join(os.path.dirname(__file__), '..')
+    if _root not in _sys.path: _sys.path.insert(0, _root)
+    from verifica_import import genera_html_report
+    conn = get_conn()
+    html = genera_html_report(conn)
+    conn.close()
+    from flask import Response
+    return Response(html, mimetype='text/html',
+        headers={'Content-Disposition': 'attachment; filename=report_qualita_utensili.html'})
+
+VERIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
+{% set r = report.riepilogo %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">Verifica qualita dati</h2>
+    <p style="margin:4px 0 0;color:#888;font-size:13px">Generato il {{ report.timestamp }}</p>
+  </div>
+  <a href="/verifica/report" class="btn btn-s">&#8659; Scarica report HTML</a>
+</div>
+
+<!-- KPI semaforo globale -->
+<div class="grid4" style="margin-bottom:1.25rem">
+  <div class="stat" style="border-top:3px solid #166534">
+    <div class="stat-n" style="color:#166534">{{ r.verdi }}</div>
+    <div class="stat-l">&#9679; Completi (&#8805;90%)</div>
+  </div>
+  <div class="stat" style="border-top:3px solid #854d0e">
+    <div class="stat-n" style="color:#854d0e">{{ r.gialli }}</div>
+    <div class="stat-l">&#9679; Incompleti (70-89%)</div>
+  </div>
+  <div class="stat" style="border-top:3px solid #991b1b">
+    <div class="stat-n" style="color:#991b1b">{{ r.rossi }}</div>
+    <div class="stat-l">&#9679; Dati mancanti (&lt;70%)</div>
+  </div>
+  <div class="stat" style="border-top:3px solid #7c3aed">
+    <div class="stat-n" style="color:#7c3aed">{{ r.senza_taglio }}</div>
+    <div class="stat-l">Senza Vc/Fz per materiale</div>
+  </div>
+</div>
+
+{% if r.rossi > 0 %}
+<div class="flash err" style="margin-bottom:1rem">
+  &#9888; <b>{{ r.rossi }} utensili con dati critici mancanti.</b>
+  Questi utensili potrebbero causare problemi in lavorazione.
+  Verifica le righe evidenziate in rosso.
+</div>
+{% elif r.gialli > 0 %}
+<div class="flash warn" style="margin-bottom:1rem">
+  &#9432; <b>{{ r.gialli }} utensili con dati incompleti.</b>
+  I dati critici ci sono ma mancano informazioni opzionali utili.
+</div>
+{% else %}
+<div class="flash" style="margin-bottom:1rem">
+  &#10003; <b>Tutti i dati sono completi.</b> Database pronto per la lavorazione.
+</div>
+{% endif %}
+
+<div class="card">
+<div style="display:flex;gap:.5rem;margin-bottom:.75rem;align-items:center">
+  <input type="text" id="sv-search" placeholder="&#128269; Cerca utensile..."
+         oninput="svFiltra()"
+         style="flex:1;padding:8px 12px;border:2px solid #e2e2df;border-radius:6px;font-size:13px">
+  <select id="sv-filtro" onchange="svFiltra()"
+          style="padding:8px;border:2px solid #e2e2df;border-radius:6px;font-size:13px;background:#fff">
+    <option value="">Tutti</option>
+    <option value="verde">&#9679; Completi</option>
+    <option value="giallo">&#9679; Incompleti</option>
+    <option value="rosso">&#9679; Mancanti</option>
+  </select>
+  <span id="sv-count" style="font-size:12px;color:#888;white-space:nowrap">{{ report.utensili|length }} utensili</span>
+</div>
+
+<div style="overflow-x:auto">
+<table id="sv-tbl">
+<thead><tr>
+  <th style="width:30px"></th>
+  <th>Codice utensile</th>
+  <th>Tipo</th>
+  <th style="text-align:right">&#8960;</th>
+  <th style="text-align:right;background:#f0fdf4;color:#166534">Fuori pinza</th>
+  <th style="text-align:center">Vc/Fz</th>
+  <th style="text-align:center">Score</th>
+  <th>Problemi rilevati</th>
+</tr></thead>
+<tbody>
+{% for item in report.utensili %}
+{% set u = item.utensile %}
+{% set q = item.qualita %}
+<tr data-css="{{ q.css }}"
+    data-search="{{ u.codice_interno|lower }} {{ (u.descrizione or '')|lower }}">
+  <td style="text-align:center;font-size:16px">
+    {% if q.css == 'verde' %}
+      <span title="Dati completi" style="color:#166534">&#9679;</span>
+    {% elif q.css == 'giallo' %}
+      <span title="Dati incompleti" style="color:#854d0e">&#9679;</span>
+    {% else %}
+      <span title="Dati critici mancanti" style="color:#991b1b">&#9888;</span>
+    {% endif %}
+  </td>
+  <td>
+    <a href="/utensile/{{ u.id }}" style="font-weight:600;font-size:13px;color:#1a1a1a;text-decoration:none">
+      {{ u.codice_interno }}
+    </a>
+  </td>
+  <td><span class="badge b-ok">{{ u.tipo }}</span></td>
+  <td style="text-align:right;font-family:monospace">{{ u.diametro_mm }}</td>
+  <td style="text-align:right;background:#f0fdf4;font-family:monospace;font-weight:600;color:#1a6e35">
+    {% if u.fuori_pinza_mm %}{{ u.fuori_pinza_mm }} mm{% else %}<span style="color:#991b1b">MANCANTE</span>{% endif %}
+  </td>
+  <td style="text-align:center">
+    {% if q.n_taglio > 0 %}
+      <span style="color:#166534;font-weight:600">{{ q.n_taglio }} mat.</span>
+    {% else %}
+      <span style="color:#aaa;font-size:12px">nessuno</span>
+    {% endif %}
+  </td>
+  <td style="text-align:center">
+    <span style="background:{{ q.colore }}22;color:{{ q.colore }};padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600">
+      {{ q.score }}%
+    </span>
+  </td>
+  <td style="font-size:12px">
+    {% if q.mancanti_critici %}
+      <div style="color:#991b1b">&#9888; <b>Critici:</b> {{ q.mancanti_critici|join(', ') }}</div>
+    {% endif %}
+    {% if q.mancanti_facoltativi %}
+      <div style="color:#854d0e">&#9432; {{ q.mancanti_facoltativi|join(', ') }}</div>
+    {% endif %}
+    {% if q.anomalie %}
+      <div style="color:#7c3aed">&#9642; {{ q.anomalie|join(' | ') }}</div>
+    {% endif %}
+    {% if not q.mancanti_critici and not q.mancanti_facoltativi and not q.anomalie %}
+      <span style="color:#166534">&#10003; OK</span>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody></table>
+</div>
+
+<div style="margin-top:.75rem;font-size:12px;color:#888">
+  <b>Leggenda:</b>
+  &#9888; = dati critici mancanti (obbligatori per programmare) &nbsp;|&nbsp;
+  &#9432; = dati facoltativi mancanti &nbsp;|&nbsp;
+  &#9642; = valore fuori range tipico &nbsp;|&nbsp;
+  <b>Fuori pinza</b> = distanza dalla punta all'inizio della pinza (critico per evitare collisioni)
+</div>
+</div>
+
+<script>
+function svFiltra(){
+  var q=document.getElementById('sv-search').value.toLowerCase();
+  var f=document.getElementById('sv-filtro').value;
+  var n=0;
+  document.querySelectorAll('#sv-tbl tbody tr').forEach(function(r){
+    var ok=true;
+    if(q && !r.dataset.search.includes(q)) ok=false;
+    if(f && r.dataset.css!==f) ok=false;
+    r.style.display=ok?'':'none';
+    if(ok) n++;
+  });
+  document.getElementById('sv-count').textContent=n+' utensili';
+}
+</script>
+""")
 
 
 @app.route('/debug_magic')
