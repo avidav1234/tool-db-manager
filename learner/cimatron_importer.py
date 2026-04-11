@@ -254,15 +254,43 @@ def importa_file(filepath: str, dry_run: bool = False) -> dict:
 
     ext = os.path.splitext(filepath)[1].lower()
 
+    # Rilevamento formato - magic bytes UTF-16 per CSV, struttura per XLS/ZIP
+    def _e_cimatron(fp):
+        try:
+            with open(fp, 'rb') as f:
+                magic = f.read(2)
+            if magic in (b'\xff\xfe', b'\xfe\xff'):
+                return True
+        except Exception:
+            pass
+        if fp.lower().endswith('.xls'):
+            try:
+                import xlrd
+                return 'Cutters' in xlrd.open_workbook(fp).sheet_names()
+            except Exception:
+                pass
+        if fp.lower().endswith('.zip'):
+            try:
+                import zipfile as _zf
+                with _zf.ZipFile(fp) as z:
+                    return any('Cutters' in os.path.basename(n) and n.endswith('.csv')
+                               for n in z.namelist())
+            except Exception:
+                pass
+        return False
+
+    if not _e_cimatron(filepath):
+        raise ValueError(f"File non riconosciuto come export Cimatron: {filepath}")
+
     # Leggi con il parser appropriato
-    if ext == '.zip' and is_cimatron_file(filepath):
+    if ext == '.zip':
         risultato = leggi_cimatron_zip(filepath)
-    elif ext == '.xls' and is_cimatron_file(filepath):
+    elif ext == '.xls':
         risultato = leggi_cimatron_xls(filepath)
-    elif ext == '.csv' and is_cimatron_file(filepath):
+    elif ext == '.csv':
         risultato = leggi_cimatron_csv(filepath)
     else:
-        raise ValueError(f"File non riconosciuto come export Cimatron: {filepath}")
+        raise ValueError(f"Formato non supportato: {ext}")
 
     df_cutters  = risultato['df']
     df_material = risultato.get('df_material')
