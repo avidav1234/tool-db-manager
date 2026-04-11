@@ -275,6 +275,11 @@ def analizza():
 
         usa_orche = False
         try:
+            # Forza reimport per usare codice aggiornato su disco
+            import sys as _sys
+            for _k in list(_sys.modules.keys()):
+                if 'orchestrator' in _k:
+                    del _sys.modules[_k]
             from orchestrator_agent import disponibile, orchestra_learning
             usa_orche = disponibile()
         except Exception:
