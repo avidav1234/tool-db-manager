@@ -276,7 +276,7 @@ def salva_profilo_route():
     for campo in ['tipo', 'materiale']:
         if campo in mapping:
             col = mapping[campo]['colonna_file']
-            df  = r.get('df') or __import__('pandas').DataFrame()
+            _df_raw = r.get('df'); df = _df_raw if _df_raw is not None else __import__('pandas').DataFrame()
             try:
                 uniq = df[col].dropna().unique() if col in df.columns else []
             except Exception:
