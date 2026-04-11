@@ -38,6 +38,12 @@ if [ ! -f "venv/bin/activate" ]; then
   echo "  Creo ambiente virtuale..."
   "$PYTHON" -m venv venv
 fi
+# Carica variabili d'ambiente da .env se esiste (contiene ANTHROPIC_API_KEY, ecc.)
+if [ -f ".env" ]; then
+  export $(grep -v '^#' .env | xargs)
+  echo "  Variabili .env caricate"
+fi
+
 source venv/bin/activate
 
 if ! python -c "import flask, pandas, openpyxl" &>/dev/null; then
