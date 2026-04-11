@@ -52,20 +52,65 @@ MASTER_FIELDS = {
 }
 
 TIPO_GUESS = {
-    '1':'FLAT','2':'BALL','3':'BULL','4':'DRILL','5':'TAP','6':'REAM',
-    'flat':'FLAT','mill':'FLAT','endmill':'FLAT','piana':'FLAT',
-    'ball':'BALL','ballnose':'BALL','sferica':'BALL','sfera':'BALL',
-    'bull':'BULL','bullnose':'BULL','torica':'BULL',
+    # Cimatron ID numerici
+    '210201':'FLAT','210202':'BALL','210203':'BULL','210204':'DRILL',
+    '210205':'REAM','210206':'TAP','210207':'SPOT','210208':'BALL','210209':'BULL',
+    # Numerici generici
+    '1':'FLAT','2':'BALL','3':'BULL','4':'DRILL','5':'TAP','6':'REAM','7':'SPOT',
+    # Italiano
+    'flat':'FLAT','piatta':'FLAT','piana':'FLAT','fresa piatta':'FLAT',
+    'mill':'FLAT','endmill':'FLAT','end mill':'FLAT','end_mill':'FLAT',
+    'ball':'BALL','ballnose':'BALL','ball nose':'BALL','ball_nose':'BALL',
+    'sferica':'BALL','sfera':'BALL','fresa sferica':'BALL',
+    'bull':'BULL','bullnose':'BULL','bull nose':'BULL',
+    'torica':'BULL','toroidale':'BULL','fresa torica':'BULL',
+    # hyperMILL
+    'flatendmill':'FLAT','flat end mill':'FLAT',
+    'ballendmill':'BALL','ball end mill':'BALL','ball nose':'BALL',
+    'bullendmill':'BULL','bull nose end mill':'BULL',
+    'toroidalendmill':'BULL','toroidal':'BULL','toroidal end mill':'BULL',
+    # WorkNC
+    'flatendmill':'FLAT','ballendmill':'BALL','toroidalendmill':'BULL',
+    # NX Siemens
+    'mill':'FLAT','ball_mill':'BALL','bull_mill':'BULL',
+    # Mastercam
+    'flat endmill':'FLAT','ball endmill':'BALL','bull endmill':'BULL',
+    # PowerMill
+    'end_mill':'FLAT','ball_nose':'BALL','bull_nose':'BULL',
+    # Foratura
     'drill':'DRILL','punta':'DRILL','foratura':'DRILL',
-    'tap':'TAP','maschio':'TAP','filettatura':'TAP',
-    'ream':'REAM','alesatura':'REAM',
-    'spot':'SPOT','center':'SPOT','centratura':'SPOT',
-    'chamfer':'TAPER','taper':'TAPER',
+    'twist drill':'DRILL','twist_drill':'DRILL',
+    # Filettatura
+    'tap':'TAP','maschio':'TAP','filettatura':'TAP','tapping':'TAP',
+    # Alesatura
+    'ream':'REAM','reamer':'REAM','alesatore':'REAM','alesatura':'REAM',
+    # Centratura
+    'spot':'SPOT','spot drill':'SPOT','spotdrill':'SPOT','spot_drill':'SPOT',
+    'center':'SPOT','centratura':'SPOT','centering':'SPOT',
+    # Conico/Smusso
+    'chamfer':'TAPER','taper':'TAPER','conico':'TAPER',
+    # Filetto fresa
+    'thread mill':'THREAD','threadmill':'THREAD','thread_mill':'THREAD',
+    'fresa filetto':'THREAD',
+    # Probe/tastatore
+    'probe':'PROBE','tastatore':'PROBE',
 }
 MAT_GUESS = {
-    '1':'HM','2':'HSS','3':'HSCo','4':'CBN','5':'PCD',
-    'hm':'HM','carbide':'HM','widia':'HM','vhm':'HM',
-    'hss':'HSS','hsco':'HSCo','cbn':'CBN','pcd':'PCD','ceramic':'CER',
+    # Numerici
+    '1':'HM','2':'HSS','3':'HSCo','4':'CBN','5':'PCD','6':'CER',
+    # Metallo duro
+    'hm':'HM','carbide':'HM','widia':'HM','vhm':'HM','wc':'HM',
+    'metallo duro':'HM','hartmetall':'HM','cemented carbide':'HM',
+    'carbidecoated':'HM','coated carbide':'HM','carbide coated':'HM',
+    'solid carbide':'HM','integral carbide':'HM',
+    # Acciaio rapido
+    'hss':'HSS','high speed steel':'HSS','acciaio rapido':'HSS',
+    # HSCo
+    'hsco':'HSCo','hss-co':'HSCo','cobalt':'HSCo',
+    # Superhard
+    'cbn':'CBN','pcbn':'CBN',
+    'pcd':'PCD','diamond':'PCD','diamante':'PCD',
+    'ceramic':'CER','ceramica':'CER',
 }
 
 
