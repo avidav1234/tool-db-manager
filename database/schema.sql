@@ -1,20 +1,24 @@
 -- ============================================================
--- schema.sql - Tool DB Manager
--- Analisi completa file Cimatron 2025 SP5
--- Tutti i campi verificati su dati reali
+-- Tool DB Manager — schema v2.0
+-- DB MASTER UNIVERSALE: hub tra tutti i software CAM
+-- Logica: importa TUTTO da qualsiasi CAM,
+--         esporta solo ciò che serve al CAM di destinazione.
+-- L'alias è l'identificativo officina, indipendente dal CAM.
 -- ============================================================
 
 PRAGMA foreign_keys = ON;
 
+-- ── Dizionari ─────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS tipo_utensile (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    codice      TEXT NOT NULL UNIQUE,
+    codice      TEXT NOT NULL UNIQUE,   -- FLAT, BALL, BULL, DRILL, TAP, REAM, SPOT, TAPER, THREAD, FORM, LOLLIPOP
     descrizione TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS materiale_utensile (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    codice      TEXT NOT NULL UNIQUE,
+    codice      TEXT NOT NULL UNIQUE,   -- HM, HSS, CBN, PCD, Ceramica, Cermet
     descrizione TEXT NOT NULL
 );
 
@@ -25,14 +29,13 @@ CREATE TABLE IF NOT EXISTS fornitore (
     note    TEXT
 );
 
--- ---------------------------------------------------------------
--- PORTAUTENSILI (da Holders_*.csv - 23 nel file aziendale)
--- ---------------------------------------------------------------
+-- ── Portautensile ──────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS portautensile (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     codice_interno   TEXT NOT NULL UNIQUE,
     descrizione      TEXT,
-    tipo_adattatore  TEXT,       -- HSK-A63, BT40, ISO40, ...
+    tipo_attacco     TEXT,       -- HSK-A63, BT40, ISO40, CAT40, Weldon, ER...
     num_segmenti     INTEGER DEFAULT 0,
     num_seg_mandrino INTEGER DEFAULT 0,
     tipo_visualiz    INTEGER DEFAULT 0,
@@ -46,190 +49,212 @@ CREATE TABLE IF NOT EXISTS portautensile_segmento (
     numero_segmento  INTEGER NOT NULL,
     diametro_inf_mm  REAL,
     diametro_sup_mm  REAL,
-    altezza_cono_mm  REAL,
-    altezza_totale_mm REAL,
+    lunghezza_mm     REAL,
     UNIQUE(id_portautensile, numero_segmento)
 );
 
--- ---------------------------------------------------------------
--- UTENSILI (da Cutters_*.csv - 96 nel file aziendale)
--- ---------------------------------------------------------------
+-- ── Tabella PRINCIPALE ──────────────────────────────────────────────────────
+-- Hub universale: contiene TUTTI i dati importabili da qualsiasi CAM.
+-- Ogni CAM sorgente popola i campi che conosce; gli altri restano NULL.
+-- L'esportatore verso un CAM di destinazione legge solo i campi necessari.
+
 CREATE TABLE IF NOT EXISTS utensile (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    -- Identificazione
+    -- ── Identificazione ───────────────────────────────────────────────────
     codice_interno          TEXT NOT NULL UNIQUE,
-    codice_catalogo         TEXT,
-    descrizione             TEXT,
-    sito_web                TEXT,
-    num_magazzino           INTEGER,
+    -- alias = NOME OFFICINA, indipendente dal CAM
+    -- Cimatron: campo "Commento" (ID 1102)
+    -- Hypermill: field "Tool ID" / "User Ref"
+    -- Mastercam: "Tool comment"
+    -- Fusion 360: "Description"
+    alias                   TEXT,
+    codice_catalogo         TEXT,       -- codice fornitore/catalogo
+    descrizione             TEXT,       -- descrizione tecnica libera
+    sito_web                TEXT,       -- URL scheda tecnica
+    num_magazzino           INTEGER,    -- posizione magazzino CNC
 
-    -- Classificazione
-    id_tipo                 INTEGER NOT NULL REFERENCES tipo_utensile(id),
-    id_materiale            INTEGER NOT NULL REFERENCES materiale_utensile(id),
+    -- ── Tracciabilità CAM sorgente ─────────────────────────────────────────
+    cam_sorgente            TEXT,       -- 'Cimatron','Hypermill','Mastercam','Fusion360','WorkNC','NX'...
+    id_originale_cam        TEXT,       -- ID/nome nel sistema CAM di origine
+
+    -- ── Classificazione ───────────────────────────────────────────────────
+    id_tipo                 INTEGER NOT NULL DEFAULT 1 REFERENCES tipo_utensile(id),
+    id_materiale            INTEGER NOT NULL DEFAULT 1 REFERENCES materiale_utensile(id),
     id_fornitore            INTEGER REFERENCES fornitore(id),
     id_portautensile        INTEGER REFERENCES portautensile(id),
-    tecnologia              TEXT,
+    tecnologia              TEXT,       -- Fresatura, Foratura, Filettatura, Alesatura, Tornitura
 
-    -- Geometria corpo utensile
+    -- ── Geometria corpo utensile ───────────────────────────────────────────
     diametro_mm             REAL NOT NULL DEFAULT 0,
-    raggio_punta_mm         REAL NOT NULL DEFAULT 0,
-    angolo_punta_gradi      REAL,
+    raggio_punta_mm         REAL NOT NULL DEFAULT 0,   -- corner radius (0=flat, =D/2 ball)
+    angolo_punta_gradi      REAL,       -- angolo punta (punte: 118-140°, spot: 60-120°)
     lunghezza_totale_mm     REAL NOT NULL DEFAULT 0,
-    lunghezza_tagl_mm       REAL NOT NULL DEFAULT 0,   -- lunghezza utile (2109)
-    lunghezza_tagl2_mm      REAL,                       -- lunghezza tagliente (2110)
-    num_taglienti           INTEGER NOT NULL DEFAULT 2,
-    conico                  INTEGER DEFAULT 0,
-    angolo_conico_gradi     REAL,
+    lunghezza_tagl_mm       REAL NOT NULL DEFAULT 0,   -- lunghezza utile / clear length
+    lunghezza_tagl2_mm      REAL,       -- lunghezza tagliente secondaria (cut length)
+    num_taglienti           INTEGER,    -- numero di taglienti / flute count
+    conico                  INTEGER DEFAULT 0,          -- flag: utensile conico
+    angolo_conico_gradi     REAL,       -- angolo conicità / taper angle
+    angolo_elica_gradi      REAL,       -- angolo elica / helix angle (Hypermill, Mastercam)
+    raggio_raccordo_mm      REAL,       -- raggio raccordo base (fillet)
+    passo_mm                REAL,       -- passo filetto (maschi/filiere)
+    num_filetti             INTEGER,    -- numero filetti
 
-    -- Assemblaggio con pinza (dati inline dal file Cimatron)
-    -- Questi dati descrivono come l'utensile e' montato nella pinza
-    nome_pinza              TEXT,       -- (3101) nome portautensile/pinza usato
-    lungh_presa_mm          REAL,       -- (3102) quanto utensile e' inserito nella pinza
-    fuori_pinza_mm          REAL,       -- (3103) DISTANZA PUNTA-INIZIO PINZA = dato critico per programmatori CAM
-    lungh_libera_prolunga_mm REAL,      -- (3105) lunghezza libera con prolunga
+    -- ── Stelo / Shank ─────────────────────────────────────────────────────
+    tipo_attacco            TEXT,       -- HSK-A63, BT40, ISO40, Weldon, Cilindrico...
+    classe_tolleranza       TEXT,       -- h6, h8, etc.
+    diam_stelo_mm           REAL,       -- diametro principale stelo
+    diam_stelo_sup_mm       REAL,       -- diametro superiore stelo (sezione conica)
+    diam_stelo_inf_mm       REAL,       -- diametro inferiore stelo
+    lungh_cono_stelo_mm     REAL,       -- lunghezza cono stelo
+    lungh_libera_stelo_mm   REAL,       -- zona libera stelo (non a contatto con pinza)
+    angolo_cono_stelo_gradi REAL,
+    -- Stelo secondario (utensili a doppio stelo)
+    diam_stelo2_sup_mm      REAL,
+    diam_stelo2_inf_mm      REAL,
+    lungh_cono_stelo2_mm    REAL,
+    lungh_libera_stelo2_mm  REAL,
+    angolo_cono_stelo2_gradi REAL,
 
-    -- Stelo principale (2201-2207)
-    diam_stelo_sup_mm       REAL,       -- (2202) diametro superiore stelo
-    diam_stelo_inf_mm       REAL,       -- (2203) diametro inferiore stelo
-    lungh_cono_stelo_mm     REAL,       -- (2206) lunghezza cono stelo
-    lungh_libera_stelo_mm   REAL,       -- (2207) zona libera stelo (non a contatto con pinza)
-    angolo_cono_stelo_gradi REAL,       -- (2205)
-    usa_angolo_cono_stelo   INTEGER DEFAULT 0,
+    -- ── Portautensile / Holder ─────────────────────────────────────────────
+    nome_pinza              TEXT,       -- codice holder (es. HSL_D10-NEW)
+    lungh_presa_mm          REAL,       -- lunghezza presa in pinza
+    fuori_pinza_mm          REAL,       -- *** DATO CRITICO: distanza punta → inizio pinza ***
+                                        -- usato da tutti i CAM per sicurezza in macchina
+    lungh_libera_prolunga_mm REAL,      -- lunghezza libera con eventuale prolunga
 
-    -- Stelo secondario (2208-2213) - usato per utensili con doppio stelo
-    diam_stelo2_sup_mm      REAL,       -- (2209)
-    diam_stelo2_inf_mm      REAL,       -- (2210)
-    lungh_cono_stelo2_mm    REAL,       -- (2212)
-    lungh_libera_stelo2_mm  REAL,       -- (2213)
-    angolo_cono_stelo2_gradi REAL,      -- (2211)
+    -- ── Parametri di taglio DEFAULT ────────────────────────────────────────
+    -- Valori generici dell'utensile (non legati al materiale pezzo).
+    -- I valori per materiale specifico sono in condizioni_taglio.
+    avanzamento_default     REAL,       -- Vf mm/min (Cimatron: 4101)
+    rotazione_default       REAL,       -- RPM       (Cimatron: 4102)
+    vc_default              REAL,       -- Vc m/min  (Cimatron: 4103)
+    fz_default              REAL,       -- Fz mm/z   (Cimatron: 4104)
+    passo_z_default         REAL,       -- ap mm     (Cimatron: 5101)
+    passo_lat_default       REAL,       -- ae mm     (Cimatron: 5102)
+    tolleranza_default      REAL,       -- tolleranza lavorazione mm (Cimatron: 5106)
+    vita_utensile           INTEGER,    -- vita utensile min/colpi (Cimatron: 4202)
 
-    -- Parametri di taglio di default (dal profilo utensile, NON per materiale)
-    avanzamento_default     REAL,       -- (4101) Vf mm/min
-    rotazione_default       REAL,       -- (4102) N rpm
-    vc_default              REAL,       -- (4103) Vc m/min
-    fz_default              REAL,       -- (4104) Fz mm/z
-    passo_z_default         REAL,       -- (5101) ap mm
-    passo_lat_default       REAL,       -- (5102) ae mm
-    tolleranza_default      REAL,       -- (5106)
-    vita_utensile           INTEGER,    -- (4202) in minuti o cicli
+    -- ── Macchina / Ciclo ──────────────────────────────────────────────────
+    dir_rotazione           TEXT,       -- CW / CCW  (Cimatron: 4203)
+    refrigerante            TEXT,       -- OFF/Flood/Mist/Through/Air (Cimatron: 4204)
+    distanza_pivot          REAL,       -- distanza pivot (Cimatron: 4205)
 
-    -- Macchina
-    dir_rotazione           TEXT,       -- (4203) CW/CCW
-    refrigerante            TEXT,       -- (4204) OFF/Flood/Mist/Through/Air
-    distanza_pivot          REAL,       -- (4205)
+    -- ── Dati specifici altri CAM ───────────────────────────────────────────
+    -- Hypermill
+    hm_tool_number          INTEGER,    -- numero utensile Hypermill
+    hm_tool_type_id         TEXT,       -- ID tipo interno Hypermill
+    hm_coolant_type         TEXT,       -- tipo refrigerante Hypermill
+    -- Mastercam
+    mc_tool_number          INTEGER,
+    mc_offset_number        INTEGER,
+    mc_holder_id            TEXT,
+    -- Fusion 360
+    f360_library            TEXT,       -- libreria Fusion 360
+    f360_product_id         TEXT,
+    -- WorkNC
+    wnc_tool_id             TEXT,
+    -- NX / Siemens
+    nx_tool_number          INTEGER,
+    nx_adjust_register      INTEGER,
 
-    -- Filettatura
-    passo_mm                REAL,       -- (2123)
-
-    -- Note e stato
+    -- ── Note e stato ──────────────────────────────────────────────────────
     note                    TEXT,
     attivo                  INTEGER NOT NULL DEFAULT 1,
     data_inserimento        TEXT NOT NULL DEFAULT (datetime('now')),
     data_modifica           TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- ---------------------------------------------------------------
--- CONDIZIONI DI TAGLIO PER MATERIALE (da Material_*.csv)
--- 287 combinazioni utensile x materiale nel file aziendale
--- ---------------------------------------------------------------
+-- ── Condizioni di taglio per materiale ────────────────────────────────────
+-- Parametri taglio specifici per combinazione utensile + materiale pezzo.
+-- Cimatron: file Material.csv (ID 8xxx). Altri CAM hanno strutture simili.
+
 CREATE TABLE IF NOT EXISTS condizioni_taglio (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_utensile     INTEGER NOT NULL REFERENCES utensile(id) ON DELETE CASCADE,
-    materiale_pezzo TEXT NOT NULL,
-    applicazione    TEXT,
-    -- Parametri Cimatron (ID 8xxx)
-    vc_m_min        REAL,    -- (8103) velocita taglio [m/min]
-    n_rpm           REAL,    -- (8102) velocita mandrino [giri/min]
-    fz_mm           REAL,    -- (8104) avanzamento per dente [mm/z]
-    vf_mm_min       REAL,    -- (8101) avanzamento tavola [mm/min]
-    ap_mm           REAL,    -- (8201) passo in Z [mm]
-    ae_mm           REAL,    -- (8202) passo laterale [mm]
-    rompitruciolo   REAL,    -- (8301)
-    decrementa      REAL,    -- (8302)
-    refrigerante    TEXT,    -- (8401)
-    note            TEXT,
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_utensile         INTEGER NOT NULL REFERENCES utensile(id) ON DELETE CASCADE,
+    materiale_pezzo     TEXT NOT NULL,  -- es. '1.2311', 'Alluminio', 'Acciaio'
+    applicazione        TEXT,           -- es. 'Sgrossatura', 'Finitura'
+    cam_sorgente        TEXT,           -- da quale CAM viene questo set di parametri
+    -- Parametri (nomi allineati alla tabella utensile)
+    vc_m_min            REAL,           -- velocità taglio [m/min]     (Cimatron: 8103)
+    rotazione_rpm       REAL,           -- velocità mandrino [giri/min] (Cimatron: 8102)
+    fz_mm_z             REAL,           -- avanzamento per dente [mm/z] (Cimatron: 8104)
+    avanzamento_mm_min  REAL,           -- avanzamento tavola [mm/min]  (Cimatron: 8101)
+    ap_mm               REAL,           -- passo in Z [mm]              (Cimatron: 8201)
+    ae_mm               REAL,           -- passo laterale [mm]          (Cimatron: 8202)
+    rompitruciolo       REAL,           -- parametro rompitruciolo      (Cimatron: 8301)
+    decrementa          REAL,           -- decremento                   (Cimatron: 8302)
+    refrigerante        TEXT,           -- tipo refrigerante             (Cimatron: 8401)
+    note                TEXT,
     UNIQUE(id_utensile, materiale_pezzo, applicazione)
 );
 
--- ---------------------------------------------------------------
--- PROFILI SAGOMATI (da Contour_*.csv - 17 nel file aziendale)
--- ---------------------------------------------------------------
+-- ── Profilo sagomato ──────────────────────────────────────────────────────
+-- Geometria dettagliata per utensili speciali (lollipop, forma, sagomati)
+
 CREATE TABLE IF NOT EXISTS profilo_sagomato (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     id_utensile     INTEGER NOT NULL REFERENCES utensile(id) ON DELETE CASCADE,
-    dati_json       TEXT,
-    data_inserimento TEXT NOT NULL DEFAULT (datetime('now'))
+    sequenza        INTEGER NOT NULL,
+    tipo_segmento   TEXT,   -- LINE, ARC, BEZIER
+    x1_mm REAL, y1_mm REAL,
+    x2_mm REAL, y2_mm REAL,
+    raggio_mm REAL,
+    UNIQUE(id_utensile, sequenza)
 );
 
--- ---------------------------------------------------------------
--- LOG EXPORT
--- ---------------------------------------------------------------
+-- ── Log export verso CAM ──────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS log_export (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    cam          TEXT NOT NULL,
-    num_utensili INTEGER NOT NULL DEFAULT 0,
-    file_output  TEXT,
-    timestamp    TEXT NOT NULL DEFAULT (datetime('now'))
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    cam_destinazione TEXT NOT NULL,  -- 'Cimatron','Hypermill','Mastercam','GCode'...
+    formato         TEXT,
+    num_utensili    INTEGER,
+    data_export     TEXT NOT NULL DEFAULT (datetime('now')),
+    filepath        TEXT,
+    note            TEXT
 );
 
--- ---------------------------------------------------------------
--- VIEW PRINCIPALE
--- ---------------------------------------------------------------
-DROP VIEW IF EXISTS utensile_completo;
-CREATE VIEW utensile_completo AS
-SELECT
-    u.id, u.codice_interno, u.codice_catalogo, u.descrizione, u.sito_web,
-    u.num_magazzino,
-    t.codice                AS tipo,
-    t.descrizione           AS tipo_descrizione,
-    m.codice                AS materiale,
-    m.descrizione           AS materiale_descrizione,
-    f.nome                  AS fornitore,
-    p.codice_interno        AS portautensile,
-    p.tipo_adattatore       AS adattatore,
-    u.tecnologia,
-    -- Geometria
-    u.diametro_mm, u.raggio_punta_mm, u.angolo_punta_gradi,
-    u.lunghezza_totale_mm, u.lunghezza_tagl_mm, u.lunghezza_tagl2_mm,
-    u.num_taglienti, u.conico, u.angolo_conico_gradi,
-    -- Assemblaggio pinza - dati critici per programmatori CAM
-    u.nome_pinza,
-    u.lungh_presa_mm,
-    u.fuori_pinza_mm,        -- DISTANZA PUNTA -> INIZIO PINZA
-    u.lungh_libera_prolunga_mm,
-    -- Stelo
-    u.diam_stelo_sup_mm, u.diam_stelo_inf_mm,
-    u.lungh_cono_stelo_mm, u.lungh_libera_stelo_mm,
-    u.diam_stelo2_sup_mm, u.diam_stelo2_inf_mm,
-    u.lungh_cono_stelo2_mm, u.lungh_libera_stelo2_mm,
-    -- Parametri taglio default
-    u.avanzamento_default, u.rotazione_default, u.vc_default, u.fz_default,
-    u.passo_z_default, u.passo_lat_default, u.vita_utensile,
-    u.dir_rotazione, u.refrigerante,
-    u.passo_mm, u.note, u.attivo,
-    u.data_inserimento, u.data_modifica
-FROM utensile u
-JOIN tipo_utensile t      ON u.id_tipo = t.id
-JOIN materiale_utensile m ON u.id_materiale = m.id
-LEFT JOIN fornitore f     ON u.id_fornitore = f.id
-LEFT JOIN portautensile p ON u.id_portautensile = p.id;
+-- ── Trigger: aggiorna data_modifica ───────────────────────────────────────
 
--- ---------------------------------------------------------------
--- DATI DI DEFAULT
--- ---------------------------------------------------------------
-INSERT OR IGNORE INTO tipo_utensile (codice, descrizione) VALUES
-    ('FLAT','Fresa piatta'),('BALL','Fresa sferica'),('BULL','Fresa torica'),
-    ('DRILL','Punta'),('TAP','Maschio'),('REAM','Alesatore'),
-    ('SPOT','Centratura'),('TAPER','Conico'),('THREAD','Fresa filetto'),('PROBE','Tastatore');
-
-INSERT OR IGNORE INTO materiale_utensile (codice, descrizione) VALUES
-    ('HM','Metallo duro'),('HSS','Acciaio rapido'),('HSCo','Acciaio rapido cobalto'),
-    ('CBN','Nitruro boro cubico'),('PCD','Diamante policristallino'),('CER','Ceramica');
-
--- Trigger data_modifica
-CREATE TRIGGER IF NOT EXISTS utensile_modifica
-AFTER UPDATE ON utensile
+CREATE TRIGGER IF NOT EXISTS utensile_upd
+    AFTER UPDATE ON utensile
 BEGIN
     UPDATE utensile SET data_modifica = datetime('now') WHERE id = NEW.id;
 END;
+
+-- ── Indici ────────────────────────────────────────────────────────────────
+
+CREATE INDEX IF NOT EXISTS idx_utensile_codice    ON utensile(codice_interno);
+CREATE INDEX IF NOT EXISTS idx_utensile_alias     ON utensile(alias);
+CREATE INDEX IF NOT EXISTS idx_utensile_tipo      ON utensile(id_tipo);
+CREATE INDEX IF NOT EXISTS idx_utensile_cam       ON utensile(cam_sorgente);
+CREATE INDEX IF NOT EXISTS idx_condizioni_ut      ON condizioni_taglio(id_utensile);
+
+-- ── Dati default dizionari ─────────────────────────────────────────────────
+
+INSERT OR IGNORE INTO tipo_utensile(codice, descrizione) VALUES
+    ('FLAT',    'Fresa piatta / End Mill'),
+    ('BALL',    'Fresa sferica / Ball Mill'),
+    ('BULL',    'Fresa torica / Bull Nose'),
+    ('DRILL',   'Punta / Drill'),
+    ('TAP',     'Maschio / Tap'),
+    ('REAM',    'Alesatore / Reamer'),
+    ('SPOT',    'Centratore / Spot Drill'),
+    ('TAPER',   'Fresa conica / Taper'),
+    ('THREAD',  'Pettine filettatore / Thread Mill'),
+    ('FORM',    'Utensile sagomato / Form Tool'),
+    ('LOLLIPOP','Fresa a T / Lollipop'),
+    ('BORING',  'Barra di alesatura / Boring Bar'),
+    ('TURN',    'Inserto tornitura / Turning Insert'),
+    ('UNKNOWN', 'Tipo non definito');
+
+INSERT OR IGNORE INTO materiale_utensile(codice, descrizione) VALUES
+    ('HM',       'Metallo duro / Carbide'),
+    ('HSS',      'Acciaio rapido / High Speed Steel'),
+    ('HSS-E',    'Acciaio rapido cobalto'),
+    ('CBN',      'Nitruro di boro cubico'),
+    ('PCD',      'Diamante policristallino'),
+    ('CERAMICA', 'Ceramica'),
+    ('CERMET',   'Cermet'),
+    ('UNKNOWN',  'Materiale non definito');
