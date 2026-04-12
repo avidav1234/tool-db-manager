@@ -533,6 +533,14 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
         {% for e in risultato.errori %}<div>{{ e }}</div>{% endfor %}
       </div>
       {% endif %}
+      {% if risultato.software %}
+      <div class="flash info" style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e;margin-bottom:.5rem">
+        🤖 <b>Formato rilevato:</b> {{ risultato.software }}
+        {% if risultato.confidence %} &nbsp;|&nbsp; <b>Confidenza:</b> {{ "%.0f"|format(risultato.confidence*100) }}%{% endif %}
+        {% if risultato.ai_usato %} &nbsp;|&nbsp; ✅ AI mapping attivo{% else %} &nbsp;|&nbsp; 🔸 Mapping euristico (nessuna API key){% endif %}
+        {% if risultato.righe_totali %} &nbsp;|&nbsp; {{ risultato.righe_totali }} righe analizzate{% endif %}
+      </div>
+      {% endif %}
       {% if risultato.dry_run %}
       <div class="flash warn">
         Simulazione completata — nessun dato scritto nel database.
