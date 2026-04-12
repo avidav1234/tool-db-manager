@@ -292,21 +292,26 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
     prompt = (
         'Software: %s\n\nMAPPING DA VERIFICARE (con valori reali):\n%s\n\n'
         'RANGE DI RIFERIMENTO:\n'
-        'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 | fz_default: 0.001-0.5 (PICCOLI)\n'
-        'vf_mm_min: 50-10000 (GRANDI) | vc_default: 10-1000 | n_rpm: 100-30000\n\n'
+        'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 | fz_default: 0.001-1.2\n'
+        'vf_mm_min: 50-10000 (GRANDI) | vc_default: 10-1000 | n_rpm: 100-30000\n'
+        'NOTA fz: valori 0.02-0.2 sono NORMALI per frese. Errore SOLO se fz > 5.0 o fz < 0.0001\n\n'
         'REGOLE SPECIALI (non sono errori):\n'
         '- "Radius" in WorkNC/hyperMILL = raggio utensile = diametro/2. '
         'SE non esiste colonna Diameter/Diametro separata, mappa Radius->diametro_mm con moltiplica_2. CORRETTO.\n'
         '- "Gauge" o "Gauge Length" = fuori_pinza_mm sempre. Non e critico se manca trasformazione.\n'
         '- "TipRadius" o "CornerRadius" = raggio_punta_mm. NON e diametro.\n\n'
-        'VERIFICA SOLO: valori fuori range, Fz/Vf scambiati\n\n'
+        'REGOLA lunghezza: lunghezza_tagl e lunghezza_tagl2 possono avere valori simili/identici: NON e errore.\n'
+        'VERIFICA SOLO: valori palesemente impossibili, Fz/Vf con fattore 1000x di differenza\n\n'
         'Rispondi SOLO con JSON:\n'
         '{"approvato":true,"score_confidenza":85,"errori_critici":[],'
         '"warning":[],"correzioni":{},"campi_mancanti_critici":[],"note_finali":"valutazione"}'
     ) % (struttura.get('software_cam', '?'), json.dumps(dettaglio, ensure_ascii=False))
     try:
         testo = _chiama(prompt, MODEL_VERIFICATORE, api_key, max_tokens=1500,
-                         system='Sei un verificatore critico di mapping utensili CNC. Approva SOLO se logicamente corretto.')
+                         system=('Sei un verificatore di mapping utensili CNC. '
+                          'Approva se il mapping e logicamente ragionevole. '
+                          'fz compreso tra 0.001 e 1.2 e SEMPRE valido per frese standard: non e mai un errore. '
+                          'Segnala errore solo per valori palesemente impossibili (es. fz>5, diametro>500).'))
         result = _parse_json(testo)
         stato = 'APPROVATO' if result.get('approvato') else 'RIFIUTATO'
         log('L4', '%s | Score: %s%% | Errori: %d | Warning: %d' % (
