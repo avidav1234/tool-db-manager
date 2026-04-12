@@ -15,6 +15,13 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config.json')
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'output', 'manual')
 
 app = Flask(__name__)
+app.config['PROPAGATE_EXCEPTIONS'] = False
+
+@app.errorhandler(500)
+def handle_500(e):
+    import traceback
+    tb = traceback.format_exc()
+    return f'<pre style="color:red;padding:1rem">{tb}</pre>', 500
 
 # CORS: permetti richieste dal Format Learner (porta 5001)
 @app.after_request
