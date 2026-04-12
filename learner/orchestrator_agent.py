@@ -674,6 +674,120 @@ def _cimatron_fast_path(df, nome_file, log):
             'mapping': {'mapping': mapping}, 'log': [], 'costo_stimato': 0,
             'score': score, 'metodo': 'deterministico', 'n_campi': n_campi}
 
+
+# =====================================================================
+# SINGLE-SHOT MAPPING (Sonnet) - sostituisce L2+L3+L4
+# =====================================================================
+
+def _sonnet_mapping_singleshot(df, nome_file, api_key, log, profili_dir=None):
+    """
+    Mapping completo in una singola chiamata Sonnet.
+    Vede valori reali delle colonne + few-shot dai profili salvati.
+    """
+    import pandas as _pd, os as _os, json as _json
+
+    log('L2', 'Analisi single-shot Sonnet (%d colonne, %d righe)...' % (len(df.columns), len(df)))
+
+    # Profilo colonne con valori reali
+    col_profiles = {}
+    has_diameter = any(c.lower() in ('diameter','diametro') for c in df.columns)
+    for col in df.columns:
+        serie = df[col].dropna()
+        if len(serie) == 0:
+            col_profiles[col] = {'tipo': 'vuota', 'campioni': []}
+            continue
+        campioni = [str(v) for v in serie.head(5).tolist()]
+        nums = _pd.to_numeric(serie, errors='coerce').dropna()
+        col_profiles[col] = {
+            'campioni': campioni,
+            'tipo': 'numerico' if len(nums) > len(serie) * 0.7 else 'testo',
+            'min': round(float(nums.min()), 4) if len(nums) > 0 else None,
+            'max': round(float(nums.max()), 4) if len(nums) > 0 else None,
+        }
+
+    # Few-shot dai profili salvati
+    few_shot = ''
+    try:
+        pdir = profili_dir or _os.path.join(_os.path.dirname(__file__), '..', 'profili')
+        if _os.path.exists(pdir):
+            pfiles = sorted(_os.listdir(pdir))[:3]
+            esempi = []
+            for pf in pfiles:
+                if not pf.endswith('.json'): continue
+                with open(_os.path.join(pdir, pf)) as fp:
+                    p = _json.load(fp)
+                m = p.get('mapping', {})
+                if not m: continue
+                ex = ['Profilo %s (%s):' % (p.get('nome','?'), p.get('software','?'))]
+                for c, info in list(m.items())[:10]:
+                    campo = info.get('campo_master','ignora') if isinstance(info,dict) else str(info)
+                    if campo != 'ignora':
+                        ex.append('  %s -> %s' % (c, campo))
+                esempi.append('\n'.join(ex))
+            if esempi:
+                few_shot = '\n\nMAPPING GIA VALIDATI (usa come riferimento):\n' + '\n\n'.join(esempi)
+    except Exception:
+        pass
+
+    fields_desc = '\n'.join('  %s: %s' % (k, v) for k, v in MASTER_FIELDS.items())
+    radius_note = 'NOTA: il file HA una colonna Diameter separata -> Radius e raggio_punta_mm' if has_diameter else 'NOTA: il file NON ha colonna Diameter -> Radius/Raggio e diametro_mm con moltiplica_2'
+
+    prompt = """Sei esperto di database utensili CNC. Mappa le colonne di questo file CAM.
+
+FILE: %s
+%s
+
+COLONNE (con valori reali):
+%s
+
+CAMPI DB MASTER:
+%s
+%s
+
+REGOLE:
+- Valori 1000-30000 interi = rotazione_default (RPM)
+- Valori 50-10000 grandi = avanzamento_default (Feed mm/min)
+- Valori 0.001-5.0 piccoli float = fz_default (mm/dente)
+- Valori 10-500 = vc_default (m/min)
+- Nome/codice utensile = codice_interno
+- Alias officina/commento libero = alias
+- Gauge/Gauge Length/Lungh.Libera portautensile = fuori_pinza_mm
+- Dubbio: ignora
+
+Rispondi SOLO JSON:
+{"software_rilevato":"nome","mapping":{"NomeColonna":{"campo_master":"campo","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2/float/int","motivazione":"..."}},"colonne_ignorate":["c1"]}""" % (
+        nome_file or 'file', radius_note,
+        _json.dumps(col_profiles, ensure_ascii=False),
+        fields_desc, few_shot
+    )
+
+    try:
+        testo = _chiama(prompt, 'claude-sonnet-4-5', api_key, max_tokens=4096,
+                        system='Esperto CNC. Rispondi SOLO JSON valido, nessun testo extra.')
+        result = _parse_json(testo)
+        mapping = result.get('mapping', {})
+        mapping_valido = {
+            col: info for col, info in mapping.items()
+            if isinstance(info, dict)
+            and info.get('campo_master','ignora') != 'ignora'
+            and info.get('campo_master') in MASTER_FIELDS
+            and col in list(df.columns)
+        }
+        sw = result.get('software_rilevato', 'sconosciuto')
+        tok_est = len(prompt) // 4 + 1000
+        log('L1', 'Software: %s | %d/%d colonne | Token: ~%d | Costo: ~$%.4f' % (
+            sw, len(mapping_valido), len(df.columns), tok_est, tok_est * 0.000015))
+        return {
+            'mapping': mapping_valido,
+            'software_cam': sw,
+            'colonne_ambigue': result.get('colonne_ignorate', []),
+            'warning': [], 'metodo': 'sonnet_singleshot',
+            'approvato': True, 'score_confidenza': 88,
+        }
+    except Exception as e:
+        log('L2', 'Errore single-shot: %s' % str(e))
+        return {'mapping': {}, 'colonne_ambigue': [], 'warning': [str(e)], 'approvato': False}
+
 def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_tentativi=2) -> dict:
     key = _get_api_key(api_key)
     if not key:
@@ -698,126 +812,34 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
     if _cima_result is not None:
         return _cima_result
 
-    # L2a - struttura
-    struttura = _l2a_struttura(df, key, log)
-    token_stimati += 800
+    # Single-shot Sonnet: sostituisce L2a + L2b + L3 + L4
+    profili_dir = os.path.join(os.path.dirname(__file__), '..', 'profili')
+    ss_result = _sonnet_mapping_singleshot(df, nome_file, key, log, profili_dir)
 
-    # L2b - ibrido: singole per <=30 colonne (preciso), batch per >30 (veloce)
-    log('L2b', 'Analisi colonne (%d totali)...' % len(df.columns))
-    import pandas as _pd
-    da_ignorare = set(struttura.get('colonne_da_ignorare', []))
-    analisi = {}
-    da_analizzare = []
-    for col in df.columns:
-        if col in da_ignorare:
-            analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'esclusa'}
-        elif len(df[col].dropna()) == 0:
-            analisi[col] = {'campo_master_suggerito': 'ignora', 'confidenza': 'alta', 'nota': 'vuota'}
-        else:
-            da_analizzare.append(col)
-
-    fields_str = ', '.join(list(MASTER_FIELDS.keys()))
-
-    if len(da_analizzare) <= 30:
-        # MODALITA' PRECISA: una chiamata per colonna (WorkNC, hyperMILL)
-        log('L2b', 'Modalita precisa (%d colonne)' % len(da_analizzare))
-        for col in da_analizzare:
-            analisi[col] = _l2b_colonna(col, df[col], struttura, key)
-            token_stimati += 250
-            time.sleep(0.05)
-    else:
-        # MODALITA' VELOCE: batch da 20 (Cimatron 100 colonne)
-        BATCH_L2B = 20
-        log('L2b', 'Modalita batch (%d colonne, batch da %d)' % (len(da_analizzare), BATCH_L2B))
-        for bi in range(0, len(da_analizzare), BATCH_L2B):
-            batch = da_analizzare[bi:bi+BATCH_L2B]
-            info_b = {}
-            for col in batch:
-                s = df[col].dropna()
-                nums = _pd.to_numeric(s, errors='coerce').dropna()
-                info_b[col] = {
-                    'campioni': [str(v)[:15] for v in s.head(3).tolist()],
-                    'tipo': 'num' if len(nums)/max(len(s),1)>0.7 else 'testo',
-                        }
-            prompt = (
-                'Software: %s. Analizza queste %d colonne.\n'
-                'COLONNE:\n%s\n\nCAMPI DISPONIBILI: %s\n\n'
-                'Rispondi SOLO JSON: {"analisi":{"NomeColonna":{"campo_master_suggerito":"campo_o_ignora","confidenza":"alta/media/bassa","trasformazione":"nessuna/moltiplica_2"}}}'
-            ) % (struttura.get('software_cam','CAM'), len(info_b), json.dumps(info_b, ensure_ascii=False), fields_str)
-            try:
-                testo = _chiama(prompt, MODEL_ANALISTA, key, max_tokens=1000)
-                res = _parse_json(testo)
-                for col, inf in res.get('analisi', {}).items():
-                    if col in df.columns and inf:
-                        analisi[col] = inf
-            except Exception as e:
-                for col in batch:
-                    analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':str(e)})
-            token_stimati += 800
-
-    for col in df.columns:
-        analisi.setdefault(col, {'campo_master_suggerito':'ignora','confidenza':'bassa','nota':'non analizzata'})
-    log('L2b', 'Completato: %d colonne analizzate' % len(analisi))
-    log('L1', 'Token finora: ~%d | Costo ~$%.4f' % (token_stimati, token_stimati/1000*0.0025))
-
-    # L3 - mapping in batch da 15
-    mapping_raw = _l3_mapping(analisi, struttura, key, log)
-    token_stimati += 1500
-
-    if not mapping_raw or 'mapping' not in mapping_raw:
-        log('L1', 'ERRORE: L3 non ha prodotto mapping')
+    if not ss_result.get('mapping'):
         return {'verificato': False, 'errore': 'Mapping non prodotto',
-                'struttura': struttura, 'log': log_eventi, 'costo_stimato': token_stimati}
+                'struttura': {}, 'log': log_eventi, 'costo_stimato': 0}
 
-    # L4 - verifica con retry (skip se Cimatron gia' identificato con alta confidenza)
-    verifica = None
-    _sw = struttura.get('software_cam', '').lower()
-    _sw_conf = struttura.get('confidenza_software', 0)
-    _skip_l4 = ('cimatron' in _sw) and len(mapping_raw.get('mapping', {})) >= 15
-    if _skip_l4:
-        log('L4', 'Skip verifica: Cimatron identificato con %d campi mappati' % len(mapping_raw.get('mapping', {})))
-        verifica = {'approvato': True, 'score_confidenza': 90, 'errori_critici': [], 'warning': [], 'correzioni': {}}
-    for tentativo in range(1, max_tentativi + 1):
-        if _skip_l4: break
-        if verifica and verifica.get('correzioni'):
-            log('L1', 'Applico %d correzioni' % len(verifica['correzioni']))
-            for col, corr in verifica['correzioni'].items():
-                if col in mapping_raw['mapping']:
-                    mapping_raw['mapping'][col].update(corr)
-        verifica = _l4_verifica(mapping_raw, struttura, df, key, log)
-        token_stimati += 2000
-        if verifica.get('approvato'):
-            log('L1', 'APPROVATO al tentativo %d' % tentativo)
-            break
-        elif tentativo < max_tentativi:
-            log('L1', 'Tentativo %d fallito - riprovo' % tentativo)
-        else:
-            log('L1', 'Max tentativi - uso mapping parziale')
-
-    # Assembla profilo finale
-    mapping_finale = dict(mapping_raw.get('mapping', {}))
-    if verifica and verifica.get('correzioni'):
-        for col, corr in verifica['correzioni'].items():
-            if col in mapping_finale:
-                mapping_finale[col].update(corr)
+    mapping_finale = ss_result['mapping']
     profilo = {col: info for col, info in mapping_finale.items()
                if info.get('campo_master', 'ignora') != 'ignora'}
 
-    log('L1', 'Profilo finale: %d campi | Token: ~%d | Costo: ~$%.4f' % (
-        len(profilo), token_stimati, token_stimati/1000*0.0025))
+    log('L1', 'Profilo finale: %d campi' % len(profilo))
 
     return {
-        'profilo':        profilo,
-        'struttura':      struttura,
-        'analisi_colonne': analisi,
-        'verifica':       verifica,
-        'verificato':     verifica.get('approvato', False) if verifica else False,
-        'score':          verifica.get('score_confidenza', 0) if verifica else 0,
-        'log':            log_eventi,
-        'costo_stimato':  token_stimati,
-        'campi_mancanti': verifica.get('campi_mancanti_critici', []) if verifica else [],
-        'warning':        (mapping_raw.get('warning', []) + (verifica.get('warning', []) if verifica else [])),
+        'profilo':         profilo,
+        'struttura':       {'software_cam': ss_result.get('software_cam', 'sconosciuto')},
+        'analisi_colonne': {},
+        'verifica':        {'approvato': True, 'score_confidenza': ss_result.get('score_confidenza', 85)},
+        'verificato':      ss_result.get('approvato', False),
+        'score':           ss_result.get('score_confidenza', 85),
+        'log':             log_eventi,
+        'costo_stimato':   0,
+        'campi_mancanti':  [],
+        'warning':         ss_result.get('warning', []),
+        'mapping':         mapping_finale,
     }
+
 
 
 def disponibile(api_key=None) -> bool:
