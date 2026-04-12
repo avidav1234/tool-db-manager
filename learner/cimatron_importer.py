@@ -294,7 +294,7 @@ def importa_cutters(rows, conn, dry_run=False):
                 cam_sorgente   = 'Cimatron',
                 # Identificazione
                 codice_catalogo          = _to_str(row.get('2103')),
-                descrizione              = _to_str(row.get('1102')),
+                descrizione              = None,                          # campo libero (1102=alias, non descrizione)
                 sito_web                 = _to_str(row.get('1103')),
                 num_magazzino            = _to_int(row.get('1201')),
                 # Classificazione
