@@ -348,6 +348,44 @@ def analizza():
         return redirect(url_for('home', msg='Nessun file selezionato'))
     fp = os.path.join(UPLOAD_FOLDER, f.filename)
     f.save(fp)
+
+    # Gestione speciale: database Hypermill (.db)
+    if f.filename.lower().endswith('.db'):
+        try:
+            import sys as _sys, os as _os
+            _ld = _os.path.dirname(_os.path.abspath(__file__))
+            if _ld not in _sys.path: _sys.path.insert(0, _ld)
+            from hypermill_db_importer import importa_hypermill_db, _is_hypermill_db
+            if _is_hypermill_db(fp):
+                result = importa_hypermill_db(fp, None, dry_run=True)
+                utensili = result.get('utensili', [])
+                # Costruisci mapping dal primo utensile come template
+                mapping_template = {}
+                campi_utensile = ['codice_interno','alias','descrizione','diametro_mm',
+                                  'raggio_punta_mm','lunghezza_totale_mm','num_taglienti',
+                                  'nome_pinza','fuori_pinza_mm','avanzamento_default',
+                                  'fz_default','rotazione_default','vc_default']
+                for campo in campi_utensile:
+                    mapping_template[campo] = {
+                        'campo_master': campo, 'confidenza': 'alta',
+                        'trasformazione': 'nessuna', 'motivazione': 'Hypermill DB import'
+                    }
+                session_data = {
+                    'filepath': fp,
+                    'mapping': mapping_template,
+                    'struttura': {'software_cam': 'Hypermill', 'tipo': 'db_nativo'},
+                    'analisi_colonne': {},
+                    'log': [{'livello':'L1','msg':f'Database Hypermill: {len(utensili)} utensili trovati'}],
+                    'verificato': True, 'score': 95,
+                    'hypermill_db': True,
+                    'utensili_count': len(utensili),
+                }
+                import json as _json
+                session['analisi'] = _json.dumps(session_data, default=str)
+                return redirect(url_for('verifica_mappatura'))
+        except Exception as e:
+            pass  # fallback all'orchestratore normale
+
     try:
         # Tenta orchestratore multilivello
         _root = os.path.join(os.path.dirname(__file__), '..')
@@ -683,6 +721,43 @@ def _inject_widget_learner(resp):
             resp.set_data(html.replace('</body>', _WIDGET_MARKUP_L + '</body>'))
     return resp
 
+
+
+
+@app.route('/importa_db', methods=['POST'])
+def importa_db():
+    """Import diretto da DB Hypermill nel DB master."""
+    import json as _json, sys as _sys, os as _os
+    _ld = _os.path.dirname(_os.path.abspath(__file__))
+    if _ld not in _sys.path: _sys.path.insert(0, _ld)
+
+    filepath = request.form.get('filepath') or request.json.get('filepath','') if request.is_json else ''
+    if not filepath:
+        # Leggi da sessione
+        try:
+            analisi = _json.loads(session.get('analisi','{}'))
+            filepath = analisi.get('filepath','')
+        except Exception:
+            filepath = ''
+
+    if not filepath or not _os.path.exists(filepath):
+        return _json.dumps({'errore': 'File non trovato'}), 400, {'Content-Type':'application/json'}
+
+    try:
+        from hypermill_db_importer import importa_hypermill_db
+        # Trova il DB master
+        _root = _os.path.join(_ld, '..')
+        master_db = _os.path.join(_root, 'database', 'tool_master.db')
+        result = importa_hypermill_db(filepath, master_db, dry_run=False)
+        return _json.dumps({
+            'ok': True,
+            'importati': result.get('importati', 0),
+            'errori': result.get('errori', 0),
+            'totale': result.get('totale', 0),
+        }, ensure_ascii=False), 200, {'Content-Type':'application/json'}
+    except Exception as e:
+        import traceback
+        return _json.dumps({'errore': str(e), 'traceback': traceback.format_exc()[-300:]}), 500, {'Content-Type':'application/json'}
 
 if __name__ == '__main__':
     app.jinja_env.filters['basename'] = os.path.basename
