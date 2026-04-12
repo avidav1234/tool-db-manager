@@ -2380,13 +2380,14 @@ def cam_agent_chat():
     for _p in [_root, _ui]:
         if _p not in _sys.path: _sys.path.insert(0, _p)
 
-    import importlib
+    import importlib, traceback as _tb
     try:
         if 'cam_agent' in _sys.modules:
-            importlib.reload(_sys.modules['cam_agent'])
+            try: importlib.reload(_sys.modules['cam_agent'])
+            except Exception: pass
         import cam_agent as _ca
-    except ImportError as e:
-        return json.dumps({'errore': f'cam_agent.py non trovato: {e}. Esegui git pull.'}), 200, {'Content-Type':'application/json'}
+    except Exception as e:
+        return json.dumps({'errore': f'Import cam_agent fallito: {e}'}), 200, {'Content-Type':'application/json'}
 
     data = request.get_json(silent=True) or {}
     messaggio = data.get('messaggio','').strip()
@@ -2396,7 +2397,11 @@ def cam_agent_chat():
     if not messaggio:
         return json.dumps({'errore': 'Messaggio vuoto'}), 400, {'Content-Type': 'application/json'}
 
-    result = _ca.esegui_agente(messaggio, filepath=filepath, history=history)
+    try:
+        result = _ca.esegui_agente(messaggio, filepath=filepath, history=history)
+    except Exception as e:
+        return json.dumps({'errore': f'Errore agente: {e}\n{_tb.format_exc()[-500:]}'},
+                          ensure_ascii=False), 200, {'Content-Type':'application/json'}
     return json.dumps(result, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
 
 
