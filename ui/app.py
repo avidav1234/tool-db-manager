@@ -887,11 +887,80 @@ def importa():
                         'taglio_aggiornate': r.get('taglio_aggiornate', 0),
                     }
                 else:
-                    import importlib
-                    if 'importers.import_from_excel' in sys.modules:
-                        importlib.reload(sys.modules['importers.import_from_excel'])
-                    from importers.import_from_excel import importa as do_import
-                    risultato = do_import(import_path, dry_run=dry_run)
+                    # Usa universal_parser per CSV/ZIP/altri formati CAM
+                    _ext = os.path.splitext(import_path)[1].lower()
+                    _is_excel = _ext in ('.xlsx', '.xls')
+                    if not _is_excel:
+                        try:
+                            import importlib as _il
+                            if 'universal_parser' in sys.modules:
+                                _il.reload(sys.modules['universal_parser'])
+                            from universal_parser import parse_any_file
+                            _api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+                            _up_result = parse_any_file(
+                                import_path,
+                                api_key=_api_key if _api_key else None,
+                            )
+                            # Inserisce i record nel DB master
+                            _ins = _agg = 0; _errs = _up_result.get('errori', [])
+                            _conn = sqlite3.connect(DB_PATH)
+                            _conn.row_factory = sqlite3.Row
+                            for _rec in _up_result.get('records', []):
+                                _cod = _rec.get('codice_interno')
+                                if not _cod: continue
+                                try:
+                                    # Risolve id_tipo
+                                    _tipo = _rec.get('tipo','FLAT')
+                                    _r = _conn.execute('SELECT id FROM tipo_utensile WHERE codice=?',(_tipo,)).fetchone()
+                                    if not _r:
+                                        _conn.execute('INSERT OR IGNORE INTO tipo_utensile(codice,descrizione) VALUES(?,?)',(_tipo,_tipo))
+                                        _r = _conn.execute('SELECT id FROM tipo_utensile WHERE codice=?',(_tipo,)).fetchone()
+                                    _tid = _r['id']
+                                    # Risolve id_materiale
+                                    _mat = _rec.get('materiale_tagliente','HM')
+                                    _rm = _conn.execute('SELECT id FROM materiale_utensile WHERE codice=?',(_mat,)).fetchone()
+                                    if not _rm:
+                                        _conn.execute('INSERT OR IGNORE INTO materiale_utensile(codice,descrizione) VALUES(?,?)',(_mat,_mat))
+                                        _rm = _conn.execute('SELECT id FROM materiale_utensile WHERE codice=?',(_mat,)).fetchone()
+                                    _mid = _rm['id']
+                                    # Parametri colonna
+                                    _p = {k:v for k,v in _rec.items() if k not in ('tipo','materiale_tagliente','codice_interno')}
+                                    _esiste = _conn.execute('SELECT id FROM utensile WHERE codice_interno=?',(_cod,)).fetchone()
+                                    if not dry_run:
+                                        if _esiste:
+                                            _sets = ','.join(f'{k}=:{k}' for k in _p if hasattr(_p[k],().__class__))
+                                            _sets = ','.join(f'{k}=:{k}' for k in _p)
+                                            _conn.execute(f'UPDATE utensile SET {_sets} WHERE codice_interno=:_cod',{**_p,'_cod':_cod})
+                                            _agg += 1
+                                        else:
+                                            _cols = 'codice_interno,id_tipo,id_materiale,' + ','.join(_p)
+                                            _vals = ':_cod,:_tid,:_mid,' + ','.join(f':{k}' for k in _p)
+                                            _conn.execute(f'INSERT INTO utensile ({_cols}) VALUES ({_vals})',{**_p,'_cod':_cod,'_tid':_tid,'_mid':_mid})
+                                            _ins += 1
+                                    else:
+                                        if _esiste: _agg += 1
+                                        else: _ins += 1
+                                except Exception as _ex:
+                                    _errs.append(f'{_cod}: {_ex}')
+                            if not dry_run: _conn.commit()
+                            _conn.close()
+                            risultato = {
+                                'inseriti': _ins, 'aggiornati': _agg, 'errori': _errs,
+                                'dry_run': dry_run,
+                                'software': _up_result.get('software','unknown'),
+                                'confidence': _up_result.get('confidence', 0),
+                                'ai_usato': _up_result.get('ai_usato', False),
+                                'righe_totali': _up_result.get('righe_totali', 0),
+                            }
+                        except Exception as _upe:
+                            _errs = [f'universal_parser: {_upe}']
+                            risultato = {'inseriti':0,'aggiornati':0,'errori':_errs,'dry_run':dry_run}
+                    else:
+                        import importlib
+                        if 'importers.import_from_excel' in sys.modules:
+                            importlib.reload(sys.modules['importers.import_from_excel'])
+                        from importers.import_from_excel import importa as do_import
+                        risultato = do_import(import_path, dry_run=dry_run)
                 risultato['dry_run'] = dry_run
             except Exception as e:
                 risultato = {'inseriti':0,'aggiornati':0,'errori':[str(e)],'dry_run':dry_run}
