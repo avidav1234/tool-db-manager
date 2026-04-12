@@ -76,10 +76,8 @@ window.aiS=function(){
   var btn=document.getElementById("ai-sb");
   if(btn){btn.disabled=true;btn.textContent="...";}
   var tid=add("t","...");
-  var ctx=(H.length===0)?("[Pagina: "+PG+"]
-"+m):m;
-  if(FP) ctx="[File: "+FP+"]
-"+ctx;
+  var ctx=(H.length===0)?("[Pagina: "+PG+"]\n"+m):m;
+  if(FP) ctx="[File: "+FP+"]\n"+ctx;
   var xhr=new XMLHttpRequest();
   xhr.open("POST","/cam-agent/chat");
   xhr.setRequestHeader("Content-Type","application/json");
