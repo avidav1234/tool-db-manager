@@ -384,7 +384,7 @@ def analizza():
                 session['analisi'] = _json.dumps(session_data, default=str)
                 return redirect(url_for('verifica_mappatura'))
         except Exception as e:
-            pass  # fallback all'orchestratore normale
+            return redirect(url_for('home', msg=f'Errore import DB Hypermill: {e}'))
 
     try:
         # Tenta orchestratore multilivello
