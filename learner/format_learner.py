@@ -23,6 +23,8 @@ import pandas as pd
 # Campi del DB master (ISO 13399)
 # ---------------------------------------------------------------
 MASTER_FIELDS = {
+    'alias':             {'label': 'Nome officina (alias)',             'tipo': 'string',
+                          'keywords': ['alias','commento','comment','nome officina','tool id','user ref'], 'esempio': 'FR-D10-R0-F25'},
     'codice_interno':     {'label': 'Codice interno / Nome utensile',   'tipo': 'string',
                            'keywords': ['name','nome','codice','code','id','number','nummer','bezeichnung'], 'esempio': 'FP-D10-R0-L50'},
     'codice_catalogo':    {'label': 'Codice catalogo fornitore',        'tipo': 'string',
