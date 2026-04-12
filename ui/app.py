@@ -2369,6 +2369,75 @@ def cam_agent_db_stats():
         return json.dumps({'errore': str(e)}), 200, {'Content-Type': 'application/json'}
 
 
+
+# ── Job asincrono per l'agente CAM ──────────────────────────────────────
+import threading as _threading, uuid as _uuid, time as _time
+
+_JOBS = {}  # job_id -> {status, result, created_at}
+
+def _run_job(job_id, messaggio, filepath, history):
+    """Esegue l'agente in un thread separato."""
+    try:
+        import sys as _sys
+        _root = os.path.join(os.path.dirname(__file__), '..')
+        _ui   = os.path.dirname(__file__)
+        for _p in [_root, _ui]:
+            if _p not in _sys.path: _sys.path.insert(0, _p)
+        import importlib, traceback as _tb
+        try:
+            if 'cam_agent' in _sys.modules:
+                try: importlib.reload(_sys.modules['cam_agent'])
+                except Exception: pass
+            import cam_agent as _ca
+        except Exception as e:
+            _JOBS[job_id] = {'status':'error','result':{'errore':f'Import cam_agent: {e}'}}
+            return
+        try:
+            result = _ca.esegui_agente(messaggio, filepath=filepath, history=history)
+        except Exception as e:
+            result = {'errore': f'Errore agente: {e}\n{_tb.format_exc()[-300:]}'}
+        _JOBS[job_id] = {'status':'done', 'result': result}
+    except Exception as e:
+        _JOBS[job_id] = {'status':'error', 'result': {'errore': str(e)}}
+
+def _cleanup_jobs():
+    """Rimuove job vecchi > 10 minuti."""
+    now = _time.time()
+    old = [k for k,v in _JOBS.items() if now - v.get('created_at',now) > 600]
+    for k in old:
+        del _JOBS[k]
+
+
+@app.route('/cam-agent/job', methods=['POST','OPTIONS'])
+def cam_agent_job_start():
+    """Avvia un job agente in background. Risponde subito con job_id."""
+    if request.method == 'OPTIONS':
+        return app.make_default_options_response()
+    _cleanup_jobs()
+    data = request.get_json(silent=True) or {}
+    messaggio = data.get('messaggio','').strip()
+    filepath  = data.get('filepath')
+    history   = [m for m in data.get('history',[]) if m.get('role') in ('user','assistant')]
+    if not messaggio:
+        return json.dumps({'errore':'Messaggio vuoto'}), 400, {'Content-Type':'application/json'}
+    job_id = str(_uuid.uuid4())[:8]
+    _JOBS[job_id] = {'status':'running','result':None,'created_at':_time.time()}
+    t = _threading.Thread(target=_run_job, args=(job_id, messaggio, filepath, history), daemon=True)
+    t.start()
+    return json.dumps({'job_id': job_id}), 200, {'Content-Type':'application/json'}
+
+
+@app.route('/cam-agent/job/<job_id>', methods=['GET','OPTIONS'])
+def cam_agent_job_poll(job_id):
+    """Polling stato job. Ritorna {status: running|done|error, result: ...}"""
+    if request.method == 'OPTIONS':
+        return app.make_default_options_response()
+    job = _JOBS.get(job_id)
+    if not job:
+        return json.dumps({'status':'not_found'}), 404, {'Content-Type':'application/json'}
+    return json.dumps({'status': job['status'], 'result': job.get('result')},
+                      ensure_ascii=False, default=str), 200, {'Content-Type':'application/json'}
+
 @app.route('/cam-agent/chat', methods=['POST','OPTIONS'])
 def cam_agent_chat():
     if request.method == 'OPTIONS':
