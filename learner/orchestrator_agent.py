@@ -248,6 +248,12 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
             '- Ogni campo master mappato UNA sola volta in tutto il file\n'
             '- Colonna "Radius" senza Diameter = diametro_mm con moltiplica_2\n'
             '- Colonna "Gauge"/"Gauge Length" = fuori_pinza_mm\n'
+            '- "Avanz." con valori >100 = avanzamento_default (Vf mm/min), NON fz_default\n'
+            '- "Fz" con valori 0.001-5.0 = fz_default (mm/dente), valori corretti\n'
+            '- "Lungh. Libera" nella sezione pinza (3103) = fuori_pinza_mm\n'
+            '- "Lungh. Libera Stelo" (2207) = lungh_libera_stelo_mm (diverso da fuori_pinza)\n'
+            '- Codici 420301/CW = dir_rotazione, codici 420401-420405 = refrigerante\n'
+            '- Due colonne con valori identici (es. Lunghezza Utile e Lungh. Tagliente) vanno a campi diversi\n'
             '- Se dubbio: ignora\n\n'
             'Rispondi SOLO con JSON (solo le colonne di questo batch):\n'
             '{"mapping":{"NomeCol":{"campo_master":"campo","confidenza":"alta/media/bassa",'
@@ -339,6 +345,68 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
 # LIVELLO 1 - ORCHESTRATORE
 # =====================================================================
 
+
+# ===== CIMATRON FAST PATH (deterministico, 0 token) =====
+_CIMA_MAP = {
+    '1101':('codice_interno',None),'1102':('descrizione',None),'1103':('sito_web',None),
+    '1201':('num_magazzino',None),'2103':('codice_catalogo',None),
+    '2105':('diametro_mm','float'),'2106':('raggio_punta_mm','float'),
+    '2108':('lunghezza_totale_mm','float'),'2109':('lunghezza_tagl_mm','float'),
+    '2110':('lunghezza_tagl2_mm','float'),'2111':('conico','int'),
+    '2112':('angolo_conico_gradi','float'),'2113':('angolo_punta_gradi','float'),
+    '2118':('diam_stelo_mm','float'),'2202':('diam_stelo_sup_mm','float'),
+    '2203':('diam_stelo_inf_mm','float'),'2205':('angolo_cono_stelo_gradi','float'),
+    '2206':('lungh_cono_stelo_mm','float'),'2207':('lungh_libera_stelo_mm','float'),
+    '3101':('nome_pinza',None),'3102':('lungh_presa_mm','float'),
+    '3103':('fuori_pinza_mm','float'),'4101':('avanzamento_default','float'),
+    '4102':('rotazione_default','float'),'4103':('vc_default','float'),
+    '4104':('fz_default','float'),'4106':('num_taglienti','int'),
+    '4202':('vita_utensile','int'),'4203':('dir_rotazione',None),
+    '4204':('refrigerante',None),'5101':('passo_z_default','float'),
+    '5102':('passo_lat_default','float'),'5106':('tolleranza_default','float'),
+}
+_CIMA_TECNOLOGIA={'210101':'Fresatura','210102':'Foratura','210103':'Filettatura',
+    '210104':'Alesatura','210105':'Barenatura','210106':'Tornitura'}
+_CIMA_TIPO={'210201':'FLAT','210202':'BALL','210203':'BULL','210204':'DRILL',
+    '210205':'TAP','210206':'REAM','210207':'SPOT','210208':'THREAD',
+    '210209':'TAPER','210210':'FORM','210211':'LOLLIPOP'}
+_CIMA_DIR={'420301':'CW','420302':'CCW'}
+_CIMA_REFR={'420401':'OFF','420402':'FLOOD','420403':'MIST','420404':'AIR','420405':'THROUGH'}
+
+def _cimatron_fast_path(df, nome_file, log):
+    cols = set(df.columns)
+    if not {'1101','2105','3103','4101','4104'}.issubset(cols):
+        return None
+    log('L1', 'Rilevato Cimatron deterministico — skip AI, 0 token')
+    def _cast(v, t):
+        if v is None or str(v).strip() in ('','nan','None'): return None
+        if t == 'float':
+            try: return float(str(v).replace(',','.'))
+            except: return None
+        if t == 'int':
+            try: return int(round(float(str(v).replace(',','.'))))
+            except: return None
+        return str(v).strip() or None
+    records = []
+    for _, row in df.iterrows():
+        rec = {}
+        for cid,(campo,tipo) in _CIMA_MAP.items():
+            if cid not in cols: continue
+            v = row.get(cid)
+            sv = str(v).strip() if v is not None else ''
+            if cid == '2101': v = _CIMA_TECNOLOGIA.get(sv, sv) or None
+            elif cid == '2102': v = _CIMA_TIPO.get(sv, sv) or None
+            elif cid == '4203': v = _CIMA_DIR.get(sv, sv) or None
+            elif cid == '4204': v = _CIMA_REFR.get(sv, sv) or None
+            else: v = _cast(v, tipo)
+            if v is not None: rec[campo] = v
+        if rec.get('codice_interno'): records.append(rec)
+    log('L1', 'Fast path: %d utensili x %d campi | Token: 0 | Costo: $0.0000' % (len(records), len(_CIMA_MAP)+2))
+    mapping = {cid:{'campo_master':cm,'confidenza':'alta','trasformazione':'nessuna'}
+               for cid,(cm,_) in _CIMA_MAP.items()}
+    return {'verificato':True,'software_cam':'Cimatron','records':records,
+            'mapping':{'mapping':mapping},'log':[],'costo_stimato':0,'score':100,'metodo':'deterministico'}
+
 def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_tentativi=2) -> dict:
     key = _get_api_key(api_key)
     if not key:
@@ -352,6 +420,11 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
         else: print('[%s][%s] %s' % (ts, livello, msg))
 
     log('L1', 'Inizio: %s (%d colonne, %d righe)' % (nome_file or 'file', len(df.columns), len(df)))
+
+    # Fast path Cimatron (deterministico, 0 token)
+    _cima_result = _cimatron_fast_path(df, nome_file, log)
+    if _cima_result is not None:
+        return _cima_result
 
     # L2a - struttura
     struttura = _l2a_struttura(df, key, log)
