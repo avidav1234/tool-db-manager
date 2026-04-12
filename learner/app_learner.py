@@ -343,6 +343,103 @@ def home():
                                   msg=request.args.get('msg',''), mtype='')
 
 @app.route('/analizza', methods=['POST'])
+HYPERMILL_PREVIEW = """<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Anteprima Import Hypermill</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}
+h1{color:#6366f1;margin-bottom:4px}
+.sub{color:#64748b;margin-bottom:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px;margin-bottom:20px}
+h2{color:#94a3b8;font-size:.95rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 16px}
+table{width:100%;border-collapse:collapse;font-size:.875rem}
+th{background:#0f172a;color:#64748b;padding:8px 12px;text-align:left;font-weight:600}
+td{padding:8px 12px;border-bottom:1px solid #334155}
+tr:hover td{background:#263344}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600}
+.tag-ok{background:#0d2d1a;color:#86efac}
+.tag-warn{background:#2d1a0d;color:#fb923c}
+.btn{display:inline-block;padding:12px 28px;border-radius:8px;font-weight:600;cursor:pointer;border:none;font-size:1rem;text-decoration:none}
+.btn-ok{background:#6366f1;color:#fff;margin-right:12px}
+.btn-cancel{background:#334155;color:#94a3b8}
+.stat{font-size:2.5rem;font-weight:700;color:#6366f1}
+</style>
+</head>
+<body>
+<h1>Anteprima Import Hypermill</h1>
+<p class="sub">Verifica il mapping prima di importare nel DB master</p>
+
+<div class="card">
+<h2>Riepilogo</h2>
+<p><span class="stat">{{ totale }}</span> utensili trovati nel database Hypermill</p>
+</div>
+
+<div class="card">
+<h2>Mapping Hypermill &rarr; DB Master</h2>
+<table>
+<thead><tr><th>Sorgente Hypermill</th><th>Campo DB Master</th><th>Esempio</th><th>Stato</th></tr></thead>
+<tbody>
+{% set rows = [
+  ('nc_name','codice_interno','Codice NC macchina'),
+  ('nc_number_str','alias','Nome officina'),
+  ('tool_name','descrizione','Nome utensile completo'),
+  ('ordering_code','codice_catalogo','Codice catalogo'),
+  ('tool_type_id','tipo','BALL/BULL/FLAT/DRILL'),
+  ('dbl_param4','diametro_mm','Diametro mm'),
+  ('dbl_param10','raggio_punta_mm','Raggio angolo mm'),
+  ('total_length','lunghezza_totale_mm','Lunghezza totale mm'),
+  ('int_param1','num_taglienti','Numero denti'),
+  ('holder_name','nome_pinza','Nome portautensile'),
+  ('gage_length','fuori_pinza_mm','Fuori pinza mm'),
+  ('feedrate','avanzamento_default','Feed Vf mm/min'),
+  ('fz','fz_default','Fz mm/dente'),
+  ('rpm','rotazione_default','RPM mandrino'),
+  ('vc','vc_default','Vc m/min'),
+] %}
+{% for src,dst,desc in rows %}
+{% set val = campione.get(dst,'') %}
+<tr>
+<td style="color:#94a3b8;font-family:monospace">{{ src }}</td>
+<td style="color:#818cf8;font-weight:600">{{ dst }}</td>
+<td style="color:#64748b">{{ val if val else desc }}</td>
+<td><span class="tag {{ 'tag-ok' if val else 'tag-warn' }}">{{ 'OK' if val else 'vuoto' }}</span></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Anteprima primi utensili</h2>
+<table>
+<thead><tr><th>#</th><th>Codice NC</th><th>Alias</th><th>Tipo</th><th>D mm</th><th>Fuori pinza</th><th>Feed</th><th>Fz</th></tr></thead>
+<tbody>
+{% for u in utensili %}
+<tr>
+<td style="color:#475569">{{ loop.index }}</td>
+<td>{{ u.get('codice_interno','') }}</td>
+<td style="color:#94a3b8">{{ u.get('alias','') }}</td>
+<td><span class="tag tag-ok">{{ u.get('tipo','?') }}</span></td>
+<td>{{ u.get('diametro_mm','') }}</td>
+<td>{{ u.get('fuori_pinza_mm','') }}</td>
+<td>{{ u.get('avanzamento_default','') }}</td>
+<td>{{ u.get('fz_default','') }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<form method="POST" action="/conferma_import_hypermill">
+<input type="hidden" name="filepath" value="{{ filepath }}">
+<button type="submit" class="btn btn-ok">&#10003; Importa {{ totale }} utensili nel DB Master</button>
+<a href="/" class="btn btn-cancel">Annulla</a>
+</form>
+</body></html>
+"""
+
 def analizza():
     f = request.files.get('file')
     if not f or f.filename == '':
