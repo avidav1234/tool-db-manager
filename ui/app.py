@@ -2336,8 +2336,11 @@ def cam_agent_ui():
     return CAM_AGENT_HTML
 
 
-@app.route('/cam-agent/upload', methods=['POST'])
+@app.route('/cam-agent/upload', methods=['POST','OPTIONS'])
 def cam_agent_upload():
+    if request.method == 'OPTIONS':
+        resp = app.make_default_options_response()
+        return resp
     f = request.files.get('file')
     if not f:
         return json.dumps({'errore': 'Nessun file'}), 400, {'Content-Type': 'application/json'}
@@ -2366,8 +2369,11 @@ def cam_agent_db_stats():
         return json.dumps({'errore': str(e)}), 200, {'Content-Type': 'application/json'}
 
 
-@app.route('/cam-agent/chat', methods=['POST'])
+@app.route('/cam-agent/chat', methods=['POST','OPTIONS'])
 def cam_agent_chat():
+    if request.method == 'OPTIONS':
+        resp = app.make_default_options_response()
+        return resp
     import sys as _sys
     _root = os.path.join(os.path.dirname(__file__), '..')
     _ui   = os.path.dirname(__file__)
