@@ -626,6 +626,64 @@ def converti_page():
     return render_template_string(CONVERTI_P, profili=profili,
                                   msg=request.args.get('msg',''), mtype='')
 
+
+
+# ── Widget agente CAM (pannello flottante) ──────────────────────────────
+
+_WIDGET_MARKUP_L = (
+    '<div id="ai-fab" onclick="aiT()" title="Agente CAM" '
+    'style="position:fixed;bottom:24px;right:24px;width:52px;height:52px;'
+    'background:#6366f1;color:#fff;border:none;border-radius:50%;cursor:pointer;'
+    'font-size:1rem;font-weight:700;box-shadow:0 4px 20px rgba(99,102,241,.5);z-index:9998;'
+    'display:flex;align-items:center;justify-content:center">AI</div>'
+    '<div id="ai-panel" style="position:fixed;bottom:88px;right:24px;width:420px;height:560px;'
+    'background:#1e293b;border:1px solid #334155;border-radius:16px;'
+    'box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:9999;display:none;flex-direction:column;overflow:hidden">'
+    '<div style="background:#0f172a;padding:.75rem 1rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid #334155">'
+    '<span style="color:#fff;font-weight:600;font-size:.875rem;flex:1">Agente CAM</span>'
+    '<small id="ai-pg" style="color:#475569;font-size:.7rem">Learner</small>'
+    '<span onclick="aiT()" style="color:#64748b;cursor:pointer;font-size:1rem;padding:.2rem">X</span>'
+    '</div>'
+    '<div id="ai-ms" style="flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.5rem">'
+    '<div style="background:#0d2d1a;color:#86efac;align-self:center;font-size:.7rem;padding:.2rem .6rem;border-radius:12px">'
+    'Sono qui - scrivi o incolla un log.</div>'
+    '</div>'
+    '<div style="padding:.6rem;border-top:1px solid #334155;display:flex;flex-direction:column;gap:.4rem">'
+    '<div style="display:flex;align-items:center;gap:.4rem">'
+    '<label for="ai-fi" style="background:#0f172a;border:1px dashed #334155;border-radius:5px;'
+    'padding:.3rem .6rem;cursor:pointer;font-size:.72rem;color:#64748b;white-space:nowrap">'
+    'File CAM</label>'
+    '<input type="file" id="ai-fi" style="display:none" accept=".zip,.csv,.xml,.tdm,.tdb">'
+    '<span id="ai-fn" style="font-size:.7rem;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">nessun file</span>'
+    '</div>'
+    '<div style="display:flex;gap:.4rem">'
+    '<textarea id="ai-in" rows="1" placeholder="Scrivi o incolla un log..." '
+    'style="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;'
+    'padding:.5rem .7rem;color:#e2e8f0;font-size:.8rem;resize:none;min-height:34px;max-height:80px"></textarea>'
+    '<button id="ai-sb" onclick="aiS()" '
+    'style="background:#6366f1;color:#fff;border:none;border-radius:8px;'
+    'padding:.5rem .9rem;cursor:pointer;font-size:.9rem;font-weight:600">></button>'
+    '</div></div></div>'
+    '<script src="http://localhost:5000/static/widget.js"><' '/script>'
+)
+
+
+@app.route('/static/widget.js')
+def learner_widget_js():
+    import os as _os
+    from flask import redirect
+    return redirect('http://localhost:5000/static/widget.js')
+
+
+@app.after_request
+def _inject_widget_learner(resp):
+    if resp.content_type and 'text/html' in resp.content_type:
+        html = resp.get_data(as_text=True)
+        if '</body>' in html and 'ai-fab' not in html:
+            resp.set_data(html.replace('</body>', _WIDGET_MARKUP_L + '</body>'))
+    return resp
+
+
 if __name__ == '__main__':
     app.jinja_env.filters['basename'] = os.path.basename
     print('Format Learner -> http://localhost:5001')
