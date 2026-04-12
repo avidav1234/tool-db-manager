@@ -359,15 +359,18 @@ def analizza():
             from hypermill_db_importer import importa_hypermill_db, _is_hypermill_db
             if not _is_hypermill_db(fp):
                 return redirect(url_for('home', msg='File .db non riconosciuto come database Hypermill'))
-            # Trova il DB master
-            _root = _os.path.join(_ld, '..')
-            master_db = _os.path.join(_root, 'database', 'tool_master.db')
-            result = importa_hypermill_db(fp, master_db, dry_run=False)
-            importati = result.get('importati', 0)
-            errori = result.get('errori', 0)
-            msg = f'Hypermill: {importati} utensili importati nel DB master'
-            if errori: msg += f' ({errori} errori)'
-            return redirect(url_for('home', msg=msg))
+            # Dry run: mostra anteprima mapping prima di importare
+            result = importa_hypermill_db(fp, None, dry_run=True)
+            utensili = result.get('utensili', [])
+            # Salva path in sessione per conferma successiva
+            import json as _json
+            session['hm_filepath'] = fp
+            session['hm_count'] = len(utensili)
+            # Costruisci tabella mapping da primo utensile
+            campione = utensili[0] if utensili else {}
+            return render_template_string(HYPERMILL_PREVIEW,
+                filepath=fp, utensili=utensili[:10],
+                totale=len(utensili), campione=campione)
         except Exception as e:
             import traceback as _tb
             return redirect(url_for('home', msg=f'Errore DB Hypermill: {str(e)[:100]}'))
@@ -744,6 +747,28 @@ def importa_db():
     except Exception as e:
         import traceback
         return _json.dumps({'errore': str(e), 'traceback': traceback.format_exc()[-300:]}), 500, {'Content-Type':'application/json'}
+
+
+@app.route('/conferma_import_hypermill', methods=['POST'])
+def conferma_import_hypermill():
+    import os as _os, sys as _sys
+    _ld = _os.path.dirname(_os.path.abspath(__file__))
+    if _ld not in _sys.path: _sys.path.insert(0, _ld)
+    filepath = request.form.get('filepath', '')
+    if not filepath or not _os.path.exists(filepath):
+        return redirect(url_for('home', msg='File non trovato'))
+    try:
+        from hypermill_db_importer import importa_hypermill_db
+        _root = _os.path.join(_ld, '..')
+        master_db = _os.path.join(_root, 'database', 'tool_master.db')
+        result = importa_hypermill_db(filepath, master_db, dry_run=False)
+        importati = result.get('importati', 0)
+        errori = result.get('errori', 0)
+        msg = f'Hypermill: {importati} utensili importati nel DB master'
+        if errori: msg += f' ({errori} non importati)'
+        return redirect(url_for('home', msg=msg))
+    except Exception as e:
+        return redirect(url_for('home', msg=f'Errore: {str(e)[:100]}'))
 
 if __name__ == '__main__':
     app.jinja_env.filters['basename'] = os.path.basename
