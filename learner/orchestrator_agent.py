@@ -611,6 +611,11 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
 
     log('L1', 'Inizio: %s (%d colonne, %d righe)' % (nome_file or 'file', len(df.columns), len(df)))
 
+    # Fast path WorkNC (deterministico, 0 token)
+    _worknc_result = _worknc_fast_path(df, nome_file, log)
+    if _worknc_result is not None:
+        return _worknc_result
+
     # Fast path Cimatron (deterministico, 0 token)
     _cima_result = _cimatron_fast_path(df, nome_file, log)
     if _cima_result is not None:
