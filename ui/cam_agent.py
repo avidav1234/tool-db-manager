@@ -206,20 +206,31 @@ def _safe_path(relpath):
         raise ValueError(f'Estensione non consentita: {ext}')
     return full
 
-def tool_leggi_file(percorso):
+def tool_leggi_file(percorso, riga_inizio=None, riga_fine=None):
     """
-    Legge un file del progetto (percorso relativo alla root, es. 'learner/orchestrator_agent.py').
-    Restituisce il contenuto con numeri di riga per facilitare il debug.
+    Legge un file del progetto con numeri di riga.
+    Per file grandi usa riga_inizio/riga_fine per leggere sezioni specifiche.
+    Esempio: riga_inizio=380, riga_fine=430 per vedere solo quelle righe.
     """
     try:
-        full = _safe_path(percorso)
-        with open(full, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        # Restituisce con numeri di riga
-        numbered = ''.join(f'{i+1:4d}  {l}' for i, l in enumerate(lines))
-        return {'percorso': percorso, 'righe_totali': len(lines), 'contenuto': numbered}
+        full=_safe_path(percorso)
+        with open(full,'r',encoding='utf-8') as f: lines=f.readlines()
+        totale=len(lines)
+        if riga_inizio or riga_fine:
+            s=max(0,(riga_inizio or 1)-1)
+            e=min(totale,(riga_fine or totale))
+            chunk=lines[s:e]
+            base=s
+        else:
+            chunk=lines
+            base=0
+        numbered=''.join(f'{base+i+1:4d}  {l}' for i,l in enumerate(chunk))
+        if len(numbered)>6000:
+            numbered=numbered[:6000]+'\n...[troncato, specifica riga_inizio/riga_fine per altre sezioni]'
+        return {'percorso':percorso,'righe_totali':totale,
+                'range':f'{base+1}-{base+len(chunk)}','contenuto':numbered}
     except Exception as e:
-        return {'errore': str(e)}
+        return {'errore':str(e)}
 
 def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
     """
@@ -395,8 +406,8 @@ TOOLS = [
      "input_schema":{"type":"object","properties":{"filepath":{"type":"string"},"dry_run":{"type":"boolean"}},"required":["filepath"]}},
     {"name":"leggi_utensili","description":"Legge utensili dal DB per verifica. Accetta filtro WHERE.",
      "input_schema":{"type":"object","properties":{"filtro":{"type":"string"},"limit":{"type":"integer"}},"required":[]}},
-    {"name":"leggi_file","description":"Legge un file del progetto con numeri di riga (es. 'learner/orchestrator_agent.py'). Usalo per analizzare bug nel codice prima di correggerli.",
-     "input_schema":{"type":"object","properties":{"percorso":{"type":"string","description":"Percorso relativo alla root del progetto"}},"required":["percorso"]}},
+    {"name":"leggi_file","description":"Legge file del progetto con numeri riga. Per file grandi (>300 righe) usa riga_inizio e riga_fine per sezioni specifiche es riga_inizio:380 riga_fine:430. MAI delegare la lettura all utente - sei tu che chiami questo tool piu volte se necessario.",
+     "input_schema":{"type":"object","properties":{"percorso":{"type":"string"},"riga_inizio":{"type":"integer","description":"Prima riga da leggere"},"riga_fine":{"type":"integer","description":"Ultima riga da leggere"}},"required":["percorso"]}},
     {"name":"lista_plugin","description":"Elenca tutti i plugin CAM installati: software, versione, firma di rilevamento.",
      "input_schema":{"type":"object","properties":{},"required":[]}},
     {"name":"testa_plugin","description":"Testa un plugin in isolamento: sintassi, import, classe, rileva(). Usalo prima di attivare un plugin generato dall agente.",
@@ -427,7 +438,7 @@ TOOL_FN = {
     'leggi_utensili':       lambda i: tool_leggi_utensili(i.get('filtro'), i.get('limit',10)),
     'lista_plugin':          lambda i: tool_lista_plugin(),
     'testa_plugin':         lambda i: tool_testa_plugin(i['percorso_plugin'], i.get('filepath_test')),
-    'leggi_file':           lambda i: tool_leggi_file(i['percorso']),
+    'leggi_file':           lambda i: tool_leggi_file(i['percorso'],i.get('riga_inizio'),i.get('riga_fine')),
     'modifica_file':        lambda i: tool_modifica_file(i['percorso'], i['vecchio_testo'],
                                                           i['nuovo_testo'], i.get('descrizione','')),
 }
