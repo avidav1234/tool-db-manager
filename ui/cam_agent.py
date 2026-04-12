@@ -462,6 +462,7 @@ CHECKPOINT - REGOLA FONDAMENTALE:
 - Dopo OGNI step completato: salva_checkpoint(task_id, step, risultati)
 - Se raggiungi il limite turni il lavoro NON va perso - e' salvato su disco
 - Quando utente dice 'continua': lista_checkpoint() poi leggi_checkpoint(task_id) e riparti
+- Quando ricevi un messaggio che inizia con PROCEDI IMMEDIATAMENTE: esegui il prossimo step SENZA chiedere nulla, SENZA spiegare, direttamente con i tool
 
 - Non modificare mai ui/app.py o ui/cam_agent.py (core dell'app)
 - Puoi modificare liberamente: learner/*.py, plugins/**/*.py
@@ -506,11 +507,12 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
         if not cp.get('trovato'):
             return {'risposta': f'Checkpoint "{task_id_richiesto}" non trovato.', 'history': []}
         steps_fatti = [k for k in cp['dati'] if k not in ('ultimo_step','task_id')]
-        messaggio_utente = (f'Riprendi il task "{task_id_richiesto}" dal checkpoint.\n'
-                           f'Steps gia completati: {steps_fatti}\n'
+        dati_str = json.dumps(cp['dati'], ensure_ascii=False, default=str)[:1500]
+        messaggio_utente = (f'PROCEDI IMMEDIATAMENTE con il task "{task_id_richiesto}".\n'
+                           f'Steps GIA FATTI (non ripetere): {steps_fatti}\n'
                            f'Ultimo step: {cp["ultimo_step"]}\n'
-                           f'Dati salvati: {json.dumps(cp["dati"], ensure_ascii=False, default=str)[:1000]}\n'
-                           f'Continua dal prossimo step senza ripetere quelli gia fatti.')
+                           f'Dati: {dati_str}\n'
+                           f'VAI AL PROSSIMO STEP. Non chiedere conferme, non spiegare, esegui.')
 
     messages = list(history or [])
     messages.append({'role':'user','content':messaggio_utente})
