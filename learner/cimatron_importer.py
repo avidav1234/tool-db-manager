@@ -130,8 +130,10 @@ DIR_ROT_MAP = {
     '420301': 'CW', '420302': 'CCW', '420303': 'OFF',
 }
 REFRIG_MAP = {
-    '420401': 'OFF', '420402': 'Flood', '420403': 'Mist',
-    '420404': 'Through', '420405': 'Air',
+    '420401': 'OFF',     '420402': 'FLOOD',   '420403': 'MIST',
+    '420404': 'AIR',     '420405': 'THROUGH',
+    # Valori gia decodificati dal parser (passthrough)
+    'OFF': 'OFF', 'FLOOD': 'FLOOD', 'MIST': 'MIST', 'AIR': 'AIR', 'THROUGH': 'THROUGH',
 }
 
 
