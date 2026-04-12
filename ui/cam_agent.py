@@ -509,10 +509,27 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
             if len(tasks) == 1:
                 task_id_richiesto = tasks[0]['task_id']
             else:
-                lines = ['Piu task in sospeso, specifica quale:']
+                # Piu task in sospeso: l'agente decide quale e' piu rilevante
+                tasks_info = []
                 for t in tasks:
-                    lines.append(f"  continua {t['task_id']}  (ultimo step: {t['ultimo_step']})")
-                return {'risposta': '\n'.join(lines), 'history': []}
+                    cp_detail = tool_leggi_checkpoint(t['task_id'])
+                    steps = t.get('steps', [])
+                    tasks_info.append({
+                        'task_id': t['task_id'],
+                        'ultimo_step': t['ultimo_step'],
+                        'steps_completati': steps,
+                        'num_steps': len(steps)
+                    })
+                # Passa all'agente la lista completa e chiedi di decidere
+                tasks_json = json.dumps(tasks_info, ensure_ascii=False)
+                messaggio_utente = (
+                    f'Ci sono {len(tasks)} task in sospeso nei checkpoint:\n{tasks_json}\n\n'
+                    f'DECIDI AUTONOMAMENTE quale riprendere basandoti su:\n'
+                    f'1. Quale e piu avanzato (piu steps completati)\n'
+                    f'2. Quale ha piu senso completare prima\n'
+                    f'3. Se i task sono correlati, quale sblocca l altro\n'
+                    f'Scegli il task migliore e PROCEDI IMMEDIATAMENTE senza chiedere conferma.'
+                )
         # Riprendi il task specificato
         cp = tool_leggi_checkpoint(task_id_richiesto)
         if not cp.get('trovato'):
