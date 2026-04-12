@@ -81,6 +81,28 @@ MASTER_FIELDS = {
     'vita_utensile':            'Vita utensile minuti/colpi',
     'dir_rotazione':            'Direzione rotazione CW/CCW',
     'refrigerante':             'Tipo refrigerante OFF/FLOOD/MIST/AIR/THROUGH',
+    # --- Filettatura
+    'passo_mm':              'Passo filetto mm',
+    'num_filetti':           'Numero filetti/starts',
+    # --- Profilo avanzato
+    'diam_libero_mm':        'Diametro libero / stylus mm',
+    'altezza_cilindro_mm':   'Altezza cilindro mm',
+    'diam_base_piatta_mm':   'Diametro base piatta mm',
+    'raggio_punta2_mm':      'Raggio punta tip mm',
+    'raggio_superiore_mm':   'Raggio superiore mm',
+    'raggio_profilo_mm':     'Raggio profilo sagomato mm',
+    'lunghezza_conica_mm':   'Lunghezza zona conica mm',
+    'centro_arco_y_mm':      'Centro arco Y profilo mm',
+    'altezza_raggio_sup_mm': 'Altezza raggio superiore mm',
+    # --- Stelo gambo
+    'diam_gambo1_mm':        'Diametro gambo mm',
+    'diam_gambo_top_mm':     'Diametro gambo top mm',
+    'diam_gambo_bot_mm':     'Diametro gambo bottom mm',
+    'lunghezza_gambo_mm':    'Lunghezza cono gambo mm',
+    # --- Portautensile/magazzino
+    'nome_portautensile':    'Nome porta utensile / holder',
+    'nome_materiale_pu':     'Materiale porta utensile',
+    'numero_magazzino':      'Numero magazzino CNC',
 }
 
 
@@ -498,6 +520,30 @@ def _cimatron_fast_path(df, nome_file, log):
             'Direzione mandrino':      'dir_rotazione',
             'Tipo refrigerante':       'refrigerante',
             'Passo laterale':          'passo_lat_default',
+            # Filettatura
+            'Passo':                   'passo_mm',
+            'Numero Filetti':          'num_filetti',
+            # Numero magazzino
+            'Numero Magazzino':        'numero_magazzino',
+            'Numero Ut.':              'numero_magazzino',
+            # Profilo geometrico avanzato
+            'Diametro Stelo Libero':   'diam_libero_mm',
+            'Altezza Cilindro':        'altezza_cilindro_mm',
+            'Diametro Piatto Inferiore':'diam_base_piatta_mm',
+            'Centro Y Arco Profilo':   'centro_arco_y_mm',
+            'Raggio Punta':            'raggio_punta2_mm',
+            'Raggio Superiore':        'raggio_superiore_mm',
+            'Lunghezza Sformo':        'lunghezza_conica_mm',
+            'Altezza Raggio Superiore':'altezza_raggio_sup_mm',
+            'Raggio Profilo':          'raggio_profilo_mm',
+            # Stelo gambo
+            'Stelo':                   'diam_gambo1_mm',
+            'Diametro Gambo Top':      'diam_gambo_top_mm',
+            'Diametro Gambo Bottom':   'diam_gambo_bot_mm',
+            'Lunghezza Cono Gambo':    'lunghezza_gambo_mm',
+            # Portautensile
+            'Nome Porta Utensile':     'nome_portautensile',
+            'Nome Materiale':          'nome_materiale_pu',
         }
         TIPO_N = {
                   'diametro_mm':'float','raggio_punta_mm':'float','angolo_punta_gradi':'float',
