@@ -434,7 +434,8 @@ def analizza():
                                         rows.append({col_names[j]: parts[j].strip() if j < len(parts) else '' for j in range(len(col_names))})
                                     df_tmp = pd.DataFrame(rows)
                     except Exception:
-                        pass              except Exception:
+                        pass
+                except Exception:
                     pass
 
             if df_tmp is not None and len(df_tmp) > 0:
