@@ -130,7 +130,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             'cam_sorgente':     'Hypermill',
             'id_originale_cam': str(row['nc_id']),
             'nome_pinza':       row['holder_name'] or '',
-            'fuori_pinza_mm':   row['gage_length'] or None,
+            'fuori_pinza_mm':   row['tool_length'] or None,
             **geo,
         }
         if tech:
