@@ -482,6 +482,20 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
     if filepath:
         messaggio_utente = f"File disponibile: {filepath}\n\n{messaggio_utente}"
 
+    # Se utente scrive "continua" senza task_id, mostra lista checkpoint
+    msg_low = messaggio_utente.strip().lower()
+    if msg_low in ('continua', 'riprendi', 'checkpoint'):
+        cp_list = tool_lista_checkpoint()
+        if cp_list.get('totale', 0) == 0:
+            return {'risposta': 'Nessun checkpoint salvato. Nessun task in sospeso.', 'history': []}
+        tasks = cp_list.get('tasks', [])
+        lines = ['Task in sospeso:']
+        for t in tasks:
+            lines.append(f"  - {t['task_id']} (ultimo step: {t['ultimo_step']})")
+        lines.append('')
+        lines.append('Scrivi: continua [task_id]')
+        return {'risposta': '\n'.join(lines), 'history': []}
+
     messages = list(history or [])
     messages.append({'role':'user','content':messaggio_utente})
     tool_calls_log = []
