@@ -16,6 +16,28 @@ OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'output', 'manual')
 
 app = Flask(__name__)
 
+# CORS: permetti richieste dal Format Learner (porta 5001)
+@app.after_request
+def add_cors_headers(response):
+    origin = request.headers.get('Origin', '')
+    if 'localhost:5001' in origin or '127.0.0.1:5001' in origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
+@app.route('/api/importa-db', methods=['OPTIONS'])
+def importa_db_preflight():
+    """Risponde al preflight CORS OPTIONS."""
+    from flask import Response
+    resp = Response('', status=200)
+    origin = request.headers.get('Origin', '')
+    if 'localhost:5001' in origin or '127.0.0.1:5001' in origin:
+        resp.headers['Access-Control-Allow-Origin'] = origin
+        resp.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return resp
+
 # ---------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------
