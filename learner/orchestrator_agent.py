@@ -270,7 +270,11 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
 
             for col, info in batch_mapping.items():
                 campo = info.get('campo_master', 'ignora')
-                if campo == 'ignora' or campo in campi_gia_mappati:
+                if campo == 'ignora' or campo not in MASTER_FIELDS:
+                    continue
+                if campo in campi_gia_mappati:
+                    continue
+                if col not in list(df.columns):
                     continue
                 mapping_totale[col] = info
                 campi_gia_mappati.add(campo)
@@ -374,10 +378,17 @@ _CIMA_DIR={'420301':'CW','420302':'CCW'}
 _CIMA_REFR={'420401':'OFF','420402':'FLOOD','420403':'MIST','420404':'AIR','420405':'THROUGH'}
 
 def _cimatron_fast_path(df, nome_file, log):
-    cols = set(df.columns)
-    if not {'1101','2105','3103','4101','4104'}.issubset(cols):
+    # Rilevamento da ID numerici O nomi italiani
+    cols_set = set(str(c).strip() for c in df.columns)
+    id_match = len(set(['1101','2105','3103','4101','4104','4104','4102','2109','3101']) & cols_set)
+    CIMA_NOMI = {'Nome Utensile','Diametro','Raggio Base','Lunghezza Totale Ut.',
+                 'Lunghezza Utile','Lungh. Tagliente','Nome Pinza','Lungh. Libera',
+                 'Avanz.','Rotaz.','Fz','Vt','Denti','Tecnologia','Punta/Tipo'}
+    nome_match = len(CIMA_NOMI & cols_set)
+    if id_match < 5 and nome_match < 4:
         return None
-    log('L1', 'Rilevato Cimatron deterministico — skip AI, 0 token')
+    log('L1', f'Rilevato Cimatron (id_match={id_match}, nome_match={nome_match}) - fast path deterministico')
+    cols = cols_set  # per compatibilita con il codice successivo
     def _cast(v, t):
         if v is None or str(v).strip() in ('','nan','None'): return None
         if t == 'float':
@@ -401,7 +412,38 @@ def _cimatron_fast_path(df, nome_file, log):
             else: v = _cast(v, tipo)
             if v is not None: rec[campo] = v
         if rec.get('codice_interno'): records.append(rec)
-    log('L1', 'Fast path: %d utensili x %d campi | Token: 0 | Costo: $0.0000' % (len(records), len(_CIMA_MAP)+2))
+    # Se nessun record trovato con ID, prova con nomi italiani
+    if not records and nome_match >= 4:
+        NOMI_MAP = {
+            'Nome Utensile':'codice_interno','Commento':'descrizione',
+            'Diametro':'diametro_mm','Raggio Base':'raggio_punta_mm',
+            'Lunghezza Totale Ut.':'lunghezza_totale_mm','Lunghezza Utile':'lunghezza_tagl_mm',
+            'Lungh. Tagliente':'lunghezza_tagl2_mm','Conico':'conico',
+            'Diametro Gambo':'diam_stelo_mm','Nome Pinza':'nome_pinza',
+            'Lunghezza Presa':'lungh_presa_mm','Lungh. Libera':'fuori_pinza_mm',
+            'Avanz.':'avanzamento_default','Rotaz.':'rotazione_default',
+            'Vt':'vc_default','Fz':'fz_default','Denti':'num_taglienti',
+            'Dir Rotaz.':'dir_rotazione','Refrigerante':'refrigerante',
+            'Passo in Z':'passo_z_default','Passo Laterale':'passo_lat_default',
+        }
+        TIPO_N = {'diametro_mm':'float','raggio_punta_mm':'float','lunghezza_totale_mm':'float',
+                  'lunghezza_tagl_mm':'float','lunghezza_tagl2_mm':'float','conico':'int',
+                  'diam_stelo_mm':'float','lungh_presa_mm':'float','fuori_pinza_mm':'float',
+                  'avanzamento_default':'float','rotazione_default':'float','vc_default':'float',
+                  'fz_default':'float','num_taglienti':'int','passo_z_default':'float',
+                  'passo_lat_default':'float'}
+        for _, row in df.iterrows():
+            rec = {}
+            for nome, campo in NOMI_MAP.items():
+                if nome not in cols_set: continue
+                v = row.get(nome)
+                if v is None or str(v).strip() in ('','nan','None'): continue
+                t = TIPO_N.get(campo,'string')
+                cv = _cast(v, t)
+                if cv is not None: rec[campo] = cv
+            if rec.get('codice_interno') or rec.get('diametro_mm'):
+                records.append(rec)
+    log('L1', 'Fast path: %d utensili x campi | Token: 0 | Costo: $0.0000' % len(records))
     mapping = {cid:{'campo_master':cm,'confidenza':'alta','trasformazione':'nessuna'}
                for cid,(cm,_) in _CIMA_MAP.items()}
     return {'verificato':True,'software_cam':'Cimatron','records':records,
