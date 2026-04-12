@@ -99,8 +99,8 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
     """).fetchall()
 
     techs_raw = hm.execute("""
-        SELECT tt.tool_id, t.feedrate, t.dbl_param2 as fz, t.dbl_param3 as rpm,
-               t.dbl_param5 as vc, t.dbl_param6 as ap, tp.purpose
+        SELECT tt.tool_id, t.feedrate, t.dbl_param3 as rpm,
+               t.dbl_param5 as ap, tp.purpose
         FROM ToolTechnologies tt
         JOIN Technologies t ON tt.technology_id = t.technology_id
         LEFT JOIN TechnologyPurposes tp ON t.purpose_id = tp.id
@@ -134,11 +134,21 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             **geo,
         }
         if tech:
-            if tech['feedrate']: utensile['avanzamento_default'] = tech['feedrate']
-            if tech['fz']:       utensile['fz_default'] = tech['fz']
-            if tech['rpm']:      utensile['rotazione_default'] = tech['rpm']
-            if tech['vc']:       utensile['vc_default'] = tech['vc']
-            if tech['ap']:       utensile['passo_z_default'] = tech['ap']
+            feed = tech['feedrate'] or 0
+            rpm  = tech['rpm'] or 0
+            ap   = tech['ap'] or 0
+            diam = utensile.get('diametro_mm') or 0
+            denti = utensile.get('num_taglienti') or 0
+            import math as _math
+            if feed:  utensile['avanzamento_default'] = round(feed, 3)
+            if rpm:   utensile['rotazione_default'] = round(rpm, 1)
+            if ap:    utensile['passo_z_default'] = round(ap, 4)
+            # Calcola Fz = Feed / (RPM * denti)
+            if feed and rpm and denti:
+                utensile['fz_default'] = round(feed / (rpm * denti), 4)
+            # Calcola Vc = RPM * D * pi / 1000
+            if rpm and diam:
+                utensile['vc_default'] = round(rpm * diam * _math.pi / 1000, 2)
 
         utensile = {k: v for k, v in utensile.items() if v is not None and v != ''}
         utensili.append(utensile)
