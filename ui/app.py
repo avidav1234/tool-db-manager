@@ -492,7 +492,7 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div class="grid2">
   <div>
     <div class="card">
-      <h2>Carica file Excel o CSV</h2>
+      <h2>Carica file Excel, CSV o ZIP Cimatron</h2>
       <form method="post" action="/importa" enctype="multipart/form-data">
         <label class="drop-zone" for="file_input" id="dz">
           <div style="font-size:2.5rem;margin-bottom:.5rem">&#128196;</div>
