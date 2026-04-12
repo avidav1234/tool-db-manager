@@ -422,6 +422,115 @@ def _get_lookup():
         conn.close()
 
 
+FORM_HTML = """
+<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ titolo }} — Tool DB Manager</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#f8fafc;color:#1e293b}
+.nav{background:#1e293b;padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
+.nav a{color:#94a3b8;text-decoration:none;font-size:.875rem}.nav a:hover{color:#fff}
+.nav .brand{color:#fff;font-weight:700;font-size:1.1rem;margin-right:auto}
+.container{max-width:860px;margin:2rem auto;padding:0 1rem}
+h1{font-size:1.4rem;font-weight:700;margin:0 0 1.5rem}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:1.5rem;margin-bottom:1rem}
+.section-title{font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;letter-spacing:.05em;margin:0 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid #f1f5f9}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem}
+.field{display:flex;flex-direction:column;gap:.25rem}
+label{font-size:.8rem;font-weight:500;color:#475569}
+input,select,textarea{padding:.45rem .65rem;border:1px solid #cbd5e1;border-radius:5px;font-size:.875rem;width:100%;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,.15)}
+.actions{display:flex;gap:.75rem;margin-top:1.5rem;align-items:center}
+.btn{padding:.55rem 1.25rem;border:none;border-radius:6px;cursor:pointer;font-size:.875rem;font-weight:500;text-decoration:none;display:inline-block}
+.btn-primary{background:#1e293b;color:#fff}.btn-primary:hover{background:#334155}
+.btn-secondary{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0}.btn-secondary:hover{background:#e2e8f0}
+.alert{padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;font-size:.875rem}
+.alert-err{background:#fee2e2;color:#991b1b}.alert-ok{background:#dcfce7;color:#166534}
+</style></head><body>
+<nav class="nav">
+  <span class="brand">Tool DB Manager</span>
+  <a href="/">&#8592; Lista utensili</a>
+</nav>
+<div class="container">
+  <h1>{{ titolo }}</h1>
+  {% if msg %}<div class="alert alert-{{ 'err' if mtype=='err' else 'ok' }}">{{ msg }}</div>{% endif %}
+  <form method="POST" action="{{ action }}">
+    <div class="card">
+      <div class="section-title">Identificazione</div>
+      <div class="grid">
+        <div class="field"><label>Codice interno *</label>
+          <input name="codice_interno" value="{{ u.get('codice_interno','') }}" required {% if modifica %}readonly{% endif %}></div>
+        <div class="field"><label>Alias (nome officina)</label>
+          <input name="alias" value="{{ u.get('alias','') }}"></div>
+        <div class="field"><label>Codice catalogo</label>
+          <input name="codice_catalogo" value="{{ u.get('codice_catalogo','') }}"></div>
+        <div class="field"><label>Descrizione</label>
+          <input name="descrizione" value="{{ u.get('descrizione','') }}"></div>
+        <div class="field"><label>Tipo *</label>
+          <select name="tipo">{% for t in tipi %}<option value="{{ t }}" {% if t==u.get('tipo') %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Materiale *</label>
+          <select name="materiale">{% for m in materiali %}<option value="{{ m }}" {% if m==u.get('materiale') %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Fornitore</label>
+          <select name="id_fornitore"><option value="">--</option>{% for fo in fornitori %}<option value="{{ fo.id }}" {% if fo.id==u.get('id_fornitore') %}selected{% endif %}>{{ fo.nome }}</option>{% endfor %}</select></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Geometria</div>
+      <div class="grid">
+        <div class="field"><label>Diametro [mm] *</label><input name="diametro_mm" type="number" step="any" value="{{ u.get('diametro_mm','') }}"></div>
+        <div class="field"><label>Raggio punta [mm]</label><input name="raggio_punta_mm" type="number" step="any" value="{{ u.get('raggio_punta_mm','') }}"></div>
+        <div class="field"><label>Angolo punta [°]</label><input name="angolo_punta_gradi" type="number" step="any" value="{{ u.get('angolo_punta_gradi','') }}"></div>
+        <div class="field"><label>Lunghezza totale [mm]</label><input name="lunghezza_totale_mm" type="number" step="any" value="{{ u.get('lunghezza_totale_mm','') }}"></div>
+        <div class="field"><label>Lunghezza tagliente [mm]</label><input name="lunghezza_tagl_mm" type="number" step="any" value="{{ u.get('lunghezza_tagl_mm','') }}"></div>
+        <div class="field"><label>Numero taglienti</label><input name="num_taglienti" type="number" value="{{ u.get('num_taglienti','') }}"></div>
+        <div class="field"><label>Angolo elica [°]</label><input name="angolo_elica_gradi" type="number" step="any" value="{{ u.get('angolo_elica_gradi','') }}"></div>
+        <div class="field"><label>Passo filetto [mm]</label><input name="passo_mm" type="number" step="any" value="{{ u.get('passo_mm','') }}"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Portautensile</div>
+      <div class="grid">
+        <div class="field"><label>Nome pinza</label><input name="nome_pinza" value="{{ u.get('nome_pinza','') }}"></div>
+        <div class="field"><label>Lunghezza presa [mm]</label><input name="lungh_presa_mm" type="number" step="any" value="{{ u.get('lungh_presa_mm','') }}"></div>
+        <div class="field"><label>Fuori pinza [mm]</label><input name="fuori_pinza_mm" type="number" step="any" value="{{ u.get('fuori_pinza_mm','') }}"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Parametri taglio default</div>
+      <div class="grid">
+        <div class="field"><label>Avanzamento Vf [mm/min]</label><input name="avanzamento_default" type="number" step="any" value="{{ u.get('avanzamento_default','') }}"></div>
+        <div class="field"><label>Rotazione [RPM]</label><input name="rotazione_default" type="number" step="any" value="{{ u.get('rotazione_default','') }}"></div>
+        <div class="field"><label>Vc [m/min]</label><input name="vc_default" type="number" step="any" value="{{ u.get('vc_default','') }}"></div>
+        <div class="field"><label>Fz [mm/z]</label><input name="fz_default" type="number" step="any" value="{{ u.get('fz_default','') }}"></div>
+        <div class="field"><label>Passo Z [mm]</label><input name="passo_z_default" type="number" step="any" value="{{ u.get('passo_z_default','') }}"></div>
+        <div class="field"><label>Passo lat. [mm]</label><input name="passo_lat_default" type="number" step="any" value="{{ u.get('passo_lat_default','') }}"></div>
+        <div class="field"><label>Tolleranza [mm]</label><input name="tolleranza_default" type="number" step="any" value="{{ u.get('tolleranza_default','') }}"></div>
+        <div class="field"><label>Vita utensile</label><input name="vita_utensile" type="number" value="{{ u.get('vita_utensile','') }}"></div>
+        <div class="field"><label>Dir. rotazione</label>
+          <select name="dir_rotazione"><option value="">--</option>
+            <option value="CW" {% if u.get('dir_rotazione')=='CW' %}selected{% endif %}>CW</option>
+            <option value="CCW" {% if u.get('dir_rotazione')=='CCW' %}selected{% endif %}>CCW</option>
+          </select></div>
+        <div class="field"><label>Refrigerante</label>
+          <select name="refrigerante"><option value="">--</option>
+            {% for rv in ['OFF','FLOOD','MIST','THROUGH','AIR'] %}
+            <option value="{{ rv }}" {% if u.get('refrigerante')==rv %}selected{% endif %}>{{ rv }}</option>
+            {% endfor %}</select></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Note</div>
+      <div class="field"><textarea name="note" rows="3" style="resize:vertical">{{ u.get('note','') }}</textarea></div>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">&#10003; Salva</button>
+      <a href="/" class="btn btn-secondary">Annulla</a>
+    </div>
+  </form>
+</div>
+</body></html>
+"""
+
 @app.route('/utensile/nuovo', methods=['GET','POST'])
 def utensile_nuovo():
     if request.method == 'POST':
@@ -484,6 +593,18 @@ def _salva_utensile(uid):
             'nome_pinza':         f.get('nome_pinza','').strip() or None,
             'lungh_presa_mm':     flt('lungh_presa_mm'),
             'fuori_pinza_mm':     flt('fuori_pinza_mm'),
+            # Parametri taglio
+            'avanzamento_default': flt('avanzamento_default'),
+            'rotazione_default':   flt('rotazione_default'),
+            'vc_default':          flt('vc_default'),
+            'fz_default':          flt('fz_default'),
+            'passo_z_default':     flt('passo_z_default'),
+            'passo_lat_default':   flt('passo_lat_default'),
+            'tolleranza_default':  flt('tolleranza_default'),
+            'vita_utensile':       intt('vita_utensile', None),
+            'dir_rotazione':       f.get('dir_rotazione','').strip() or None,
+            'refrigerante':        f.get('refrigerante','').strip() or None,
+            'alias':               f.get('alias','').strip() or None,
         }
 
         if uid:
