@@ -49,6 +49,27 @@ def init_db():
         conn.commit(); conn.close()
     except Exception as e:
         print(f'[WARN] init_db: {e}')
+    # Migration: aggiunge colonne mancanti al DB esistente (ALTER TABLE ignora se esistono gia')
+    try:
+        _mc = get_conn()
+        _migrations = [
+            "ALTER TABLE utensile ADD COLUMN sito_web TEXT",
+            "ALTER TABLE utensile ADD COLUMN num_magazzino INTEGER",
+            "ALTER TABLE utensile ADD COLUMN rivestimento TEXT",
+            "ALTER TABLE utensile ADD COLUMN refrigerante TEXT",
+            "ALTER TABLE utensile ADD COLUMN dir_rotazione TEXT",
+            "ALTER TABLE utensile ADD COLUMN conico INTEGER",
+            "ALTER TABLE utensile ADD COLUMN angolo_conico_gradi REAL",
+            "ALTER TABLE utensile ADD COLUMN lunghezza_tagl2_mm REAL",
+            "ALTER TABLE utensile ADD COLUMN passo_z_default REAL",
+            "ALTER TABLE utensile ADD COLUMN passo_lat_default REAL",
+        ]
+        for _msql in _migrations:
+            try: _mc.execute(_msql)
+            except Exception: pass  # colonna gia' presente
+        _mc.commit(); _mc.close()
+    except Exception as _me:
+        print(f'[WARN] migration: {_me}')
 
 def carica_config():
     default = {'formati_attivi':['cimatron_v26'],'export_ora':'22:00','output_rete':'','keep_last_n':7,'anthropic_api_key':''}
