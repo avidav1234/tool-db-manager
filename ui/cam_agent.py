@@ -315,9 +315,72 @@ def tool_testa_plugin(percorso_plugin: str, filepath_test: str = None):
     except Exception as e:
         return {'ok': False, 'fase': 'import', 'errore': str(e), 'traceback': traceback.format_exc()[:300]}
 
+
+CHECKPOINT_DIR = os.path.join(_DIR, '..', 'checkpoints')
+
+def tool_salva_checkpoint(task_id, step, dati):
+    """Salva lo stato del task su disco dopo ogni step completato."""
+    try:
+        os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+        cp_file = os.path.join(CHECKPOINT_DIR, f'{task_id}.json')
+        cp = {}
+        if os.path.exists(cp_file):
+            with open(cp_file) as f: cp = json.load(f)
+        import time
+        cp[step] = {'dati': dati, 'ts': time.time()}
+        cp['ultimo_step'] = step
+        cp['task_id'] = task_id
+        with open(cp_file, 'w') as f: json.dump(cp, f, ensure_ascii=False, indent=2, default=str)
+        return {'ok': True, 'task_id': task_id, 'step': step,
+                'steps_salvati': [k for k in cp if k not in ('ultimo_step','task_id')]}
+    except Exception as e:
+        return {'errore': str(e)}
+
+def tool_leggi_checkpoint(task_id):
+    """Legge checkpoint salvato. Usa quando riprendi un task interrotto."""
+    try:
+        cp_file = os.path.join(CHECKPOINT_DIR, f'{task_id}.json')
+        if not os.path.exists(cp_file): return {'trovato': False, 'task_id': task_id}
+        with open(cp_file) as f: cp = json.load(f)
+        return {'trovato': True, 'task_id': task_id, 'ultimo_step': cp.get('ultimo_step'),
+                'steps': [k for k in cp if k not in ('ultimo_step','task_id')], 'dati': cp}
+    except Exception as e:
+        return {'errore': str(e)}
+
+def tool_lista_checkpoint():
+    """Elenca tutti i task con checkpoint salvato."""
+    try:
+        os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+        tasks = []
+        for f in os.listdir(CHECKPOINT_DIR):
+            if not f.endswith('.json'): continue
+            try:
+                with open(os.path.join(CHECKPOINT_DIR, f)) as fp: cp = json.load(fp)
+                tasks.append({'task_id': cp.get('task_id', f[:-5]),
+                              'ultimo_step': cp.get('ultimo_step'),
+                              'steps': [k for k in cp if k not in ('ultimo_step','task_id')]})
+            except: pass
+        return {'tasks': tasks, 'totale': len(tasks)}
+    except Exception as e:
+        return {'errore': str(e)}
+
+def tool_cancella_checkpoint(task_id):
+    """Cancella checkpoint di un task completato."""
+    try:
+        cp_file = os.path.join(CHECKPOINT_DIR, f'{task_id}.json')
+        if os.path.exists(cp_file): os.remove(cp_file); return {'ok': True, 'cancellato': task_id}
+        return {'ok': False, 'msg': 'Non trovato'}
+    except Exception as e:
+        return {'errore': str(e)}
+
 # ── TOOL REGISTRY ──────────────────────────────────────────────────────────
 
 TOOLS = [
+    {"name":"salva_checkpoint","description":"IMPORTANTE: salva progresso task su disco dopo ogni step. Permette di riprendere se si raggiunge il limite turni. Chiama dopo ogni step completato.",
+     "input_schema":{"type":"object","properties":{"task_id":{"type":"string","description":"ID univoco task, es. import_worknc_v2024"},"step":{"type":"string","description":"Step completato: schema_letto|analisi|mapping|dry_run|import|verifica|fix_applicato"},"dati":{"type":"object"}},"required":["task_id","step","dati"]}},
+    {"name":"leggi_checkpoint","description":"Legge checkpoint salvato. Usa SUBITO quando utente dice continua o riprendi.","input_schema":{"type":"object","properties":{"task_id":{"type":"string"}},"required":["task_id"]}},
+    {"name":"lista_checkpoint","description":"Elenca task con checkpoint salvato.","input_schema":{"type":"object","properties":{},"required":[]}},
+    {"name":"cancella_checkpoint","description":"Cancella checkpoint task completato.","input_schema":{"type":"object","properties":{"task_id":{"type":"string"}},"required":["task_id"]}},
     {"name":"leggi_schema_db","description":"Legge struttura completa DB master: tabelle, colonne, righe.",
      "input_schema":{"type":"object","properties":{},"required":[]}},
     {"name":"analizza_file_cam","description":"Analizza file CAM (ZIP Cimatron, CSV, XML): colonne, campioni, software rilevato.",
@@ -351,6 +414,10 @@ TOOLS = [
 ]
 
 TOOL_FN = {
+    'salva_checkpoint':     lambda i: tool_salva_checkpoint(i['task_id'],i['step'],i.get('dati',{})),
+    'leggi_checkpoint':     lambda i: tool_leggi_checkpoint(i['task_id']),
+    'lista_checkpoint':     lambda i: tool_lista_checkpoint(),
+    'cancella_checkpoint':  lambda i: tool_cancella_checkpoint(i['task_id']),
     'leggi_schema_db':      lambda i: tool_leggi_schema_db(),
     'analizza_file_cam':    lambda i: tool_analizza_file_cam(i['filepath']),
     'confronta_con_schema': lambda i: tool_confronta_con_schema(i['analisi']),
@@ -391,6 +458,11 @@ REGOLE ASSOLUTE:
 - NON spiegare cosa faresti — FALLO direttamente con i tool
 - Dopo modifica_file SEMPRE comunica quale file modificare e come riavviare
 - DROP TABLE e DELETE senza WHERE sono bloccati per sicurezza
+CHECKPOINT - REGOLA FONDAMENTALE:
+- Dopo OGNI step completato: salva_checkpoint(task_id, step, risultati)
+- Se raggiungi il limite turni il lavoro NON va perso - e' salvato su disco
+- Quando utente dice 'continua': lista_checkpoint() poi leggi_checkpoint(task_id) e riparti
+
 - Non modificare mai ui/app.py o ui/cam_agent.py (core dell'app)
 - Puoi modificare liberamente: learner/*.py, plugins/**/*.py
 
@@ -401,7 +473,7 @@ File principali:
 - plugins/cimatron/_core.py — core plugin Cimatron
 - plugins/_loader.py — loader plugin dinamico"""
 
-def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=8):
+def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
     import urllib.request, ssl
     api_key = _get_api_key()
     if not api_key:
@@ -478,4 +550,4 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=8):
             results.append({'type':'tool_result','tool_use_id':tu['id'],'content':res_str})
         messages.append({'role':'user','content':results})
 
-    return {'risposta':'Limite turni raggiunto.','tool_calls':tool_calls_log,'history':messages}
+    return {'risposta': f'Limite {max_turns} turni. Progresso salvato nei checkpoint. Scrivi "continua [task_id]" per riprendere.','tool_calls':tool_calls_log,'history':messages}
