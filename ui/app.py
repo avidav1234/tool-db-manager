@@ -15,14 +15,6 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config.json')
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'output', 'manual')
 
 app = Flask(__name__)
-app.config['PROPAGATE_EXCEPTIONS'] = False
-
-@app.errorhandler(500)
-def handle_500(e):
-    import traceback
-    tb = traceback.format_exc()
-    return f'<pre style="color:red;padding:1rem">{tb}</pre>', 500
-
 # CORS: permetti richieste dal Format Learner (porta 5001)
 @app.after_request
 def add_cors_headers(response):
@@ -215,6 +207,7 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
   <a href="/export" class="{{ 'active' if active=='export' }}">Export</a>
   <a href="/cam" class="{{ 'active' if active=='cam' }}">CAM</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
+  <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente CAM</a>
   <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
   <a href="/test-agente" {% if active=='test' %}class="active"{% endif %}
        style="color:{% if active=='test' %}#fff{% else %}#fbbf24{% endif %}">&#129516; Test AI</a>
