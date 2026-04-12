@@ -127,7 +127,48 @@ MASTER_FIELDS = {
     'tolleranza_default':    {'label': 'Tolleranza [mm]',                 'tipo': 'float',
                               'keywords': ['tolleranza','tolerance'], 'esempio': '0.01'},
     'tecnologia':            {'label': 'Tecnologia lavorazione',          'tipo': 'string',
-                              'keywords': ['tecnologia','technology','fresatura','foratura'], 'esempio': 'Fresatura'},
+                              'keywords': ['tecnologia','technology','fresatura','foratura'], 'esempio': 'Fresatura'},,
+    # --- Filettatura ---
+    'passo_mm':              {'label': 'Passo filetto [mm]',                'tipo': 'float',
+                              'keywords': ['passo','pitch','step','filetto'], 'esempio': '1.5'},
+    'num_filetti':           {'label': 'Numero filetti/starts',             'tipo': 'int',
+                              'keywords': ['filetti','threads','starts','numero filetti'], 'esempio': '1'},
+    # --- Profilo geometrico avanzato (lollipop, sagomati, speciali) ---
+    'diam_libero_mm':        {'label': 'Diametro libero/stylus [mm]',       'tipo': 'float',
+                              'keywords': ['libero','stylus','free diam','stelo libero'], 'esempio': '8.0'},
+    'altezza_cilindro_mm':   {'label': 'Altezza cilindro [mm]',             'tipo': 'float',
+                              'keywords': ['cilindro','cylinder height','altezza cil'], 'esempio': '5.0'},
+    'diam_base_piatta_mm':   {'label': 'Diametro base piatta [mm]',         'tipo': 'float',
+                              'keywords': ['base piatta','flat base','piatto inf'], 'esempio': '4.0'},
+    'centro_arco_y_mm':      {'label': 'Centro arco Y profilo [mm]',        'tipo': 'float',
+                              'keywords': ['centro arco','arc center','arco y'], 'esempio': '2.0'},
+    'raggio_punta2_mm':      {'label': 'Raggio punta tip [mm]',             'tipo': 'float',
+                              'keywords': ['raggio punta','tip radius','raggio tip'], 'esempio': '0.5'},
+    'raggio_superiore_mm':   {'label': 'Raggio superiore [mm]',             'tipo': 'float',
+                              'keywords': ['raggio sup','upper radius','raggio superiore'], 'esempio': '2.0'},
+    'raggio_profilo_mm':     {'label': 'Raggio profilo sagomato [mm]',      'tipo': 'float',
+                              'keywords': ['raggio profilo','profile radius','profilo'], 'esempio': '3.0'},
+    'lunghezza_conica_mm':   {'label': 'Lunghezza zona conica/sformo [mm]', 'tipo': 'float',
+                              'keywords': ['conica','taper length','sformo','conico'], 'esempio': '10.0'},
+    'altezza_raggio_sup_mm': {'label': 'Altezza raggio superiore [mm]',     'tipo': 'float',
+                              'keywords': ['altezza raggio','upper radius height'], 'esempio': '3.0'},
+    # --- Stelo gambo ---
+    'diam_gambo1_mm':        {'label': 'Diametro gambo [mm]',               'tipo': 'float',
+                              'keywords': ['gambo','stelo','shank','schaft'], 'esempio': '10.0'},
+    'diam_gambo_top_mm':     {'label': 'Diametro gambo superiore [mm]',     'tipo': 'float',
+                              'keywords': ['gambo top','shank top','diam top'], 'esempio': '10.0'},
+    'diam_gambo_bot_mm':     {'label': 'Diametro gambo inferiore [mm]',     'tipo': 'float',
+                              'keywords': ['gambo bot','shank bot','diam bot'], 'esempio': '8.0'},
+    'lunghezza_gambo_mm':    {'label': 'Lunghezza cono gambo [mm]',         'tipo': 'float',
+                              'keywords': ['cono gambo','shank taper','lungh gambo'], 'esempio': '5.0'},
+    # --- Portautensile esteso ---
+    'nome_portautensile':    {'label': 'Nome porta utensile (holder)',       'tipo': 'string',
+                              'keywords': ['porta utensile','tool holder','holder name','portautensile'], 'esempio': 'HSK63A_D10'},
+    'nome_materiale_pu':     {'label': 'Materiale porta utensile',          'tipo': 'string',
+                              'keywords': ['materiale pu','holder material','mat portautensile'], 'esempio': 'Acciaio'},
+    # --- Magazzino ---
+    'numero_magazzino':      {'label': 'Numero magazzino CNC',              'tipo': 'int',
+                              'keywords': ['numero magazzino','magazine','slot','n mag'], 'esempio': '5'}
 }
 
 TIPO_GUESS = {
