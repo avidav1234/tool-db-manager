@@ -432,11 +432,22 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=8):
                      'content-type':'application/json'},
             method='POST'
         )
-        try:
-            with urllib.request.urlopen(req, context=ctx, timeout=60) as r:
-                resp = json.loads(r.read())
-        except Exception as e:
-            return {'errore': f'Errore API: {e}', 'history': messages}
+        import time as _time, urllib.error as _ue
+        resp = None
+        for _att in range(3):
+            try:
+                with urllib.request.urlopen(req, context=ctx, timeout=120) as r:
+                    resp = json.loads(r.read())
+                break
+            except _ue.HTTPError as e:
+                if e.code == 429:
+                    _time.sleep(30 * (_att + 1))
+                    continue
+                return {'errore': f'Errore API: HTTP Error {e.code}: {e.reason}', 'history': messages}
+            except Exception as e:
+                return {'errore': f'Errore API: {e}', 'history': messages}
+        if resp is None:
+            return {'errore': 'Rate limit 429 persistente. Riprova tra 2 minuti.', 'history': messages}
 
         messages.append({'role':'assistant','content':resp['content']})
         tool_uses = [b for b in resp['content'] if b.get('type')=='tool_use']
