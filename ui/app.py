@@ -551,9 +551,12 @@ def utensile_modifica(uid):
     if not row:
         return redirect(url_for('home', msg='Utensile non trovato', mtype='err'))
     tipi, materiali, fornitori = _get_lookup()
+    # None -> '' e arrotonda float per display pulito nel form
+    u = {k: ('' if v is None else v) for k, v in dict(row).items()}
+    u = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in u.items()}
     return render_template_string(FORM_HTML,
-        titolo=f'Modifica — {row["codice_interno"]}', action=f'/utensile/{uid}/modifica',
-        u=dict(row), tipi=tipi, materiali=materiali, fornitori=fornitori,
+        titolo='Modifica — ' + row['codice_interno'], action=f'/utensile/{uid}/modifica',
+        u=u, tipi=tipi, materiali=materiali, fornitori=fornitori,
         modifica=True, active='home', msg='', mtype='')
 
 def _salva_utensile(uid):
