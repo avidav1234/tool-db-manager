@@ -230,8 +230,6 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         # Tipo attacco da coupling
         tipo_attacco = None
         holder_name = row['holder_name'] or ''
-        holder_comment = row.get('holder_comment') or ''
-        holder_str = holder_name + ' ' + holder_comment
         try: holder_comment = row['holder_comment'] or ''
         except: holder_comment = ''
         holder_str = holder_name + ' ' + holder_comment
