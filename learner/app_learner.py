@@ -7,12 +7,13 @@ Apri: http://localhost:5001
 import os, sys, json, tempfile
 sys.path.insert(0, os.path.dirname(__file__))
 
-from flask import Flask, render_template_string, request, redirect, url_for, send_file
+from flask import Flask, render_template_string, request, redirect, url_for, send_file, session
 from format_learner import analizza_file, MASTER_FIELDS
 from profile_manager import salva_profilo, carica_profilo, lista_profili, elimina_profilo
 from universal_converter import converti
 
 app = Flask(__name__)
+app.secret_key = 'tooldb-learner-2025'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # Preload moduli al boot per abilitare hot-reload
@@ -349,42 +350,27 @@ def analizza():
     fp = os.path.join(UPLOAD_FOLDER, f.filename)
     f.save(fp)
 
-    # Gestione speciale: database Hypermill (.db)
+    # Gestione speciale: database Hypermill (.db) - import diretto nel DB master
     if f.filename.lower().endswith('.db'):
         try:
             import sys as _sys, os as _os
             _ld = _os.path.dirname(_os.path.abspath(__file__))
             if _ld not in _sys.path: _sys.path.insert(0, _ld)
             from hypermill_db_importer import importa_hypermill_db, _is_hypermill_db
-            if _is_hypermill_db(fp):
-                result = importa_hypermill_db(fp, None, dry_run=True)
-                utensili = result.get('utensili', [])
-                # Costruisci mapping dal primo utensile come template
-                mapping_template = {}
-                campi_utensile = ['codice_interno','alias','descrizione','diametro_mm',
-                                  'raggio_punta_mm','lunghezza_totale_mm','num_taglienti',
-                                  'nome_pinza','fuori_pinza_mm','avanzamento_default',
-                                  'fz_default','rotazione_default','vc_default']
-                for campo in campi_utensile:
-                    mapping_template[campo] = {
-                        'campo_master': campo, 'confidenza': 'alta',
-                        'trasformazione': 'nessuna', 'motivazione': 'Hypermill DB import'
-                    }
-                session_data = {
-                    'filepath': fp,
-                    'mapping': mapping_template,
-                    'struttura': {'software_cam': 'Hypermill', 'tipo': 'db_nativo'},
-                    'analisi_colonne': {},
-                    'log': [{'livello':'L1','msg':f'Database Hypermill: {len(utensili)} utensili trovati'}],
-                    'verificato': True, 'score': 95,
-                    'hypermill_db': True,
-                    'utensili_count': len(utensili),
-                }
-                import json as _json
-                session['analisi'] = _json.dumps(session_data, default=str)
-                return redirect(url_for('verifica_mappatura'))
+            if not _is_hypermill_db(fp):
+                return redirect(url_for('home', msg='File .db non riconosciuto come database Hypermill'))
+            # Trova il DB master
+            _root = _os.path.join(_ld, '..')
+            master_db = _os.path.join(_root, 'database', 'tool_master.db')
+            result = importa_hypermill_db(fp, master_db, dry_run=False)
+            importati = result.get('importati', 0)
+            errori = result.get('errori', 0)
+            msg = f'Hypermill: {importati} utensili importati nel DB master'
+            if errori: msg += f' ({errori} errori)'
+            return redirect(url_for('home', msg=msg))
         except Exception as e:
-            return redirect(url_for('home', msg=f'Errore import DB Hypermill: {e}'))
+            import traceback as _tb
+            return redirect(url_for('home', msg=f'Errore DB Hypermill: {str(e)[:100]}'))
 
     try:
         # Tenta orchestratore multilivello
