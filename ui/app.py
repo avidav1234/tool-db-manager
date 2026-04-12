@@ -2646,4 +2646,4 @@ if __name__ == '__main__':
     print('  Tool DB Manager  ->  http://localhost:5000')
     print('  Format Learner   ->  python learner/app_learner.py  (porta 5001)')
     print('')
-    app.run(debug=True, port=5000, use_reloader=True)
+    app.run(debug=True, port=5000, use_reloader=True, threaded=True)
