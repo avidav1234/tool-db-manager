@@ -196,6 +196,72 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
   </div>
   </form>
 </div>
+
+<div class="card" style="border-color:#86efac;background:#f0fdf4">
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <div>
+      <h2 style="margin:0;color:#166534">&#8679; Importa nel DB master</h2>
+      <p style="margin:.25rem 0 0;font-size:.8rem;color:#555">
+        Inserisce gli utensili direttamente in Tool DB Manager
+        &mdash; usa il parser deterministico Cimatron (35 campi, 0 token AI)
+      </p>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <label style="font-size:.8rem;color:#555;display:flex;align-items:center;gap:.3rem">
+        <input type="checkbox" id="lrn_dry_run"> Simulazione
+      </label>
+      <button onclick="lrnImportaDB()"
+              style="padding:.5rem 1.25rem;background:#166534;color:#fff;border:none;
+                     border-radius:6px;cursor:pointer;font-size:.875rem;font-weight:500">
+        &#8679; Importa nel DB master
+      </button>
+    </div>
+  </div>
+  <div id="lrn_status" style="margin-top:.75rem;font-size:.85rem;display:none;
+       padding:.5rem .75rem;border-radius:6px"></div>
+</div>
+
+<script>
+function lrnImportaDB() {
+  const fp  = {{ r.filepath | tojson }};
+  const dry = document.getElementById('lrn_dry_run').checked;
+  const box = document.getElementById('lrn_status');
+  box.style.display = 'block';
+  box.style.background = '#fef9c3';
+  box.style.color = '#713f12';
+  box.textContent = 'Importazione in corso...';
+  fetch('http://localhost:5000/api/importa-db', {
+    method : 'POST',
+    headers: {'Content-Type':'application/json'},
+    body   : JSON.stringify({filepath: fp, dry_run: dry})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.errore) {
+      box.style.background = '#fee2e2';
+      box.style.color = '#991b1b';
+      box.textContent = 'Errore: ' + d.errore;
+    } else {
+      box.style.background = dry ? '#fef9c3' : '#dcfce7';
+      box.style.color = dry ? '#713f12' : '#166534';
+      let msg = (dry ? 'SIMULAZIONE — ' : '') +
+        d.inseriti + ' inseriti, ' +
+        d.aggiornati + ' aggiornati';
+      if (d.taglio_inserite) msg += ', ' + d.taglio_inserite + ' condizioni taglio';
+      if (d.versione) msg += ' (v' + d.versione + ')';
+      if (d.errori && d.errori.length) msg += ' — ' + d.errori.length + ' errori';
+      if (!dry) msg += ' — <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master →</a>';
+      box.innerHTML = msg;
+    }
+  })
+  .catch(e => {
+    box.style.background = '#fee2e2';
+    box.style.color = '#991b1b';
+    box.textContent = 'Connessione fallita: ' + e.message + ' (app.py in esecuzione su porta 5000?)';
+  });
+}
+</script>
+
 <div class="card"><h2>Anteprima</h2>
 <div style="overflow-x:auto"><table>
 <thead><tr>{% for c in r.colonne_originali %}<th>{{ c }}</th>{% endfor %}</tr></thead>
