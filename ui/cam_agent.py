@@ -253,6 +253,68 @@ def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
     except Exception as e:
         return {'errore': str(e)}
 
+
+def tool_lista_plugin():
+    """Restituisce tutti i plugin installati con software, versione, firma."""
+    sys.path.insert(0, os.path.join(_DIR, '..'))
+    try:
+        import importlib
+        if 'plugins._loader' in sys.modules:
+            importlib.reload(sys.modules['plugins._loader'])
+        from plugins._loader import lista_plugin
+        return {'plugin': lista_plugin(), 'totale': len(lista_plugin())}
+    except Exception as e:
+        return {'errore': str(e)}
+
+def tool_testa_plugin(percorso_plugin: str, filepath_test: str = None):
+    """
+    Testa un plugin in isolamento prima di attivarlo.
+    Verifica: importazione, istanziazione, rileva(), analizza() se filepath_test fornito.
+    Restituisce: ok/errore + dettagli.
+    """
+    try:
+        import importlib.util, ast
+        full = _safe_path(percorso_plugin)
+        # 1. Validazione sintassi
+        with open(full) as f: src = f.read()
+        try: ast.parse(src)
+        except SyntaxError as e:
+            return {'ok': False, 'fase': 'sintassi', 'errore': str(e)}
+        # 2. Import isolato
+        spec = importlib.util.spec_from_file_location('_test_plugin', full)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        # 3. Trova la classe
+        from plugins._base import PluginCAM
+        cls = None
+        for name in dir(mod):
+            obj = getattr(mod, name)
+            try:
+                if (isinstance(obj, type) and issubclass(obj, PluginCAM)
+                        and obj is not PluginCAM
+                        and getattr(obj,'versione','') not in ('','core')):
+                    cls = obj; break
+            except: continue
+        if not cls:
+            return {'ok': False, 'fase': 'classe', 'errore': 'Nessuna classe PluginCAM trovata'}
+        plugin = cls()
+        result = {
+            'ok': True, 'plugin': repr(plugin),
+            'software': plugin.software, 'versione': plugin.versione,
+            'estensioni': plugin.estensioni, 'firma': plugin.FIRMA,
+        }
+        # 4. Test rileva + analizza su file reale (opzionale)
+        if filepath_test and os.path.exists(filepath_test):
+            conf = plugin.rileva(filepath_test)
+            result['rileva_confidenza'] = conf
+            if conf > 0.3:
+                analisi = plugin.analizza(filepath_test)
+                result['analisi_ok'] = 'errore' not in analisi
+                result['righe'] = analisi.get('sezioni',{}).get('Cutters',{}).get('righe',0)
+        return result
+    except Exception as e:
+        return {'ok': False, 'fase': 'import', 'errore': str(e), 'traceback': traceback.format_exc()[:300]}
+
 # ── TOOL REGISTRY ──────────────────────────────────────────────────────────
 
 TOOLS = [
@@ -272,6 +334,13 @@ TOOLS = [
      "input_schema":{"type":"object","properties":{"filtro":{"type":"string"},"limit":{"type":"integer"}},"required":[]}},
     {"name":"leggi_file","description":"Legge un file del progetto con numeri di riga (es. 'learner/orchestrator_agent.py'). Usalo per analizzare bug nel codice prima di correggerli.",
      "input_schema":{"type":"object","properties":{"percorso":{"type":"string","description":"Percorso relativo alla root del progetto"}},"required":["percorso"]}},
+    {"name":"lista_plugin","description":"Elenca tutti i plugin CAM installati: software, versione, firma di rilevamento.",
+     "input_schema":{"type":"object","properties":{},"required":[]}},
+    {"name":"testa_plugin","description":"Testa un plugin in isolamento: sintassi, import, classe, rileva(). Usalo prima di attivare un plugin generato dall agente.",
+     "input_schema":{"type":"object","properties":{
+       "percorso_plugin":{"type":"string","description":"Percorso relativo al plugin, es. 'plugins/worknc/v2024/plugin.py'"},
+       "filepath_test":{"type":"string","description":"File reale per testare rileva() e analizza() (opzionale)"}
+     },"required":["percorso_plugin"]}},
     {"name":"modifica_file","description":"Corregge un bug in un file del progetto tramite str_replace. vecchio_testo deve apparire ESATTAMENTE una volta. Usalo dopo leggi_file per verificare il contesto.",
      "input_schema":{"type":"object","properties":{
        "percorso":{"type":"string","description":"Percorso relativo alla root, es. 'learner/orchestrator_agent.py'"},
@@ -289,6 +358,8 @@ TOOL_FN = {
     'esegui_sql':           lambda i: tool_esegui_sql(i['sql'], i.get('params')),
     'importa_file':         lambda i: tool_importa_file(i['filepath'], i.get('dry_run',False)),
     'leggi_utensili':       lambda i: tool_leggi_utensili(i.get('filtro'), i.get('limit',10)),
+    'lista_plugin':          lambda i: tool_lista_plugin(),
+    'testa_plugin':         lambda i: tool_testa_plugin(i['percorso_plugin'], i.get('filepath_test')),
     'leggi_file':           lambda i: tool_leggi_file(i['percorso']),
     'modifica_file':        lambda i: tool_modifica_file(i['percorso'], i['vecchio_testo'],
                                                           i['nuovo_testo'], i.get('descrizione','')),
@@ -309,6 +380,15 @@ Regole operative - Import:
 - Quando l utente dice 'procedi', 'ok', 'si', esegui l azione
 - L alias e il nome officina: Cimatron=Commento, Hypermill=Tool ID, Mastercam=Tool comment
 - fuori_pinza_mm e il dato piu critico per la sicurezza in macchina: verificalo sempre
+
+Regole operative - Generazione plugin per nuovo CAM:
+- Quando un file non ha plugin, usa lista_plugin per vedere cosa esiste
+- Scegli il _core piu vicino (es. per Cimatron 2026 usa plugins/cimatron/_core.py)
+- Leggi _core.py e un plugin esistente come esempio con leggi_file
+- Crea il nuovo plugin in plugins/{software}/{versione}/plugin.py
+- Il plugin deve ereditare il _core, fare override SOLO di cio che cambia
+- Dopo modifica_file, usa testa_plugin per validare PRIMA di importare
+- Se testa_plugin fallisce, correggi con modifica_file e ritesta
 
 Regole operative - Debug e fix codice:
 - Quando un import produce risultati anomali (0 campi mappati, errori nel log), ANALIZZA il codice
