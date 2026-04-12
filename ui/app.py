@@ -926,16 +926,19 @@ def importa():
                                     # Parametri colonna
                                     _p = {k:v for k,v in _rec.items() if k not in ('tipo','materiale_tagliente','codice_interno')}
                                     _esiste = _conn.execute('SELECT id FROM utensile WHERE codice_interno=?',(_cod,)).fetchone()
+                                    # Filtra _p alle sole colonne presenti nello schema
+                                    _schema_cols = {r[1] for r in _conn.execute("PRAGMA table_info(utensile)").fetchall()}
+                                    _p_safe = {k:v for k,v in _p.items() if k in _schema_cols}
                                     if not dry_run:
                                         if _esiste:
-                                            _sets = ','.join(f'{k}=:{k}' for k in _p if hasattr(_p[k],().__class__))
-                                            _sets = ','.join(f'{k}=:{k}' for k in _p)
-                                            _conn.execute(f'UPDATE utensile SET {_sets} WHERE codice_interno=:_cod',{**_p,'_cod':_cod})
+                                            if _p_safe:
+                                                _sets = ','.join(f'{k}=:{k}' for k in _p_safe)
+                                                _conn.execute(f'UPDATE utensile SET {_sets} WHERE codice_interno=:_cod',{**_p_safe,'_cod':_cod})
                                             _agg += 1
                                         else:
-                                            _cols = 'codice_interno,id_tipo,id_materiale,' + ','.join(_p)
-                                            _vals = ':_cod,:_tid,:_mid,' + ','.join(f':{k}' for k in _p)
-                                            _conn.execute(f'INSERT INTO utensile ({_cols}) VALUES ({_vals})',{**_p,'_cod':_cod,'_tid':_tid,'_mid':_mid})
+                                            _cols = 'codice_interno,id_tipo,id_materiale,' + ','.join(_p_safe)
+                                            _vals = ':_cod,:_tid,:_mid,' + ','.join(f':{k}' for k in _p_safe)
+                                            _conn.execute(f'INSERT INTO utensile ({_cols}) VALUES ({_vals})',{**_p_safe,'_cod':_cod,'_tid':_tid,'_mid':_mid})
                                             _ins += 1
                                     else:
                                         if _esiste: _agg += 1
