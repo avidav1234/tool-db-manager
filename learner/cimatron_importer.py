@@ -1,21 +1,4 @@
-CREATE TABLE IF NOT EXISTS condizioni_taglio (
-            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-            id_utensile         INTEGER NOT NULL,
-            materiale_pezzo     TEXT NOT NULL,
-            applicazione        TEXT,
-            cam_sorgente        TEXT,
-            vc_m_min            REAL,
-            rotazione_rpm       REAL,
-            fz_mm_z             REAL,
-            avanzamento_mm_min  REAL,
-            ap_mm               REAL,
-            ae_mm               REAL,
-            rompitruciolo       REAL,
-            decrementa          REAL,
-            refrigerante        TEXT,
-            note                TEXT,
-            UNIQUE(id_utensile, materiale_pezzo, applicazione)
-        )"""
+"""
 cimatron_importer.py
 ====================
 Importa TUTTI i dati Cimatron nel DB master:
@@ -306,6 +289,7 @@ def importa_cutters(rows, conn, dry_run=False):
                 if r: pid = r['id']
 
             params = dict(
+                cam_sorgente   = 'Cimatron',
                 # Identificazione
                 codice_catalogo          = _to_str(row.get('2103')),
                 descrizione              = _to_str(row.get('1102')),
@@ -398,16 +382,17 @@ def importa_material(rows, conn, dry_run=False):
             id_utensile     INTEGER NOT NULL REFERENCES utensile(id) ON DELETE CASCADE,
             materiale_pezzo TEXT NOT NULL,
             applicazione    TEXT,
-            vf_mm_min       REAL,
-            n_rpm           REAL,
-            vc_m_min        REAL,
-            fz_mm           REAL,
-            ap_mm           REAL,
-            ae_mm           REAL,
-            passo_lat       REAL,
-            rompitruciolo   REAL,
-            decrementa      REAL,
-            refrigerante    TEXT,
+            cam_sorgente        TEXT,
+            vc_m_min            REAL,
+            rotazione_rpm       REAL,
+            fz_mm_z             REAL,
+            avanzamento_mm_min  REAL,
+            ap_mm               REAL,
+            ae_mm               REAL,
+            rompitruciolo       REAL,
+            decrementa          REAL,
+            refrigerante        TEXT,
+            note                TEXT,
             UNIQUE(id_utensile, materiale_pezzo, applicazione)
         )
     """)
@@ -424,15 +409,15 @@ def importa_material(rows, conn, dry_run=False):
                 id_utensile   = u['id'],
                 materiale_pezzo = mater,
                 applicazione  = None,
-                vf_mm_min     = _to_float(row.get('8101')),
-                n_rpm         = _to_float(row.get('8102')),
+                avanzamento_mm_min = _to_float(row.get('8101')),
+                rotazione_rpm      = _to_float(row.get('8102')),
                 vc_m_min      = _to_float(row.get('8103')),
-                fz_mm         = _to_float(row.get('8104')),
+                fz_mm_z            = _to_float(row.get('8104')),
                 ap_mm         = _to_float(row.get('8201')),
                 ae_mm         = _to_float(row.get('8202')),
                 rompitruciolo = _to_float(row.get('8301')),
                 decrementa    = _to_float(row.get('8302')),
-                passo_lat     = _to_float(row.get('8105')),
+                
                 refrigerante  = _to_str(row.get('8401')),
             )
             esiste = conn.execute(
@@ -442,15 +427,15 @@ def importa_material(rows, conn, dry_run=False):
             if not dry_run:
                 if esiste:
                     conn.execute("""UPDATE condizioni_taglio SET
-                        vc_m_min=:vc_m_min, rotazione_rpm=:rotazione_rpm, fz_mm_z=:fz_mm_z, avanzamento_mm_min=:avanzamento_mm_min,
+                        cam_sorgente=:cam_sorgente, vc_m_min=:vc_m_min, rotazione_rpm=:rotazione_rpm, fz_mm_z=:fz_mm_z, avanzamento_mm_min=:avanzamento_mm_min,
                         ap_mm=:ap_mm, ae_mm=:ae_mm, rompitruciolo=:rompitruciolo,
                         decrementa=:decrementa, refrigerante=:refrigerante
                         WHERE id=?""", {**params, 'id': esiste['id']})
                     agg += 1
                 else:
                     conn.execute("""INSERT INTO condizioni_taglio
-                        (id_utensile,materiale_pezzo,applicazione,cam_sorgente,vc_m_min,rotazione_rpm,fz_mm_z,avanzamento_mm_min,ap_mm,ae_mm,rompitruciolo,decrementa,refrigerante)
-                        VALUES (:id_utensile,:materiale_pezzo,:applicazione,:cam_sorgente,:vc_m_min,:rotazione_rpm,:fz_mm_z,:avanzamento_mm_min,:ap_mm,:ae_mm,:rompitruciolo,:decrementa,:refrigerante)""", params)
+                        (id_utensile,materiale_pezzo,applicazione,vc_m_min,n_rpm,fz_mm,vf_mm_min,ap_mm,ae_mm,rompitruciolo,decrementa,refrigerante)
+                        VALUES (:id_utensile,:materiale_pezzo,:applicazione,:vc_m_min,:n_rpm,:fz_mm,:vf_mm_min,:ap_mm,:ae_mm,:rompitruciolo,:decrementa,:refrigerante)""", params)
                     ins += 1
             else:
                 if esiste: agg += 1
