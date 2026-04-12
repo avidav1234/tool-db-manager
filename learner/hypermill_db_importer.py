@@ -30,7 +30,18 @@ def _is_hypermill_db(db_path):
         return False
 
 def _estrai_geometria(row, tool_type_id):
-    """Estrae parametri geometrici dai dbl_param in base al tipo."""
+    """
+    Estrae parametri geometrici dai dbl_param.
+    Decodifica verificata su manuali Moldino ETM/ETMLN/ASRM/ABPF:
+      dbl_param1  = altezza tagliente (l2)
+      dbl_param2  = diametro stelo/attacco
+      dbl_param3  = lunghezza smusso
+      dbl_param4  = DIAMETRO (D)
+      dbl_param5  = lunghezza punta (l1)
+      dbl_param7  = angolo cono
+      dbl_param8  = raggio corner (CR) per BULL, diam gambo scaricato per BALL
+      total_length = lunghezza totale utensile
+    """
     def p(i):
         try: return row[f'dbl_param{i}'] or 0.0
         except: return 0.0
@@ -39,30 +50,56 @@ def _estrai_geometria(row, tool_type_id):
         except: return 0
 
     geo = {
-        'lunghezza_totale_mm': row['total_length'],
-        'num_taglienti': ip(1) or None,
+        'lunghezza_totale_mm':  row['total_length'],
+        'num_taglienti':        ip(1) or None,
+        'diam_stelo_mm':        p(2) or None,
+        'angolo_conico_gradi':  p(7) or None,
     }
 
     if tool_type_id in (1, 5):
-        geo['diametro_mm'] = p(4)
-        geo['raggio_punta_mm'] = round(p(4) / 2.0, 4) if p(4) else None
-        geo['lunghezza_tagl_mm'] = p(3) or None
+        # Fresa sferica (BALL): D=p4, raggio=D/2, altezza_tagl=p1, lungh_punta=p5
+        geo['diametro_mm']       = p(4)
+        geo['raggio_punta_mm']   = round(p(4) / 2.0, 4) if p(4) else None
+        geo['lunghezza_tagl_mm'] = p(1) or None
+
     elif tool_type_id == 2:
-        geo['diametro_mm'] = p(4)
-        geo['raggio_punta_mm'] = 0.0
+        # Fresa piatta con inserto: D=p4
+        geo['diametro_mm']       = p(4)
+        geo['raggio_punta_mm']   = 0.0
+        geo['lunghezza_tagl_mm'] = p(1) or None
+
     elif tool_type_id == 3:
-        geo['diametro_mm'] = p(4)
-        geo['raggio_punta_mm'] = p(10) if p(10) else 0.0
-        geo['lunghezza_tagl_mm'] = p(5) or None
+        # Fresa torica/BULL: D=p4, CR=p8, altezza_tagl=p1, lungh_punta=p5
+        geo['diametro_mm']       = p(4)
+        geo['raggio_punta_mm']   = p(8) if p(8) else 0.0
+        geo['lunghezza_tagl_mm'] = p(1) or None
+
     elif tool_type_id == 4:
-        geo['diametro_mm'] = p(4)
+        # Punta (DRILL): D=p4, lungh_tagl=p1, angolo_punta=p7
+        geo['diametro_mm']       = p(4)
         geo['lunghezza_tagl_mm'] = p(1) or None
         geo['angolo_punta_gradi'] = p(7) or None
-    elif tool_type_id == 16:
-        geo['diametro_mm'] = p(4)
+
+    elif tool_type_id in (16,):
+        # Alesatore (REAM): D=p4, lungh_tagl=p1
+        geo['diametro_mm']       = p(4)
         geo['lunghezza_tagl_mm'] = p(1) or None
+
+    elif tool_type_id == 15:
+        # Fresa per filetti (THREAD): D=p4, passo=p9
+        geo['diametro_mm']       = p(4)
+        geo['passo_mm']          = p(9) or None
+
+    elif tool_type_id == 9:
+        # Maschio (TAP): D=p4
+        geo['diametro_mm']       = p(4)
+
     else:
-        geo['diametro_mm'] = p(4) or p(1) or None
+        geo['diametro_mm']       = p(4) or None
+        geo['lunghezza_tagl_mm'] = p(1) or None
+
+    # Campi comuni a tutti i tipi
+    if p(5): geo['raggio_raccordo_mm'] = p(5)  # lunghezza punta
 
     return {k: v for k, v in geo.items() if v is not None and v != 0.0}
 
@@ -103,8 +140,13 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
     """).fetchall()
 
     techs_raw = hm.execute("""
-        SELECT tt.tool_id, t.feedrate, t.dbl_param3 as rpm,
-               t.dbl_param5 as ap, tp.purpose
+        SELECT tt.tool_id, t.feedrate,
+               t.dbl_param2 as fz,
+               t.dbl_param3 as rpm,
+               t.dbl_param5 as ae,
+               t.dbl_param6 as ap,
+               t.dbl_param10 as vc,
+               tp.purpose
         FROM ToolTechnologies tt
         JOIN Technologies t ON tt.technology_id = t.technology_id
         LEFT JOIN TechnologyPurposes tp ON t.purpose_id = tp.id
@@ -139,21 +181,33 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             **geo,
         }
         if tech:
-            feed = tech['feedrate'] or 0
-            rpm  = tech['rpm'] or 0
-            ap   = tech['ap'] or 0
-            diam = utensile.get('diametro_mm') or 0
-            denti = utensile.get('num_taglienti') or 0
             import math as _math
-            if feed:  utensile['avanzamento_default'] = round(feed, 3)
-            if rpm:   utensile['rotazione_default'] = round(rpm, 1)
-            if ap:    utensile['passo_z_default'] = round(ap, 4)
-            # Calcola Fz = Feed / (RPM * denti)
-            if feed and rpm and denti:
-                utensile['fz_default'] = round(feed / (rpm * denti), 4)
-            # Calcola Vc = RPM * D * pi / 1000
-            if rpm and diam:
-                utensile['vc_default'] = round(rpm * diam * _math.pi / 1000, 2)
+            feed  = tech['feedrate'] or 0
+            rpm   = tech['rpm'] or 0
+            fz    = tech['fz'] or 0
+            ae    = tech['ae'] or 0
+            ap    = tech['ap'] or 0
+            vc    = tech['vc'] or 0
+            diam  = utensile.get('diametro_mm') or 0
+            denti = utensile.get('num_taglienti') or 0
+            # Fattori correzione NCTool (portautensile lungo riduce parametri)
+            feed_factor = row.get('feedrate_factor') or 1.0
+            spd_factor  = row.get('spindle_speed_factor') or 1.0
+            ae_factor   = row.get('infeed_width_factor') or 1.0
+            ap_factor   = row.get('infeed_length_factor') or 1.0
+            # Applica fattori
+            if feed:  utensile['avanzamento_default'] = round(feed * feed_factor, 2)
+            if rpm:   utensile['rotazione_default']   = round(rpm * spd_factor, 1)
+            if fz:    utensile['fz_default']           = round(fz, 4)
+            if ae:    utensile['passo_lat_default']    = round(ae * ae_factor, 4)
+            if ap:    utensile['passo_z_default']      = round(ap * ap_factor, 4)
+            if vc:    utensile['vc_default']           = round(vc, 2)
+            # Se Fz non disponibile calcolalo: Fz = Feed / (RPM * denti)
+            if not fz and feed and rpm and denti:
+                utensile['fz_default'] = round((feed * feed_factor) / (rpm * spd_factor * denti), 4)
+            # Se Vc non disponibile calcolalo: Vc = RPM * D * pi / 1000
+            if not vc and rpm and diam:
+                utensile['vc_default'] = round(rpm * spd_factor * diam * _math.pi / 1000, 2)
 
         utensile = {k: v for k, v in utensile.items() if v is not None and v != ''}
         utensili.append(utensile)
@@ -173,11 +227,13 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
 
     CAMPO_MAP = {
         'codice_interno', 'alias', 'descrizione', 'codice_catalogo',
-        'cam_sorgente', 'id_originale_cam', 'diametro_mm', 'raggio_punta_mm',
+        'cam_sorgente', 'id_originale_cam',
+        'diametro_mm', 'raggio_punta_mm', 'raggio_raccordo_mm',
         'lunghezza_totale_mm', 'lunghezza_tagl_mm', 'angolo_punta_gradi',
-        'num_taglienti', 'nome_pinza', 'fuori_pinza_mm',
+        'angolo_conico_gradi', 'diam_stelo_mm', 'passo_mm',
+        'num_taglienti', 'nome_pinza', 'fuori_pinza_mm', 'nome_prolunga',
         'avanzamento_default', 'rotazione_default', 'vc_default',
-        'fz_default', 'passo_z_default',
+        'fz_default', 'passo_z_default', 'passo_lat_default',
     }
 
     importati = errori = ignorati = 0
