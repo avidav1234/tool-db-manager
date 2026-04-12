@@ -544,6 +544,32 @@ def elimina(nome):
     elimina_profilo(nome)
     return redirect(url_for('profili_page', msg=f'"{nome}" eliminato'))
 
+@app.route('/api/version')
+def api_version():
+    """Mostra la versione dei moduli caricati (per debug)."""
+    import importlib, sys
+    info = {}
+    for mod in ['orchestrator_agent','format_learner','cimatron_parser']:
+        m = sys.modules.get(mod)
+        info[mod] = 'loaded' if m else 'not loaded'
+    return json.dumps({'status': 'ok', 'modules': info,
+                       'python': sys.version.split()[0]}, ensure_ascii=False)
+
+@app.route('/api/reload', methods=['POST'])
+def api_reload():
+    """Ricarica i moduli principali senza riavviare il server."""
+    import importlib, sys
+    reloaded = []
+    for mod in ['orchestrator_agent','format_learner','cimatron_parser',
+                'mapping_agent','profile_manager']:
+        if mod in sys.modules:
+            try:
+                importlib.reload(sys.modules[mod])
+                reloaded.append(mod)
+            except Exception as e:
+                pass
+    return json.dumps({'reloaded': reloaded}, ensure_ascii=False)
+
 @app.route('/converti', methods=['GET','POST'])
 def converti_page():
     profili = lista_profili()
