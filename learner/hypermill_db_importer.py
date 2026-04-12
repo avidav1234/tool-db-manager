@@ -119,8 +119,10 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         geo = _estrai_geometria(row, row['tool_type_id'])
         tech = techs.get(row['tool_id'])
 
+        # Rendi codice_interno unico aggiungendo il numero NC come suffisso
+        nc_code = row['nc_name'] or row['tool_name'] or ''
         utensile = {
-            'codice_interno':   row['nc_name'] or row['tool_name'] or '',
+            'codice_interno':   f"{nc_code}_hm_{row['nc_id']}" if nc_code else f"hm_{row['nc_id']}",
             'alias':            row['nc_number_str'] or '',
             'descrizione':      row['tool_name'] or '',
             'codice_catalogo':  row['ordering_code'] or '',
@@ -179,12 +181,9 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
 
             cols = ', '.join(insert_data.keys())
             ph = ', '.join(['?'] * len(insert_data))
-            cur = master.execute(f"INSERT OR IGNORE INTO utensile ({cols}) VALUES ({ph})",
+            master.execute(f"INSERT INTO utensile ({cols}) VALUES ({ph})",
                            list(insert_data.values()))
-            if cur.rowcount > 0:
-                importati += 1
-            else:
-                ignorati += 1
+            importati += 1
         except Exception as e:
             errori += 1
             if errori == 1:
