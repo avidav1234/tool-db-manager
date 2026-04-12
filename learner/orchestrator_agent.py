@@ -458,10 +458,21 @@ def _cimatron_fast_path(df, nome_file, log):
             if rec.get('codice_interno') or rec.get('diametro_mm'):
                 records.append(rec)
     log('L1', 'Fast path: %d utensili x campi | Token: 0 | Costo: $0.0000' % len(records))
-    mapping = {cid:{'campo_master':cm,'confidenza':'alta','trasformazione':'nessuna'}
-               for cid,(cm,_) in _CIMA_MAP.items()}
-    return {'verificato':True,'software_cam':'Cimatron','records':records,
-            'mapping':{'mapping':mapping},'log':[],'costo_stimato':0,'score':100,'metodo':'deterministico'}
+    # Costruisce mapping con le colonne REALI del DataFrame come chiavi
+    if id_match >= 5:
+        # Colonne sono ID numerici: usa _CIMA_MAP
+        mapping = {cid: {'campo_master': cm, 'confidenza': 'alta', 'trasformazione': 'nessuna'}
+                   for cid, (cm, _) in _CIMA_MAP.items() if cid in set(str(c) for c in df.columns)}
+    else:
+        # Colonne sono nomi italiani: usa NOMI_MAP
+        mapping = {nome: {'campo_master': campo, 'confidenza': 'alta', 'trasformazione': 'nessuna'}
+                   for nome, campo in NOMI_MAP.items() if nome in set(str(c) for c in df.columns)}
+    n_campi = len(mapping)
+    score = min(100, int(n_campi / 32 * 100))
+    log('L1', 'Fast path: %d utensili, %d campi mappati, score=%d%%' % (len(records), n_campi, score))
+    return {'verificato': True, 'software_cam': 'Cimatron', 'records': records,
+            'mapping': {'mapping': mapping}, 'log': [], 'costo_stimato': 0,
+            'score': score, 'metodo': 'deterministico', 'n_campi': n_campi}
 
 def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_tentativi=2) -> dict:
     key = _get_api_key(api_key)
