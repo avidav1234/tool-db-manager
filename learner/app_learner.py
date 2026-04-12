@@ -14,6 +14,20 @@ from universal_converter import converti
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+# Preload moduli al boot per abilitare hot-reload
+def _preload_moduli():
+    import sys, os
+    _ld = os.path.dirname(os.path.abspath(__file__))
+    if _ld not in sys.path: sys.path.insert(0, _ld)
+    for _m in ['cimatron_parser', 'orchestrator_agent', 'mapping_agent']:
+        try:
+            if _m not in sys.modules:
+                __import__(_m)
+        except Exception:
+            pass
+
+_preload_moduli()
 UPLOAD_FOLDER = tempfile.mkdtemp()
 
 BASE = """<!DOCTYPE html><html lang="it"><head>
@@ -560,6 +574,7 @@ def api_reload():
     """Ricarica i moduli principali senza riavviare il server."""
     import importlib, sys
     reloaded = []
+    _preload_moduli()  # assicura che tutti i moduli siano caricati
     for mod in ['orchestrator_agent','format_learner','cimatron_parser',
                 'mapping_agent','profile_manager']:
         if mod in sys.modules:
