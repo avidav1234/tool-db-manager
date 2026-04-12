@@ -19,13 +19,7 @@ app = Flask(__name__)
 # ---------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------
-def _ensure_db()
-    try:
-        _startup_cfg = carica_config()
-        if _startup_cfg.get('anthropic_api_key'):
-            os.environ.setdefault('ANTHROPIC_API_KEY', _startup_cfg['anthropic_api_key'])
-    except Exception:
-        pass:
+def _ensure_db():
     """Crea cartella e DB automaticamente se non esistono."""
     db_dir = os.path.dirname(DB_PATH)
     os.makedirs(db_dir, exist_ok=True)
@@ -1957,6 +1951,12 @@ def version():
 # ---------------------------------------------------------------
 if __name__ == '__main__':
     init_db()
+    try:
+        _sc = carica_config()
+        if _sc.get('anthropic_api_key'):
+            os.environ.setdefault('ANTHROPIC_API_KEY', _sc['anthropic_api_key'])
+    except Exception:
+        pass
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(os.path.join(os.path.dirname(__file__),'..','logs'), exist_ok=True)
     print('')
