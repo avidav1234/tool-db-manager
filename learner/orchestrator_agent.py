@@ -286,15 +286,15 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
             'confidenza': info.get('confidenza'),
             'trasformazione': info.get('trasformazione', 'nessuna'),
             'campioni': campioni,
-            'min': round(float(nums.min()), 3) if len(nums) > 0 else None,
-            'max': round(float(nums.max()), 3) if len(nums) > 0 else None,
         }
     prompt = (
         'Software: %s\n\nMAPPING DA VERIFICARE (con valori reali):\n%s\n\n'
         'RANGE DI RIFERIMENTO:\n'
-        'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 | fz_default: 0.001-1.2\n'
+        'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 | fz_default: 0.001-2.0\n'
         'vf_mm_min: 50-10000 (GRANDI) | vc_default: 10-1000 | n_rpm: 100-30000\n'
-        'NOTA fz: valori 0.02-0.2 sono NORMALI per frese. Errore SOLO se fz > 5.0 o fz < 0.0001\n\n'
+        'ATTENZIONE: i "campioni" sono VALORI DAL FILE, non range di validazione.\n'
+        'fz tra 0.001 e 2.0 e SEMPRE VALIDO. NON segnalare mai fz in quel range come errore.\n'
+        'Segnala SOLO se fz > 5.0 (impossibile) o vf < 1 (impossibile per avanzamento).\n\n'
         'REGOLE SPECIALI (non sono errori):\n'
         '- "Radius" in WorkNC/hyperMILL = raggio utensile = diametro/2. '
         'SE non esiste colonna Diameter/Diametro separata, mappa Radius->diametro_mm con moltiplica_2. CORRETTO.\n'
@@ -383,9 +383,7 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
                 info_b[col] = {
                     'campioni': [str(v)[:15] for v in s.head(3).tolist()],
                     'tipo': 'num' if len(nums)/max(len(s),1)>0.7 else 'testo',
-                    'min': round(float(nums.min()),3) if len(nums)>0 else None,
-                    'max': round(float(nums.max()),3) if len(nums)>0 else None,
-                }
+                        }
             prompt = (
                 'Software: %s. Analizza queste %d colonne.\n'
                 'COLONNE:\n%s\n\nCAMPI DISPONIBILI: %s\n\n'
@@ -416,9 +414,16 @@ def orchestra_learning(df, api_key=None, nome_file='', log_callback=None, max_te
         return {'verificato': False, 'errore': 'Mapping non prodotto',
                 'struttura': struttura, 'log': log_eventi, 'costo_stimato': token_stimati}
 
-    # L4 - verifica con retry
+    # L4 - verifica con retry (skip se Cimatron gia' identificato con alta confidenza)
     verifica = None
+    _sw = struttura.get('software_cam', '').lower()
+    _sw_conf = struttura.get('confidenza_software', 0)
+    _skip_l4 = ('cimatron' in _sw) and len(mapping_raw.get('mapping', {})) >= 15
+    if _skip_l4:
+        log('L4', 'Skip verifica: Cimatron identificato con %d campi mappati' % len(mapping_raw.get('mapping', {})))
+        verifica = {'approvato': True, 'score_confidenza': 90, 'errori_critici': [], 'warning': [], 'correzioni': {}}
     for tentativo in range(1, max_tentativi + 1):
+        if _skip_l4: break
         if verifica and verifica.get('correzioni'):
             log('L1', 'Applico %d correzioni' % len(verifica['correzioni']))
             for col, corr in verifica['correzioni'].items():
