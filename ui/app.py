@@ -2166,6 +2166,241 @@ def debug_magic():
     return '<br>'.join(results) or 'nessun file trovato'
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CAM AGENT — Agente AI per import universale CAM
+# ═══════════════════════════════════════════════════════════════════════
+
+CAM_AGENT_HTML = """<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agente CAM — Tool DB Manager</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+.nav{background:#1e293b;padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem;border-bottom:1px solid #334155}
+.nav a{color:#94a3b8;text-decoration:none;font-size:.875rem}.nav a:hover{color:#fff}
+.nav .brand{color:#fff;font-weight:700;font-size:1.1rem;margin-right:auto}
+.nav .badge{background:#6366f1;color:#fff;padding:.2rem .6rem;border-radius:12px;font-size:.75rem;font-weight:600}
+.container{display:grid;grid-template-columns:1fr 320px;height:calc(100vh - 49px)}
+.chat-area{display:flex;flex-direction:column;border-right:1px solid #1e293b}
+.chat-messages{flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem}
+.msg{max-width:90%;padding:.75rem 1rem;border-radius:12px;font-size:.875rem;line-height:1.6;white-space:pre-wrap}
+.msg.user{background:#1d4ed8;color:#fff;align-self:flex-end;border-radius:12px 12px 2px 12px}
+.msg.agent{background:#1e293b;color:#e2e8f0;align-self:flex-start;border-radius:12px 12px 12px 2px}
+.msg.agent strong{color:#a5b4fc}.msg.agent code{background:#0f172a;padding:.1rem .3rem;border-radius:3px;font-size:.8rem;font-family:monospace}
+.msg.system{background:#0d2d1a;color:#86efac;align-self:center;font-size:.78rem;padding:.35rem .75rem;border-radius:20px}
+.msg.error{background:#450a0a;color:#fca5a5}
+.msg.thinking{background:#1e293b;color:#64748b;font-style:italic;align-self:flex-start}
+.input-area{padding:1rem;border-top:1px solid #1e293b;display:flex;flex-direction:column;gap:.6rem}
+.file-row{display:flex;align-items:center;gap:.5rem}
+.file-label{background:#1e293b;border:1px dashed #334155;border-radius:6px;padding:.4rem .75rem;cursor:pointer;font-size:.8rem;color:#94a3b8;white-space:nowrap}
+.file-label:hover{border-color:#6366f1;color:#a5b4fc}
+#file-input{display:none}
+.file-name{font-size:.75rem;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick-row{display:flex;flex-wrap:wrap;gap:.3rem}
+.qbtn{background:#1e293b;border:1px solid #334155;color:#94a3b8;border-radius:6px;padding:.3rem .6rem;font-size:.73rem;cursor:pointer}
+.qbtn:hover{background:#334155;color:#e2e8f0}
+.msg-row{display:flex;gap:.5rem}
+#user-input{flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:.6rem .9rem;color:#e2e8f0;font-size:.875rem;resize:none;min-height:40px;max-height:100px}
+#user-input:focus{outline:none;border-color:#6366f1}
+#send-btn{background:#6366f1;color:#fff;border:none;border-radius:8px;padding:.6rem 1.1rem;cursor:pointer;font-size:.875rem;font-weight:500}
+#send-btn:hover{background:#4f46e5}#send-btn:disabled{background:#334155;cursor:not-allowed}
+.side{background:#0f172a;overflow-y:auto}
+.pane{border-bottom:1px solid #1e293b;padding:.9rem}
+.pane-title{font-size:.68rem;font-weight:700;text-transform:uppercase;color:#475569;letter-spacing:.05em;margin:0 0 .6rem}
+.stat{display:flex;justify-content:space-between;font-size:.78rem;padding:.2rem 0;border-bottom:1px solid #0f172a}
+.stat:last-child{border:none}.stat-v{color:#a5b4fc;font-weight:600}
+.tool-item{font-size:.7rem;color:#475569;font-family:monospace;padding:.25rem .4rem;background:#1e293b;border-radius:4px;margin-bottom:.25rem}
+.tool-name{color:#7dd3fc}.spinner{width:14px;height:14px;border:2px solid #334155;border-top-color:#6366f1;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle;margin-right:.4rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style></head><body>
+<nav class="nav">
+  <span class="brand">&#128295; Tool DB Manager</span>
+  <a href="/">&#8592; Lista utensili</a>
+  <span class="badge">&#129302; Agente CAM</span>
+</nav>
+<div class="container">
+  <div class="chat-area">
+    <div class="chat-messages" id="msgs">
+      <div class="msg system">&#129302; Agente CAM pronto — carica un file o fai una domanda</div>
+      <div class="msg agent">Ciao! Sono l&#39;agente CAM integrato.
+
+Posso aiutarti a:
+&#8226; <strong>Importare</strong> file da Cimatron, Hypermill, Mastercam, Fusion 360, WorkNC, NX
+&#8226; <strong>Analizzare</strong> la struttura di qualsiasi file CAM e mappare le colonne al DB
+&#8226; <strong>Migrare</strong> lo schema DB quando servono nuovi campi per un nuovo CAM
+&#8226; <strong>Verificare</strong> i dati dopo ogni import
+
+Carica un file CAM in alto e scrivi cosa vuoi fare, oppure usa i pulsanti rapidi.</div>
+    </div>
+    <div class="input-area">
+      <div class="file-row">
+        <label class="file-label" for="file-input">&#128194; Carica file (ZIP, CSV, XML, TDM)</label>
+        <input type="file" id="file-input" accept=".zip,.csv,.xml,.tdm,.tdb">
+        <span class="file-name" id="fname">Nessun file caricato</span>
+      </div>
+      <div class="quick-row">
+        <button class="qbtn" onclick="q('Analizza il file caricato: quanti utensili ha e quali colonne contiene?')">&#128269; Analizza</button>
+        <button class="qbtn" onclick="q('Proponi il mapping colonne del file ai campi del DB master')">&#128279; Mapping</button>
+        <button class="qbtn" onclick="q('Fai un dry-run: simula l\'import senza scrivere nel DB e dimmi cosa cambierebbe')">&#9654; Dry-run</button>
+        <button class="qbtn" onclick="q('Importa gli utensili nel DB master')">&#8679; Importa</button>
+        <button class="qbtn" onclick="q('Mostrami lo stato del DB: utensili, CAM sorgenti, campi popolati')">&#128202; Stato DB</button>
+        <button class="qbtn" onclick="q('Verifica gli ultimi utensili importati e controlla alias, refrigerante e fuori_pinza_mm')">&#10003; Verifica</button>
+      </div>
+      <div class="msg-row">
+        <textarea id="user-input" rows="1" placeholder="Scrivi qui... (Enter = invia, Shift+Enter = a capo)"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
+        <button id="send-btn" onclick="send()">Invia</button>
+      </div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="pane">
+      <div class="pane-title">&#128202; DB Master</div>
+      <div id="db-stats"><span style="color:#475569;font-size:.78rem">Caricamento...</span></div>
+    </div>
+    <div class="pane">
+      <div class="pane-title">&#9881; Tool calls</div>
+      <div id="tool-log"><span style="color:#475569;font-size:.75rem">—</span></div>
+    </div>
+  </div>
+</div>
+<script>
+let _hist=[], _fp=null, _mid=0;
+
+(async()=>{
+  try{
+    const r=await fetch('/cam-agent/db-stats');
+    const d=await r.json();
+    const el=document.getElementById('db-stats');
+    if(d.errore){el.innerHTML='<span style="color:#f87171">'+d.errore+'</span>';return;}
+    el.innerHTML=Object.entries(d).map(([k,v])=>
+      '<div class="stat"><span>'+k+'</span><span class="stat-v">'+v+'</span></div>'
+    ).join('');
+  }catch(e){document.getElementById('db-stats').innerHTML='<span style="color:#f87171">Errore</span>';}
+})();
+
+document.getElementById('file-input').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  document.getElementById('fname').textContent=f.name;
+  addMsg('system','&#128194; Caricamento '+f.name+'...');
+  const fd=new FormData();fd.append('file',f);
+  try{
+    const r=await fetch('/cam-agent/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.filepath){_fp=d.filepath;addMsg('system','&#10003; Pronto: '+f.name);}
+    else addMsg('error','Errore upload: '+JSON.stringify(d));
+  }catch(e){addMsg('error','Errore: '+e.message);}
+});
+
+function q(m){document.getElementById('user-input').value=m;send();}
+
+async function send(){
+  const inp=document.getElementById('user-input');
+  const m=inp.value.trim();if(!m)return;
+  inp.value='';addMsg('user',m);
+  const btn=document.getElementById('send-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
+  const tid=addMsg('thinking','&#129302; Elaborazione...');
+  try{
+    const r=await fetch('/cam-agent/chat',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messaggio:m,filepath:_fp,history:_hist})
+    });
+    const d=await r.json();
+    removeMsg(tid);
+    if(d.errore){addMsg('error','&#10060; '+d.errore);}
+    else{
+      addMsg('agent',d.risposta);
+      _hist=d.history||_hist;
+      if(d.tool_calls&&d.tool_calls.length){
+        document.getElementById('tool-log').innerHTML=
+          d.tool_calls.map(t=>
+            '<div class="tool-item"><span class="tool-name">'+t.tool+'</span><br>'+
+            t.result_summary.slice(0,120)+'</div>'
+          ).join('');
+      }
+    }
+  }catch(e){removeMsg(tid);addMsg('error','Errore: '+e.message);}
+  btn.disabled=false;btn.innerHTML='Invia';
+}
+
+function addMsg(t,txt){
+  const id='m'+(++_mid);
+  const el=document.createElement('div');
+  el.id=id;el.className='msg '+t;
+  el.innerHTML=txt.replace(/**([^*]+)**/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  document.getElementById('msgs').appendChild(el);
+  el.scrollIntoView({behavior:'smooth',block:'end'});
+  return id;
+}
+function removeMsg(id){const e=document.getElementById(id);if(e)e.remove();}
+</script></body></html>"""
+
+
+@app.route('/cam-agent')
+def cam_agent_ui():
+    return CAM_AGENT_HTML
+
+
+@app.route('/cam-agent/upload', methods=['POST'])
+def cam_agent_upload():
+    f = request.files.get('file')
+    if not f:
+        return json.dumps({'errore': 'Nessun file'}), 400, {'Content-Type': 'application/json'}
+    upload_dir = os.path.join(os.path.dirname(__file__), '..', 'uploads_agent')
+    os.makedirs(upload_dir, exist_ok=True)
+    fp = os.path.join(upload_dir, f.filename)
+    f.save(fp)
+    return json.dumps({'filepath': fp, 'filename': f.filename}), 200, {'Content-Type': 'application/json'}
+
+
+@app.route('/cam-agent/db-stats')
+def cam_agent_db_stats():
+    try:
+        conn = get_conn()
+        stats = {
+            'Utensili totali':    conn.execute("SELECT COUNT(*) FROM utensile").fetchone()[0],
+            'CAM sorgenti':       conn.execute("SELECT COUNT(DISTINCT cam_sorgente) FROM utensile WHERE cam_sorgente IS NOT NULL").fetchone()[0],
+            'Con alias':          conn.execute("SELECT COUNT(*) FROM utensile WHERE alias IS NOT NULL AND alias!=''").fetchone()[0],
+            'Tipi utensile':      conn.execute("SELECT COUNT(*) FROM tipo_utensile").fetchone()[0],
+            'Portautensili':      conn.execute("SELECT COUNT(*) FROM portautensile").fetchone()[0],
+            'Cond. taglio':       conn.execute("SELECT COUNT(*) FROM condizioni_taglio").fetchone()[0],
+        }
+        conn.close()
+        return json.dumps(stats), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return json.dumps({'errore': str(e)}), 200, {'Content-Type': 'application/json'}
+
+
+@app.route('/cam-agent/chat', methods=['POST'])
+def cam_agent_chat():
+    import sys as _sys
+    _root = os.path.join(os.path.dirname(__file__), '..')
+    _ui   = os.path.dirname(__file__)
+    for _p in [_root, _ui]:
+        if _p not in _sys.path: _sys.path.insert(0, _p)
+
+    import importlib
+    try:
+        if 'cam_agent' in _sys.modules:
+            importlib.reload(_sys.modules['cam_agent'])
+        import cam_agent as _ca
+    except ImportError as e:
+        return json.dumps({'errore': f'cam_agent.py non trovato: {e}. Esegui git pull.'}), 200, {'Content-Type':'application/json'}
+
+    data = request.get_json(silent=True) or {}
+    messaggio = data.get('messaggio','').strip()
+    filepath  = data.get('filepath')
+    history   = [m for m in data.get('history',[]) if m.get('role') in ('user','assistant')]
+
+    if not messaggio:
+        return json.dumps({'errore': 'Messaggio vuoto'}), 400, {'Content-Type': 'application/json'}
+
+    result = _ca.esegui_agente(messaggio, filepath=filepath, history=history)
+    return json.dumps(result, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
+
+
 @app.route('/version')
 def version():
     import importlib, importers.import_from_excel as ief
