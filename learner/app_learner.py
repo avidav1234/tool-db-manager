@@ -413,7 +413,7 @@ tr:hover td{background:#263344}
 <div class="card">
 <h2>Anteprima primi utensili</h2>
 <table>
-<thead><tr><th>#</th><th>Codice NC</th><th>Alias</th><th>Tipo</th><th>D mm</th><th>Fuori pinza</th><th>Feed</th><th>Fz</th></tr></thead>
+<thead><tr><th>#</th><th>Codice</th><th>Alias NC</th><th>Tipo</th><th>D mm</th><th>CR</th><th>Fuori pinza</th><th>Holder</th><th>L holder</th><th>Feed</th><th>Fz</th><th>Vc</th></tr></thead>
 <tbody>
 {% for u in utensili %}
 <tr>
