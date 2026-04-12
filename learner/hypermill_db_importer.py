@@ -199,18 +199,28 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
 
         # Rendi codice_interno unico aggiungendo il numero NC come suffisso
         nc_code = row['nc_name'] or row['tool_name'] or ''
+        # Decodifica geometria portautensile
+        holder_geo = _decodifica_holder(row['holder_polyline']) if row['holder_polyline'] else {}
+        # Tipo attacco da coupling
+        tipo_attacco = None
+        holder_name = row['holder_name'] or ''
+        if 'HSK' in holder_name: tipo_attacco = 'HSK63'
+        elif 'ISO' in holder_name: tipo_attacco = 'ISO50'
+        elif 'SK40' in holder_name: tipo_attacco = 'SK40'
+
         utensile = {
-            'codice_interno':   f"{row['nc_number_str'] or row['nc_name'] or ''}_hm_{row['nc_id']}",
-            'alias':            row['nc_name'] or '',
-            'descrizione':      row['tool_name'] or '',
-            'codice_catalogo':  row['ordering_code'] or '',
-            'tipo':             TIPO_MAP.get(row['tool_type_id'], 'FLAT'),
-            'cam_sorgente':     'Hypermill',
-            'id_originale_cam': str(row['nc_id']),
-            'nome_pinza':       row['holder_name'] or '',
-            'lungh_presa_mm':   _decodifica_holder(row['holder_polyline']).get('lungh_corpo_mm'),
-            'fuori_pinza_mm':   round((row['tool_length'] or 0) + (row['ext_reach'] or 0), 2) or None,
-            'nome_prolunga':    row['ext_name'] or None,
+            'codice_interno':        f"{row['nc_number_str'] or row['nc_name'] or ''}_hm_{row['nc_id']}",
+            'alias':                 row['nc_name'] or '',
+            'descrizione':           row['tool_name'] or '',
+            'codice_catalogo':       row['ordering_code'] or '',
+            'tipo':                  TIPO_MAP.get(row['tool_type_id'], 'FLAT'),
+            'cam_sorgente':          'Hypermill',
+            'id_originale_cam':      str(row['nc_id']),
+            'nome_pinza':            holder_name or None,
+            'lungh_presa_mm':        holder_geo.get('lungh_corpo_mm'),
+            'fuori_pinza_mm':        round((row['tool_length'] or 0) + (row['ext_reach'] or 0), 2) or None,
+            'lungh_libera_prolunga_mm': row['ext_reach'] or None,
+            'tipo_attacco':          tipo_attacco,
             **geo,
         }
         if tech:
@@ -269,7 +279,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         'lunghezza_totale_mm', 'lunghezza_tagl_mm', 'angolo_punta_gradi',
         'angolo_conico_gradi', 'diam_stelo_mm', 'passo_mm',
         'num_taglienti', 'nome_pinza', 'fuori_pinza_mm', 'nome_prolunga',
-        'lungh_presa_mm',
+        'lungh_presa_mm', 'lungh_libera_prolunga_mm', 'tipo_attacco',
         'avanzamento_default', 'rotazione_default', 'vc_default',
         'fz_default', 'passo_z_default', 'passo_lat_default',
     }
