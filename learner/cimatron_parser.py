@@ -41,7 +41,7 @@ CIMATRON_ID_MAP = {
     '2109': ('lunghezza_tagl_mm',     'float'),    # Lunghezza Utile (clear length)
     '2110': ('lunghezza_tagl2_mm',    'float'),    # Lunghezza Taglio secondaria
     '2111': ('conico',                'int'),      # Conico (flag)
-    '2112': ('angolo_conico_gradi',   'float'),, 'float'),    # Angolo Conicità (helix/taper)
+    '2112': ('angolo_conico_gradi', 'float'),    # Angolo Conicità (helix/taper)
     '2113': ('angolo_punta_gradi',    'float'),    # Angolo Punta
     '2114': ('diam_libero_mm',        'float'),    # Diametro Libero (stylus)
     '2115': ('altezza_cilindro_mm',   'float'),    # Altezza Cilindro
