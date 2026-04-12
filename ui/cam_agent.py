@@ -498,7 +498,7 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
 
         body = json.dumps({
             'model': 'claude-haiku-4-5-20251001',
-            'max_tokens': 1024,
+            'max_tokens': 2048,
             'system': SYSTEM_PROMPT,
             'tools': TOOLS,
             'messages': messages
