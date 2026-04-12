@@ -163,7 +163,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         'fz_default', 'passo_z_default',
     }
 
-    importati = errori = 0
+    importati = errori = ignorati = 0
     for u in utensili:
         try:
             tipo_str = u.get('tipo', 'FLAT')
@@ -179,9 +179,12 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
 
             cols = ', '.join(insert_data.keys())
             ph = ', '.join(['?'] * len(insert_data))
-            master.execute(f"INSERT INTO utensile ({cols}) VALUES ({ph})",
+            cur = master.execute(f"INSERT OR IGNORE INTO utensile ({cols}) VALUES ({ph})",
                            list(insert_data.values()))
-            importati += 1
+            if cur.rowcount > 0:
+                importati += 1
+            else:
+                ignorati += 1
         except Exception as e:
             errori += 1
             if errori == 1:
@@ -191,5 +194,5 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
     master.commit()
     master.close()
 
-    return {'importati': importati, 'errori': errori,
+    return {'importati': importati, 'errori': errori, 'ignorati': ignorati,
             'totale': len(utensili), 'utensili': utensili}
