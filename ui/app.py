@@ -410,6 +410,18 @@ def home():
         msg=request.args.get('msg',''),
         mtype=request.args.get('mtype',''))
 
+def _get_lookup():
+    """Ritorna le liste per i dropdown: tipi, materiali, fornitori."""
+    conn = get_conn()
+    try:
+        tipi      = [r['codice'] for r in conn.execute("SELECT codice FROM tipo_utensile ORDER BY codice").fetchall()]
+        materiali = [r['codice'] for r in conn.execute("SELECT codice FROM materiale_utensile ORDER BY codice").fetchall()]
+        fornitori = conn.execute("SELECT id, nome FROM fornitore ORDER BY nome").fetchall()
+        return tipi, materiali, [dict(r) for r in fornitori]
+    finally:
+        conn.close()
+
+
 @app.route('/utensile/nuovo', methods=['GET','POST'])
 def utensile_nuovo():
     if request.method == 'POST':
