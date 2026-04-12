@@ -885,6 +885,44 @@ def salva_apikey():
         os.environ['ANTHROPIC_API_KEY'] = key
     return redirect('/impostazioni?msg=apikey_salvata')
 
+@app.route('/api/importa-db', methods=['POST'])
+def api_importa_db():
+    """
+    Collegamento Learner -> DB master.
+    Riceve un filepath (file gia' sul disco del server) e lo importa nel DB master
+    usando il cimatron_importer deterministico.
+    Chiamato dal Format Learner dopo l'analisi.
+    """
+    data = request.get_json(silent=True) or {}
+    filepath = data.get('filepath', '').strip()
+    dry_run  = bool(data.get('dry_run', False))
+
+    if not filepath or not os.path.exists(filepath):
+        return json.dumps({'errore': 'File non trovato: ' + filepath}), 400, {'Content-Type':'application/json'}
+
+    try:
+        _root = os.path.join(os.path.dirname(__file__), '..')
+        _learner = os.path.join(_root, 'learner')
+        for _p in [_root, _learner]:
+            if _p not in sys.path: sys.path.insert(0, _p)
+
+        import importlib as _il
+        if 'cimatron_importer' in sys.modules:
+            _il.reload(sys.modules['cimatron_importer'])
+        from cimatron_importer import importa_file
+        r = importa_file(filepath, dry_run=dry_run)
+        return json.dumps({
+            'inseriti':        r.get('utensili_inseriti', 0),
+            'aggiornati':      r.get('utensili_aggiornati', 0),
+            'errori':          r.get('utensili_errori', []),
+            'dry_run':         dry_run,
+            'versione':        r.get('versione', ''),
+            'taglio_inserite': r.get('taglio_inserite', 0),
+        }, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        return json.dumps({'errore': str(e)}), 500, {'Content-Type': 'application/json'}
+
+
 @app.route('/importa', methods=['GET','POST'])
 def importa():
     risultato = None
