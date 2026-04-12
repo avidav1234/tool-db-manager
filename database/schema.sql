@@ -97,8 +97,20 @@ CREATE TABLE IF NOT EXISTS utensile (
     angolo_conico_gradi     REAL,       -- angolo conicità / taper angle
     angolo_elica_gradi      REAL,       -- angolo elica / helix angle (Hypermill, Mastercam)
     raggio_raccordo_mm      REAL,       -- raggio raccordo base (fillet)
-    passo_mm                REAL,       -- passo filetto (maschi/filiere)
-    num_filetti             INTEGER,    -- numero filetti
+    passo_mm                REAL,       -- passo filetto (maschi/filiere)      (Cimatron: 2123)
+    num_filetti             INTEGER,    -- numero filetti                       (Cimatron: 2124)
+    -- Geometria profilo avanzata (utensili speciali: lollipop, forma, sagomati)
+    diam_libero_mm          REAL,       -- diametro libero / stylus             (Cimatron: 2114)
+    altezza_cilindro_mm     REAL,       -- altezza cilindro                     (Cimatron: 2115)
+    diam_base_piatta_mm     REAL,       -- diametro base piatta                 (Cimatron: 2116)
+    centro_arco_y_mm        REAL,       -- centro arco Y profilo                (Cimatron: 2117)
+    raggio_punta2_mm        REAL,       -- raggio punta (tip radius)            (Cimatron: 2121)
+    raggio_superiore_mm     REAL,       -- raggio superiore                     (Cimatron: 2122)
+    lunghezza_conica_mm     REAL,       -- lunghezza zona conica                (Cimatron: 2126)
+    altezza_raggio_sup_mm   REAL,       -- altezza raggio superiore             (Cimatron: 2129)
+    raggio_profilo_mm       REAL,       -- raggio profilo sagomato              (Cimatron: 2130)
+    -- Numero magazzino (alias diverso)
+    numero_magazzino        INTEGER,    -- numero magazzino alternativo         (Cimatron: 1201)
 
     -- ── Stelo / Shank ─────────────────────────────────────────────────────
     tipo_attacco            TEXT,       -- HSK-A63, BT40, ISO40, Weldon, Cilindrico...
@@ -115,9 +127,16 @@ CREATE TABLE IF NOT EXISTS utensile (
     lungh_cono_stelo2_mm    REAL,
     lungh_libera_stelo2_mm  REAL,
     angolo_cono_stelo2_gradi REAL,
+    -- Stelo gambo (misure specifiche Cimatron)
+    diam_gambo1_mm          REAL,       -- diametro gambo sezione 1            (Cimatron: 2201)
+    diam_gambo_top_mm       REAL,       -- diametro gambo superiore             (Cimatron: 2202)
+    diam_gambo_bot_mm       REAL,       -- diametro gambo inferiore             (Cimatron: 2203)
+    lunghezza_gambo_mm      REAL,       -- lunghezza cono gambo                 (Cimatron: 2206)
 
     -- ── Portautensile / Holder ─────────────────────────────────────────────
     nome_pinza              TEXT,       -- codice holder (es. HSL_D10-NEW)
+    nome_portautensile      TEXT,       -- nome porta utensile Cimatron         (Cimatron: 7001)
+    nome_materiale_pu       TEXT,       -- nome materiale porta utensile        (Cimatron: 7002)
     lungh_presa_mm          REAL,       -- lunghezza presa in pinza
     fuori_pinza_mm          REAL,       -- *** DATO CRITICO: distanza punta → inizio pinza ***
                                         -- usato da tutti i CAM per sicurezza in macchina
