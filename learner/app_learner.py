@@ -342,7 +342,6 @@ def home():
     return render_template_string(HOME, profili=lista_profili(),
                                   msg=request.args.get('msg',''), mtype='')
 
-@app.route('/analizza', methods=['POST'])
 HYPERMILL_PREVIEW = """<!DOCTYPE html>
 <html lang="it">
 <head>
@@ -439,6 +438,9 @@ tr:hover td{background:#263344}
 </form>
 </body></html>
 """
+
+
+@app.route('/analizza', methods=['POST'])
 
 def analizza():
     f = request.files.get('file')
