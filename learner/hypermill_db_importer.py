@@ -19,33 +19,58 @@ TIPO_MAP = {
 }
 
 
-def _decodifica_holder(polyline):
+def _decodifica_holder(polyline, holder_name=''):
     """
     Decodifica la polyline binaria del portautensile Hypermill.
-    Formato: double big-endian, 8 byte per valore.
-    pos=136: lunghezza corpo (moltiplicatore 0.954)
-    Diametro serraggio: estratto dal nome
+    Formato double big-endian, 8 byte per valore.
+
+    Formule verificate per famiglia:
+    TSF/TFS/T (collet): pos=136/0.954 = L_corpo, pos=552-30 = L_totale
+    SLSA06/08/10/12:    pos=760+26 = L_nominale
+    SLSB16/20:          pos=760+26 = L_nominale (offset diverso)
     """
-    import struct, re
+    import struct
     if not polyline or len(polyline) < 144:
         return {}
     def get_be(pos):
-        chunk = polyline[pos:pos+8]
-        try: return round(struct.unpack('>d', chunk)[0], 3)
+        if pos + 8 > len(polyline): return None
+        try: return round(struct.unpack('>d', polyline[pos:pos+8])[0], 3)
         except: return None
-    p136 = get_be(136)
-    l_corpo = round(p136 / 0.954, 1) if p136 and 5 < p136 < 400 else None
-    # Lunghezza totale: cerca il valore piu grande plausibile in fondo alla polyline
-    l_totale = None
-    for pos in [552, 544, 536, 560, 528]:
-        v = get_be(pos)
-        if v and 30 < v < 500:
-            l_totale = round(v - 30, 1)
-            break
-    return {
-        'lungh_corpo_mm': l_corpo,
-        'lungh_totale_mm': l_totale,
-    }
+
+    name = holder_name.upper()
+    l_corpo = None
+
+    if any(x in name for x in ('TSF', 'TFS')):
+        # Termorestrizione: pos136 = L * 0.954
+        p136 = get_be(136)
+        if p136 and 5 < p136 < 400:
+            l_corpo = round(p136 / 0.954, 1)
+
+    elif name.startswith('T ') or ('T D' in name and 'TSF' not in name):
+        # Collet mandrino: pos136 = L * 0.954
+        p136 = get_be(136)
+        if p136 and 5 < p136 < 400:
+            l_corpo = round(p136 / 0.954, 1)
+
+    elif 'SLSA' in name or 'SLSB' in name:
+        # Pinza a molla A63: pos760 + 26 = L_nominale
+        p760 = get_be(760)
+        if p760 and 30 < p760 < 400:
+            l_corpo = round(p760 + 26, 1)
+
+    else:
+        # Generico: prova pos136 poi cerca il valore piu grande plausibile
+        p136 = get_be(136)
+        if p136 and 5 < p136 < 400:
+            l_corpo = round(p136 / 0.954, 1)
+        if not l_corpo:
+            for pos in range(len(polyline)-8, 127, -8):
+                v = get_be(pos)
+                if v and 20 < v < 400:
+                    l_corpo = round(v, 1)
+                    break
+
+    return {'lungh_corpo_mm': l_corpo} if l_corpo else {}
 
 def _is_hypermill_db(db_path):
     """Verifica se il file e' un DB Hypermill."""
@@ -200,7 +225,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         # Rendi codice_interno unico aggiungendo il numero NC come suffisso
         nc_code = row['nc_name'] or row['tool_name'] or ''
         # Decodifica geometria portautensile
-        holder_geo = _decodifica_holder(row['holder_polyline']) if row['holder_polyline'] else {}
+        holder_geo = _decodifica_holder(row['holder_polyline'], row['holder_name'] or '') if row['holder_polyline'] else {}
         # Tipo attacco da coupling
         tipo_attacco = None
         holder_name = row['holder_name'] or ''
