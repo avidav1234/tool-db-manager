@@ -536,11 +536,31 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
             return {'risposta': f'Checkpoint "{task_id_richiesto}" non trovato.', 'history': []}
         steps_fatti = [k for k in cp['dati'] if k not in ('ultimo_step','task_id')]
         dati_str = json.dumps(cp['dati'], ensure_ascii=False, default=str)[:1500]
+        # Se e' un task di debug, precarica i file rilevanti nel contesto
+        contesto_codice = ''
+        task_lower = task_id_richiesto.lower()
+        if any(k in task_lower for k in ['debug','fix','bug','batch','mapping','error']):
+            file_chiave = [
+                'learner/orchestrator_agent.py',
+                'learner/cimatron_importer.py',
+            ]
+            for fk in file_chiave:
+                try:
+                    res = tool_leggi_file(fk)
+                    contenuto = res.get('contenuto','')
+                    totale = res.get('righe_totali', 0)
+                    contesto_codice += f'\n\n=== {fk} ({totale} righe) ===\n{contenuto[:4000]}'
+                    if totale > 100:
+                        # Leggi anche la seconda meta del file
+                        res2 = tool_leggi_file(fk, riga_inizio=101, riga_fine=min(totale, 300))
+                        contesto_codice += res2.get('contenuto','')[:2000]
+                except: pass
         messaggio_utente = (f'PROCEDI IMMEDIATAMENTE con il task "{task_id_richiesto}".\n'
                            f'Steps GIA FATTI (non ripetere): {steps_fatti}\n'
                            f'Ultimo step: {cp["ultimo_step"]}\n'
-                           f'Dati: {dati_str}\n'
-                           f'VAI AL PROSSIMO STEP. Non chiedere conferme, non spiegare, esegui.')
+                           f'Dati checkpoint: {dati_str}\n'
+                           + (f'Codice rilevante precaricato:{contesto_codice}\n' if contesto_codice else '')
+                           + f'VAI AL PROSSIMO STEP. Non chiedere conferme, non spiegare, esegui.')
 
     messages = list(history or [])
     messages.append({'role':'user','content':messaggio_utente})
