@@ -400,31 +400,41 @@ def analizza():
             elif ext in ('.xlsx', '.xls'):
                 df_tmp = pd.read_excel(fp)
             elif ext == '.zip':
-                # ZIP Cimatron: estrai il CSV Cutters e leggilo
-                import zipfile, io
+                # ZIP Cimatron: usa parser ufficiale cimatron_parser
                 try:
-                    with zipfile.ZipFile(fp) as z:
-                        cutters = next((n for n in z.namelist() if 'Cutters' in n and n.endswith('.csv')), None)
-                        if cutters:
-                            with z.open(cutters) as zf:
-                                content = zf.read().decode('utf-16')
-                            lines = content.splitlines()
-                            # Trova riga header (nomi colonne) e riga ID
-                            nome_riga = id_riga = -1
-                            for i, line in enumerate(lines):
-                                s = line.strip().lstrip('"')
-                                if s.startswith('//') or s == '' or s.startswith('Cimatron'): continue
-                                if nome_riga == -1: nome_riga = i; continue
-                                if id_riga == -1: id_riga = i; break
-                            if nome_riga >= 0 and id_riga >= 0:
-                                col_names = [c.strip() for c in lines[nome_riga].split('|')]
-                                dati = [l for l in lines[id_riga+1:] if l.strip() and not l.strip().startswith('//')]
-                                rows = []
-                                for line in dati:
-                                    parts = line.split('|')
-                                    rows.append({col_names[j]: parts[j].strip() if j < len(parts) else '' for j in range(len(col_names))})
-                                df_tmp = pd.DataFrame(rows)
-                except Exception:
+                    import cimatron_parser as _cp_mod
+                    _result = _cp_mod.leggi_cimatron_zip(fp)
+                    df_tmp = _result.get('df')
+                    # Logga i nomi colonne per debug
+                    if df_tmp is not None:
+                        print('[DBG] col_names[:10]=' + str(list(df_tmp.columns)[:10]), flush=True)
+                except Exception as _ez:
+                    log_ev.append({'livello': 'ERR', 'msg': 'leggi_cimatron_zip: ' + str(_ez)})
+                    # Fallback: parser manuale
+                    import zipfile, io
+                    try:
+                        with zipfile.ZipFile(fp) as z:
+                            cutters = next((n for n in z.namelist() if 'Cutters' in n and n.endswith('.csv')), None)
+                            if cutters:
+                                with z.open(cutters) as zf:
+                                    content = zf.read().decode('utf-16')
+                                lines = content.splitlines()
+                                nome_riga = id_riga = -1
+                                for i, line in enumerate(lines):
+                                    s = line.strip().lstrip('"')
+                                    if s.startswith('//') or s == '' or s.startswith('Cimatron'): continue
+                                    if nome_riga == -1: nome_riga = i; continue
+                                    if id_riga == -1: id_riga = i; break
+                                if nome_riga >= 0 and id_riga >= 0:
+                                    col_names = [c.strip() for c in lines[nome_riga].split('|')]
+                                    dati = [l for l in lines[id_riga+1:] if l.strip() and not l.strip().startswith('//')]
+                                    rows = []
+                                    for line in dati:
+                                        parts = line.split('|')
+                                        rows.append({col_names[j]: parts[j].strip() if j < len(parts) else '' for j in range(len(col_names))})
+                                    df_tmp = pd.DataFrame(rows)
+                    except Exception:
+                        pass              except Exception:
                     pass
 
             if df_tmp is not None and len(df_tmp) > 0:
