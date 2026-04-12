@@ -26,7 +26,7 @@ DB_PATH = os.path.join(_BASE, 'database', 'tool_master.db')
 CUTTERS_MAP = {
     # Identificazione
     '1101': 'codice_interno',
-    '1102': 'descrizione',
+    '1102': 'alias',           # Commento Cimatron = NOME OFFICINA
     '1103': 'sito_web',
     '1201': 'num_magazzino',
     '1202': 'comp_diametro',       # non importato nel DB (offset macchina)
@@ -218,7 +218,10 @@ def importa_holders(rows, conn, dry_run=False):
         try:
             params = {
                 'codice_interno':   codice,
-                'descrizione':      _to_str(row.get('7002')),
+            'alias':            _to_str(row.get('1102')),   # Commento = nome officina
+            'cam_sorgente':     'Cimatron',
+            'id_originale_cam': codice,
+                'descrizione':      _to_str(row.get('7002', '')),  # descrizione tecnica (non l'alias)
                 'tipo_adattatore':  _to_str(row.get('7010')),
                 'num_segmenti':     _to_int(row.get('7003'), 0),
                 'num_seg_mandrino': _to_int(row.get('7004'), 0),
