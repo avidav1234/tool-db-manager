@@ -25,7 +25,7 @@ CIMATRON_ID_MAP = {
     # --- IDENTIFICAZIONE ---
     '1101': ('codice_interno',       'string'),   # Nome Utensile
     '1102': ('descrizione',           'string'),   # Commento
-    '1103': ('url_scheda',            'string'),   # Sito web (ignora)
+    '1103': ('sito_web',              'string'),   # Sito web
     '2103': ('codice_catalogo',       'string'),   # Nome Catalogo
 
     # --- TIPO E TECNOLOGIA ---
@@ -39,15 +39,15 @@ CIMATRON_ID_MAP = {
     '2107': ('usa_lunghezza_totale',  'int'),      # Usa Lunghezza Totale (flag)
     '2108': ('lunghezza_totale_mm',   'float'),    # Lunghezza Totale Ut.
     '2109': ('lunghezza_tagl_mm',     'float'),    # Lunghezza Utile (clear length)
-    '2110': ('lunghezza_taglio_mm',   'float'),    # Lunghezza Taglio (cut length)
+    '2110': ('lunghezza_tagl2_mm',    'float'),    # Lunghezza Taglio secondaria
     '2111': ('conico',                'int'),      # Conico (flag)
-    '2112': ('angolo_conicita_gradi', 'float'),    # Angolo Conicità (helix/taper)
+    '2112': ('angolo_conico_gradi',   'float'),, 'float'),    # Angolo Conicità (helix/taper)
     '2113': ('angolo_punta_gradi',    'float'),    # Angolo Punta
     '2114': ('diam_libero_mm',        'float'),    # Diametro Libero (stylus)
     '2115': ('altezza_cilindro_mm',   'float'),    # Altezza Cilindro
     '2116': ('diam_base_piatta_mm',   'float'),    # Diametro Base Piatta
     '2117': ('centro_arco_y_mm',      'float'),    # Centro Arco Y (profilo)
-    '2118': ('diam_gambo_mm',         'float'),    # Diametro Gambo (shaft)
+    '2118': ('diam_stelo_mm',         'float'),    # Diametro Gambo/Stelo
     '2119': ('usa_base_piatta',       'int'),      # Usa Base Piatta (flag)
     '2120': ('usa_lunghezza_taglio',  'int'),      # Usa Lunghezza Taglio (flag)
     '2121': ('raggio_punta2_mm',      'float'),    # Raggio Punta (tip radius)
@@ -71,7 +71,7 @@ CIMATRON_ID_MAP = {
     '1201': ('numero_magazzino',      'int'),      # Numero Magazzino (Magazine No.)
     '1202': ('comp_diametro',         'float'),    # Compensazione Diametro
     '1203': ('comp_lunghezza',        'float'),    # Compensazione Lunghezza
-    '4203': ('dir_mandrino',          'categoria'),# Direzione Mandrino
+    '4203': ('dir_rotazione',         'categoria'),# Direzione Mandrino
     '4204': ('refrigerante',          'categoria'),# Refrigerante
     '4210': ('metodo_visualiz',       'categoria'),# Metodo Visualizzazione
     '4212': ('connessione',           'categoria'),# Connessione (pass successivo)
@@ -92,6 +92,19 @@ CIMATRON_ID_MAP = {
     '7002': ('nome_materiale_pu',     'string'),   # Nome Materiale (portautensile)
     '7900': ('e_fisso',               'int'),      # E Fisso (flag)
     '9002': ('tipo_elemento',         'categoria'),# Tipo (Cutter/Holder/Extension)
+
+    # --- PARAMETRI TAGLIO DEFAULT ---
+    '4101': ('avanzamento_default',   'float'),    # Avanzamento Vf mm/min
+    '4102': ('rotazione_default',     'float'),    # Rotazione RPM
+    '4103': ('vc_default',            'float'),    # Velocita taglio Vc m/min
+    '4104': ('fz_default',            'float'),    # Avanzamento per dente Fz mm/z
+    '4106': ('num_taglienti',         'int'),      # Numero denti/taglienti
+    '4202': ('vita_utensile',         'int'),      # Vita utensile
+    '4203': ('dir_rotazione',         'categoria'),# Direzione mandrino
+    '4204': ('refrigerante',          'categoria'),# Tipo refrigerante
+    '5101': ('passo_z_default',       'float'),    # Passo in Z (ap)
+    '5102': ('passo_lat_default',     'float'),    # Passo laterale (ae)
+    '5106': ('tolleranza_default',    'float'),    # Tolleranza
 }
 
 # Valori Punta/Tipo -> tipo master
@@ -112,7 +125,7 @@ TIPO_STR_MAP = {
 CAMPI_INTERNI = {
     'usa_lunghezza_totale', 'conico', 'usa_base_piatta', 'usa_lunghezza_taglio',
     'usa_diam_gambo', 'usa_angolo_conico', 'usa_angolo_gambo', 'e_fisso',
-    'url_scheda', 'comp_diametro', 'comp_lunghezza',
+    'comp_diametro', 'comp_lunghezza',
 }
 
 
@@ -201,7 +214,29 @@ def _leggi_csv_cimatron(content_bytes: bytes, nome_file: str = '') -> tuple:
             "Verifica che il file contenga utensili e non sia un template vuoto."
         )
 
-    return pd.DataFrame(rows), col_names, col_ids, versione
+    df_raw = pd.DataFrame(rows)
+
+    # Decodifica colonne categoria (sostituisce codici numerici con valori leggibili)
+    _DECODE_COLS = {
+        # col_id: decode_map
+        '2101': {'210101':'Fresatura','210102':'Foratura','210103':'Filettatura',
+                 '210104':'Alesatura','210105':'Barenatura','210106':'Tornitura'},
+        '2102': {'210201':'FLAT','210202':'BALL','210203':'BULL','210204':'DRILL',
+                 '210205':'TAP','210206':'REAM','210207':'SPOT','210208':'THREAD',
+                 '210209':'TAPER','210210':'FORM','210211':'LOLLIPOP'},
+        '4203': {'420301':'CW','420302':'CCW'},
+        '4204': {'420401':'OFF','420402':'FLOOD','420403':'MIST','420404':'AIR','420405':'THROUGH'},
+    }
+    id_to_nome = dict(zip(col_ids, col_names))  # es. '2102' -> 'Punta/Tipo'
+    for cid, dmap in _DECODE_COLS.items():
+        # trova il nome colonna corrispondente all'ID
+        col_nome = id_to_nome.get(cid)
+        if col_nome and col_nome in df_raw.columns:
+            df_raw[col_nome] = df_raw[col_nome].map(
+                lambda v: dmap.get(str(v).strip(), v) if pd.notna(v) else v
+            )
+
+    return df_raw, col_names, col_ids, versione
 
 
 def _mapping_da_ids(col_names: list, col_ids: list) -> dict:
@@ -218,7 +253,7 @@ def _mapping_da_ids(col_names: list, col_ids: list) -> dict:
             campo, tipo = CIMATRON_ID_MAP[cid]
             if campo in CAMPI_INTERNI:
                 continue  # salta flags interni
-            mapping[campo] = {
+            entry = {
                 'colonna_file': nome,
                 'score':        10.0,
                 'tipo':         tipo,
@@ -226,6 +261,22 @@ def _mapping_da_ids(col_names: list, col_ids: list) -> dict:
                 'confidenza':   'alta',
                 'id_cimatron':  cid,
             }
+            # Aggiunge decode_map per i campi categoria
+            if cid == '2101':  # tecnologia
+                entry['decode_map'] = {'210101':'Fresatura','210102':'Foratura',
+                    '210103':'Filettatura','210104':'Alesatura',
+                    '210105':'Barenatura','210106':'Tornitura'}
+            elif cid == '2102':  # tipo utensile
+                entry['decode_map'] = {'210201':'FLAT','210202':'BALL','210203':'BULL',
+                    '210204':'DRILL','210205':'TAP','210206':'REAM',
+                    '210207':'SPOT','210208':'THREAD','210209':'TAPER',
+                    '210210':'FORM','210211':'LOLLIPOP'}
+            elif cid == '4203':  # direzione rotazione
+                entry['decode_map'] = {'420301':'CW','420302':'CCW'}
+            elif cid == '4204':  # refrigerante
+                entry['decode_map'] = {'420401':'OFF','420402':'FLOOD',
+                    '420403':'MIST','420404':'AIR','420405':'THROUGH'}
+            mapping[campo] = entry
     return mapping
 
 
