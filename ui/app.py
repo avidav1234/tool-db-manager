@@ -642,8 +642,9 @@ def importa_locale():
                              'errori':[f'Non riconosciuto come Cimatron. Magic: {magic.hex()}'],
                              'dry_run':dry_run}
         except Exception as e:
-            risultato = {'inseriti':0,'aggiornati':0,'errori':[str(e)],'dry_run':dry_run}
-        return render_template_string(IMPORTA_LOCALE_HTML, msg='', risultato=risultato)
+            import traceback as _tb
+            risultato = {'inseriti':0,'aggiornati':0,'errori':[str(e), _tb.format_exc()],'dry_run':dry_run}
+        return json.dumps(risultato), 200, {'Content-Type':'application/json'}
     return render_template_string(IMPORTA_LOCALE_HTML, msg='', risultato=None)
 
 IMPORTA_LOCALE_HTML = BASE.replace('{% block content %}{% endblock %}', """
@@ -942,7 +943,9 @@ def api_importa_db():
             'taglio_inserite': r.get('taglio_inserite', 0),
         }, ensure_ascii=False), 200, {'Content-Type': 'application/json'}
     except Exception as e:
-        return json.dumps({'errore': str(e)}), 500, {'Content-Type': 'application/json'}
+        import traceback as _tbo
+        tb = _tbo.format_exc()
+        return json.dumps({'errore': str(e), 'traceback': tb}), 200, {'Content-Type': 'application/json'}
 
 
 @app.route('/importa', methods=['GET','POST'])
