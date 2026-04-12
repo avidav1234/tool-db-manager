@@ -399,6 +399,83 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
 # =====================================================================
 
 
+
+# ===== WORKNC FAST PATH (deterministico, 0 token) =====
+_WORKNC_MAP = {
+    'name':         ('codice_interno', None),
+    'type':         ('tipo', None),
+    'radius':       ('diametro_mm', 'moltiplica_2'),
+    'diameter':     ('diametro_mm', 'float'),
+    'tipradius':    ('raggio_punta_mm', 'float'),
+    'cornerradius': ('raggio_punta_mm', 'float'),
+    'length':       ('lunghezza_totale_mm', 'float'),
+    'usefullength': ('lunghezza_tagl_mm', 'float'),
+    'teeth':        ('num_taglienti', 'int'),
+    'flutes':       ('num_taglienti', 'int'),
+    'material':     ('materiale', None),
+    'vc':           ('vc_default', 'float'),
+    'fz':           ('fz_default', 'float'),
+    'rpm':          ('rotazione_default', 'float'),
+    'feed':         ('avanzamento_default', 'float'),
+    'vf':           ('avanzamento_default', 'float'),
+    'ap':           ('passo_z_default', 'float'),
+    'ae':           ('passo_lat_default', 'float'),
+    'gauge':        ('fuori_pinza_mm', 'float'),
+    'gaugelength':  ('fuori_pinza_mm', 'float'),
+    'holderref':    ('nome_pinza', None),
+    'holder':       ('nome_pinza', None),
+    'notes':        ('descrizione', None),
+    'comment':      ('descrizione', None),
+}
+
+def _worknc_fast_path(df, nome_file, log):
+    cols_low = {str(c).strip().lower() for c in df.columns}
+    WORKNC_SIGNATURE = {'name', 'radius', 'length', 'teeth', 'fz', 'rpm', 'gauge'}
+    match = len(WORKNC_SIGNATURE & cols_low)
+    if match < 3:
+        return None
+    log('L1', 'Rilevato WorkNC (match=%d) - fast path deterministico' % match)
+
+    def _cast(v, t):
+        if v is None or str(v).strip() in ('', 'nan', 'None'): return None
+        if t in ('float', 'moltiplica_2'):
+            try:
+                val = float(str(v).replace(',', '.'))
+                return round(val * 2, 6) if t == 'moltiplica_2' else val
+            except: return None
+        if t == 'int':
+            try: return int(round(float(str(v).replace(',', '.'))))
+            except: return None
+        return str(v).strip() or None
+
+    cols_map = {str(c).strip().lower(): str(c).strip() for c in df.columns}
+    mapping_result = {}
+    for col_low, col_orig in cols_map.items():
+        if col_low in _WORKNC_MAP:
+            campo, tipo = _WORKNC_MAP[col_low]
+            mapping_result[col_orig] = {
+                'campo_master': campo,
+                'confidenza': 'alta',
+                'trasformazione': tipo or 'nessuna',
+                'motivazione': 'WorkNC fast path deterministico'
+            }
+
+    records = []
+    for _, row in df.iterrows():
+        rec = {}
+        for col_low, col_orig in cols_map.items():
+            if col_low not in _WORKNC_MAP: continue
+            campo, tipo = _WORKNC_MAP[col_low]
+            v = _cast(row.get(col_orig), tipo)
+            if v is not None: rec[campo] = v
+        if rec.get('codice_interno'): records.append(rec)
+
+    log('L1', 'WorkNC: %d colonne mappate, %d utensili' % (len(mapping_result), len(records)))
+    return {
+        'mapping': mapping_result, 'records': records,
+        'colonne_ambigue': [], 'warning': [], 'metodo': 'worknc_fast_path'
+    }
+
 # ===== CIMATRON FAST PATH (deterministico, 0 token) =====
 _CIMA_MAP = {
     '1101':('codice_interno',None),'1102':('descrizione',None),'1103':('sito_web',None),
