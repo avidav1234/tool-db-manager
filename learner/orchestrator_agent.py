@@ -98,19 +98,29 @@ def _ssl_ctx():
         return ssl.create_default_context()
 
 
-def _chiama(prompt, model, api_key, max_tokens=1500, system=None):
+def _chiama(prompt, model, api_key, max_tokens=1500, system=None, _retry=4):
+    import time
     body = {'model': model, 'max_tokens': max_tokens,
             'messages': [{'role': 'user', 'content': prompt}]}
     if system: body['system'] = system
     payload = json.dumps(body).encode('utf-8')
-    req = urllib.request.Request('https://api.anthropic.com/v1/messages',
-        data=payload,
-        headers={'Content-Type': 'application/json',
-                 'x-api-key': api_key,
-                 'anthropic-version': '2023-06-01'},
-        method='POST')
-    with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=45) as resp:
-        return json.loads(resp.read())['content'][0]['text']
+    for attempt in range(_retry):
+        try:
+            req = urllib.request.Request('https://api.anthropic.com/v1/messages',
+                data=payload,
+                headers={'Content-Type': 'application/json',
+                         'x-api-key': api_key,
+                         'anthropic-version': '2023-06-01'},
+                method='POST')
+            with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=60) as resp:
+                return json.loads(resp.read())['content'][0]['text']
+        except Exception as e:
+            if '429' in str(e) and attempt < _retry - 1:
+                wait = 20 * (attempt + 1)
+                print(f'    [429 rate limit] attendo {wait}s (tentativo {attempt+1}/{_retry})...', flush=True)
+                time.sleep(wait)
+            else:
+                raise
 
 
 def _parse_json(testo):
@@ -290,17 +300,17 @@ def _l4_verifica(mapping_raw, struttura, df, api_key, log) -> dict:
     prompt = (
         'Software: %s\n\nMAPPING DA VERIFICARE (con valori reali):\n%s\n\n'
         'RANGE DI RIFERIMENTO:\n'
-        'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 | fz_default: 0.001-2.0\n'
+        'diametro_mm: 0.5-100 | fuori_pinza_mm: 5-300 | fz_default: 0.001-5.0 (anche >1 e normale)\n'
         'vf_mm_min: 50-10000 (GRANDI) | vc_default: 10-1000 | n_rpm: 100-30000\n'
         'ATTENZIONE: i "campioni" sono VALORI DAL FILE, non range di validazione.\n'
-        'fz tra 0.001 e 2.0 e SEMPRE VALIDO. NON segnalare mai fz in quel range come errore.\n'
-        'Segnala SOLO se fz > 5.0 (impossibile) o vf < 1 (impossibile per avanzamento).\n\n'
+        'fz tra 0.001 e 5.0 e SEMPRE VALIDO (fz puo essere anche 1 o maggiore per frese grandi). NON segnalare mai come errore.\n'
+        'Segnala SOLO se fz > 10.0 (impossibile fisicamente) o vf < 1.\n\n'
         'REGOLE SPECIALI (non sono errori):\n'
         '- "Radius" in WorkNC/hyperMILL = raggio utensile = diametro/2. '
         'SE non esiste colonna Diameter/Diametro separata, mappa Radius->diametro_mm con moltiplica_2. CORRETTO.\n'
         '- "Gauge" o "Gauge Length" = fuori_pinza_mm sempre. Non e critico se manca trasformazione.\n'
         '- "TipRadius" o "CornerRadius" = raggio_punta_mm. NON e diametro.\n\n'
-        'REGOLA lunghezza: lunghezza_tagl e lunghezza_tagl2 possono avere valori simili/identici: NON e errore.\n'
+        'REGOLA duplicazione: piu colonne possono avere valori identici e mappare allo stesso campo: NON e errore critico, e normale nelle librerie CAM.\n'
         'VERIFICA SOLO: valori palesemente impossibili, Fz/Vf con fattore 1000x di differenza\n\n'
         'Rispondi SOLO con JSON:\n'
         '{"approvato":true,"score_confidenza":85,"errori_critici":[],'
