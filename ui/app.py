@@ -19,7 +19,13 @@ app = Flask(__name__)
 # ---------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------
-def _ensure_db():
+def _ensure_db()
+    try:
+        _startup_cfg = carica_config()
+        if _startup_cfg.get('anthropic_api_key'):
+            os.environ.setdefault('ANTHROPIC_API_KEY', _startup_cfg['anthropic_api_key'])
+    except Exception:
+        pass:
     """Crea cartella e DB automaticamente se non esistono."""
     db_dir = os.path.dirname(DB_PATH)
     os.makedirs(db_dir, exist_ok=True)
@@ -51,7 +57,7 @@ def init_db():
         print(f'[WARN] init_db: {e}')
 
 def carica_config():
-    default = {'formati_attivi':['cimatron_v26'],'export_ora':'22:00','output_rete':'','keep_last_n':7}
+    default = {'formati_attivi':['cimatron_v26'],'export_ora':'22:00','output_rete':'','keep_last_n':7,'anthropic_api_key':''}
     try:
         if os.path.exists(CONFIG_PATH):
             with open(CONFIG_PATH) as f:
@@ -854,6 +860,16 @@ def debug_test_cimatron():
     return f"file={os.path.basename(os.path.dirname(f))}/Cimatron_2025.csv<br>magic={magic.hex()}<br>is_utf16={is_utf16}<br>_is_cimatron={result}<br>module_file={ief.__file__}"
 
 
+@app.route('/api/salva-apikey', methods=['POST'])
+def salva_apikey():
+    key = request.form.get('api_key', '').strip()
+    if key and '•' not in key:
+        cfg = carica_config()
+        cfg['anthropic_api_key'] = key
+        salva_config(cfg)
+        os.environ['ANTHROPIC_API_KEY'] = key
+    return redirect('/impostazioni?msg=apikey_salvata')
+
 @app.route('/importa', methods=['GET','POST'])
 def importa():
     risultato = None
@@ -1191,6 +1207,31 @@ IMPOSTAZIONI_HTML = BASE.replace('{% block content %}{% endblock %}', """
       </form>
     </div>
     <div class="card">
+      <h2>🤖 AI Parser universale</h2>
+      <p style="font-size:.85rem;color:#555;margin:0 0 .75rem">
+        Chiave API Anthropic per <code>universal_parser</code>: analisi automatica di qualsiasi file CAM
+        (hyperMILL, WorkNC, Mastercam, CSV generico). Senza chiave viene usato il mapping euristico.
+      </p>
+      <form method="post" action="/api/salva-apikey" style="display:flex;gap:.5rem;align-items:center">
+        <input type="password" name="api_key"
+               placeholder="sk-ant-api03-..."
+               value="{{ '&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;' if cfg.get('anthropic_api_key') else '' }}"
+               style="flex:1;padding:.45rem .75rem;border:1px solid #d1d5db;border-radius:6px;font-size:.875rem;font-family:monospace">
+        <button type="submit"
+                style="padding:.45rem 1rem;background:#1a1a1a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.875rem">
+          Salva
+        </button>
+        {% if cfg.get('anthropic_api_key') %}
+        <span style="color:#166534;font-size:.8rem">&#10003; Configurata</span>
+        {% else %}
+        <span style="color:#92400e;font-size:.8rem">&#9888; Non impostata</span>
+        {% endif %}
+      </form>
+      {% if msg == 'apikey_salvata' %}
+      <p style="color:#166534;font-size:.8rem;margin:.5rem 0 0">&#10003; API key salvata nel config.json.</p>
+      {% endif %}
+    </div>
+    <div class="card">
       <h2>Comandi terminale</h2>
       <div style="font-size:12px;color:#555;display:flex;flex-direction:column;gap:.4rem">
         <div style="background:#f4f4f2;border-radius:5px;padding:.5rem .75rem">
@@ -1216,6 +1257,7 @@ def impostazioni():
         cfg_ora=cfg.get('export_ora','22:00'),
         cfg_rete=cfg.get('output_rete',''),
         cfg_keep=cfg.get('keep_last_n',7),
+        cfg=cfg,
         active='impostazioni', msg=request.args.get('msg',''), mtype='')
 
 @app.route('/impostazioni/formati', methods=['POST'])
