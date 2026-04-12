@@ -82,6 +82,8 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         SELECT
             n.id as nc_id, n.nc_name, n.nc_number_str, n.nc_number_val,
             n.gage_length, n.tool_length, n.comment as nc_comment,
+            COALESCE(c.reach, 0) as ext_reach,
+            e.name as ext_name,
             t.id as tool_id, t.name as tool_name, t.comment as tool_comment,
             t.tool_type_id, t.total_length, t.ordering_code,
             t.dbl_param1, t.dbl_param2, t.dbl_param3, t.dbl_param4,
@@ -95,6 +97,8 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         JOIN Tools t ON n.tool_id = t.id
         LEFT JOIN Holders h ON n.holder_id = h.id
         LEFT JOIN Manufacturers m ON t.manufacturer_id = m.manufacturer_id
+        LEFT JOIN Components c ON c.nctool_id = n.id
+        LEFT JOIN Extensions e ON c.extension_id = e.extension_id
         ORDER BY n.nc_number_val
     """).fetchall()
 
@@ -130,7 +134,8 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             'cam_sorgente':     'Hypermill',
             'id_originale_cam': str(row['nc_id']),
             'nome_pinza':       row['holder_name'] or '',
-            'fuori_pinza_mm':   row['tool_length'] or None,
+            'fuori_pinza_mm':   round((row['tool_length'] or 0) + (row['ext_reach'] or 0), 2) or None,
+            'nome_prolunga':    row['ext_name'] or None,
             **geo,
         }
         if tech:
