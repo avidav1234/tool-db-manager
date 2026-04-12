@@ -191,10 +191,14 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             diam  = utensile.get('diametro_mm') or 0
             denti = utensile.get('num_taglienti') or 0
             # Fattori correzione NCTool (portautensile lungo riduce parametri)
-            feed_factor = row.get('feedrate_factor') or 1.0
-            spd_factor  = row.get('spindle_speed_factor') or 1.0
-            ae_factor   = row.get('infeed_width_factor') or 1.0
-            ap_factor   = row.get('infeed_length_factor') or 1.0
+            try: feed_factor = row['feedrate_factor'] or 1.0
+            except: feed_factor = 1.0
+            try: spd_factor = row['spindle_speed_factor'] or 1.0
+            except: spd_factor = 1.0
+            try: ae_factor = row['infeed_width_factor'] or 1.0
+            except: ae_factor = 1.0
+            try: ap_factor = row['infeed_length_factor'] or 1.0
+            except: ap_factor = 1.0
             # Applica fattori
             if feed:  utensile['avanzamento_default'] = round(feed * feed_factor, 2)
             if rpm:   utensile['rotazione_default']   = round(rpm * spd_factor, 1)
