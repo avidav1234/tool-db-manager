@@ -18,6 +18,35 @@ TIPO_MAP = {
     16: 'REAM',
 }
 
+
+def _decodifica_holder(polyline):
+    """
+    Decodifica la polyline binaria del portautensile Hypermill.
+    Formato: double big-endian, 8 byte per valore.
+    pos=136: lunghezza corpo (moltiplicatore 0.954)
+    Diametro serraggio: estratto dal nome
+    """
+    import struct, re
+    if not polyline or len(polyline) < 144:
+        return {}
+    def get_be(pos):
+        chunk = polyline[pos:pos+8]
+        try: return round(struct.unpack('>d', chunk)[0], 3)
+        except: return None
+    p136 = get_be(136)
+    l_corpo = round(p136 / 0.954, 1) if p136 and 5 < p136 < 400 else None
+    # Lunghezza totale: cerca il valore piu grande plausibile in fondo alla polyline
+    l_totale = None
+    for pos in [552, 544, 536, 560, 528]:
+        v = get_be(pos)
+        if v and 30 < v < 500:
+            l_totale = round(v - 30, 1)
+            break
+    return {
+        'lungh_corpo_mm': l_corpo,
+        'lungh_totale_mm': l_totale,
+    }
+
 def _is_hypermill_db(db_path):
     """Verifica se il file e' un DB Hypermill."""
     try:
@@ -129,10 +158,13 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             t.dbl_param13, t.dbl_param14, t.dbl_param15, t.dbl_param16, t.dbl_param17,
             t.int_param1, t.int_param2, t.int_param3, t.int_param4, t.int_param5, t.int_param6,
             h.name as holder_name,
+            gh.polyline as holder_polyline,
             m.name as manufacturer_name
         FROM NCTools n
         JOIN Tools t ON n.tool_id = t.id
         LEFT JOIN Holders h ON n.holder_id = h.id
+        LEFT JOIN HolderGeometries hg ON hg.holder_id = h.id
+        LEFT JOIN Geometries gh ON gh.id = hg.geometry_id
         LEFT JOIN Manufacturers m ON t.manufacturer_id = m.manufacturer_id
         LEFT JOIN Components c ON c.nctool_id = n.id
         LEFT JOIN Extensions e ON c.extension_id = e.extension_id
@@ -176,6 +208,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             'cam_sorgente':     'Hypermill',
             'id_originale_cam': str(row['nc_id']),
             'nome_pinza':       row['holder_name'] or '',
+            'lungh_presa_mm':   _decodifica_holder(row['holder_polyline']).get('lungh_corpo_mm'),
             'fuori_pinza_mm':   round((row['tool_length'] or 0) + (row['ext_reach'] or 0), 2) or None,
             'nome_prolunga':    row['ext_name'] or None,
             **geo,
@@ -236,6 +269,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         'lunghezza_totale_mm', 'lunghezza_tagl_mm', 'angolo_punta_gradi',
         'angolo_conico_gradi', 'diam_stelo_mm', 'passo_mm',
         'num_taglienti', 'nome_pinza', 'fuori_pinza_mm', 'nome_prolunga',
+        'lungh_presa_mm',
         'avanzamento_default', 'rotazione_default', 'vc_default',
         'fz_default', 'passo_z_default', 'passo_lat_default',
     }
