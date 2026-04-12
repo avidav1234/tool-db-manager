@@ -419,7 +419,13 @@ def analizza():
                     df_tmp, nome_file=f.filename,
                     log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg})
                 )
-                profilo = res.get('profilo', {})
+                # Leggi il mapping dal formato dell'orchestrator v2
+                # Struttura: res['mapping']['mapping'] = {col: {campo_master, confidenza}}
+                _raw_map = res.get('mapping', {})
+                if isinstance(_raw_map, dict):
+                    profilo = _raw_map.get('mapping', _raw_map)
+                else:
+                    profilo = res.get('profilo', {})
 
                 # Costruisce r nel formato che la template si aspetta
                 mapping = {}
@@ -432,10 +438,10 @@ def analizza():
                         'score':          9.0 if info.get('confidenza') == 'alta' else 6.0,
                         'tipo':           'string',
                         'label':          col_file,
-                        'confidenza':     info.get('confidenza', 'media'),
-                        'motivazione':    info.get('motivazione', ''),
+                        'confidenza':     info.get('confidenza', 'alta'),
+                        'motivazione':    info.get('motivazione', 'Cimatron deterministico'),
                         'trasformazione': info.get('trasformazione', 'nessuna'),
-                        'da_agente':      True,
+                        'da_agente':      False,
                     }
 
                 # Colonne non mappate = quelle nel file che non hanno un campo master
