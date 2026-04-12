@@ -127,7 +127,7 @@ MASTER_FIELDS = {
     'tolleranza_default':    {'label': 'Tolleranza [mm]',                 'tipo': 'float',
                               'keywords': ['tolleranza','tolerance'], 'esempio': '0.01'},
     'tecnologia':            {'label': 'Tecnologia lavorazione',          'tipo': 'string',
-                              'keywords': ['tecnologia','technology','fresatura','foratura'], 'esempio': 'Fresatura'},,
+                              'keywords': ['tecnologia','technology','fresatura','foratura'], 'esempio': 'Fresatura'},
     # --- Filettatura ---
     'passo_mm':              {'label': 'Passo filetto [mm]',                'tipo': 'float',
                               'keywords': ['passo','pitch','step','filetto'], 'esempio': '1.5'},
