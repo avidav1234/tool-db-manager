@@ -581,6 +581,13 @@ def api_version():
     return json.dumps({'status': 'ok', 'modules': info,
                        'python': sys.version.split()[0]}, ensure_ascii=False)
 
+@app.route('/api/debug-import')
+def api_debug_import():
+    """Debug: elenca file in UPLOAD_FOLDER e mostra percorso."""
+    import glob, os
+    files = glob.glob(os.path.join(UPLOAD_FOLDER, '*'))
+    return json.dumps({'upload_folder': UPLOAD_FOLDER, 'files': files})
+
 @app.route('/api/reload', methods=['POST'])
 def api_reload():
     """Ricarica i moduli principali senza riavviare il server."""
