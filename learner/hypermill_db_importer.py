@@ -148,9 +148,10 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
                 'utensili': utensili, 'dry_run': True}
 
     master = sqlite3.connect(master_db_path)
-    master.row_factory = sqlite3.Row
+    # PRAGMA senza row_factory per usare indici numerici
     master_cols = {r[1] for r in master.execute("PRAGMA table_info('utensile')").fetchall()}
     id_tipo_default = master.execute("SELECT id FROM tipo_utensile LIMIT 1").fetchone()[0]
+    master.row_factory = sqlite3.Row
 
     CAMPO_MAP = {
         'codice_interno', 'alias', 'descrizione', 'codice_catalogo',
@@ -182,6 +183,9 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             importati += 1
         except Exception as e:
             errori += 1
+            if errori == 1:
+                import sys as _sys
+                print(f'Primo errore: {e} | utensile: {u.get("codice_interno","?")} | dati: {list(insert_data.items())[:5]}', file=_sys.stderr)
 
     master.commit()
     master.close()
