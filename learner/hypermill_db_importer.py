@@ -151,6 +151,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
     # PRAGMA senza row_factory per usare indici numerici
     master_cols = {r[1] for r in master.execute("PRAGMA table_info('utensile')").fetchall()}
     id_tipo_default = master.execute("SELECT id FROM tipo_utensile LIMIT 1").fetchone()[0]
+    id_mat_default = master.execute("SELECT id FROM materiale_utensile LIMIT 1").fetchone()[0]
     master.row_factory = sqlite3.Row
 
     CAMPO_MAP = {
@@ -171,7 +172,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             ).fetchone()
             id_tipo = id_tipo_row['id'] if id_tipo_row else id_tipo_default
 
-            insert_data = {'id_tipo': id_tipo}
+            insert_data = {'id_tipo': id_tipo, 'id_materiale': id_mat_default}
             for campo in CAMPO_MAP:
                 if campo in u and campo in master_cols:
                     insert_data[campo] = u[campo]
