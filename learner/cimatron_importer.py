@@ -137,7 +137,7 @@ REFRIG_MAP = {
 
 def _to_float(v, default=None):
     if v is None or str(v).strip() in ('', 'nan', 'None'): return default
-    try: return float(str(v).replace(',', '.').replace('E-0', 'e-0'))
+    try: return round(float(str(v).replace(',', '.').replace('E-0', 'e-0')), 6)
     except: return default
 
 def _to_int(v, default=None):
