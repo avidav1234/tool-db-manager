@@ -314,7 +314,7 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
                     continue
                 if campo in campi_gia_mappati:
                     continue
-                if col not in list(df.columns):
+                if col not in list(analisi.keys()):
                     continue
                 mapping_totale[col] = info
                 campi_gia_mappati.add(campo)
