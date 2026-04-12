@@ -122,8 +122,8 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         # Rendi codice_interno unico aggiungendo il numero NC come suffisso
         nc_code = row['nc_name'] or row['tool_name'] or ''
         utensile = {
-            'codice_interno':   f"{nc_code}_hm_{row['nc_id']}" if nc_code else f"hm_{row['nc_id']}",
-            'alias':            row['nc_number_str'] or '',
+            'codice_interno':   f"{row['nc_number_str'] or row['nc_name'] or ''}_hm_{row['nc_id']}",
+            'alias':            row['nc_name'] or '',
             'descrizione':      row['tool_name'] or '',
             'codice_catalogo':  row['ordering_code'] or '',
             'tipo':             TIPO_MAP.get(row['tool_type_id'], 'FLAT'),
