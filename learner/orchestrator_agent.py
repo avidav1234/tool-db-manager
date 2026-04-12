@@ -308,20 +308,29 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
             result = _parse_json(testo)
             batch_mapping = result.get('mapping', {})
 
+            if not batch_mapping:
+                log('L3', 'Batch %d/%d: mapping vuoto dalla risposta del modello' % (idx_batch+1, len(batches)))
+                log('L3', 'Risposta ricevuta: %s' % str(testo)[:200])
+            else:
+                log('L3', 'Batch %d/%d: %d colonne ricevute' % (idx_batch+1, len(batches), len(batch_mapping)))
+
             for col, info in batch_mapping.items():
                 campo = info.get('campo_master', 'ignora')
                 if campo == 'ignora' or campo not in MASTER_FIELDS:
                     continue
                 if campo in campi_gia_mappati:
                     continue
-                if col not in list(analisi.keys()):
+                col_norm = col.strip().lower()
+                analisi_keys_norm = {k.strip().lower(): k for k in analisi.keys()}
+                if col_norm not in analisi_keys_norm:
                     continue
                 mapping_totale[col] = info
                 campi_gia_mappati.add(campo)
 
             ambigue.extend(result.get('ambigue', []))
         except Exception as e:
-            log('L3', 'Batch %d/%d errore: %s' % (idx_batch+1, len(batches), e))
+            log('L3', 'Batch %d/%d errore CRITICO: %s' % (idx_batch+1, len(batches), str(e)))
+            log('L3', 'Testo ricevuto dal modello: %s' % str(testo)[:300] if 'testo' in dir() else 'N/A')
 
     n = sum(1 for v in mapping_totale.values() if v.get('campo_master','ignora') != 'ignora')
     log('L3', '%d colonne mappate su %d totali (%d batch)' % (n, len(colonne), len(batches)))
