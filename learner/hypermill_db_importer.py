@@ -183,6 +183,7 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
             t.dbl_param13, t.dbl_param14, t.dbl_param15, t.dbl_param16, t.dbl_param17,
             t.int_param1, t.int_param2, t.int_param3, t.int_param4, t.int_param5, t.int_param6,
             h.name as holder_name,
+            h.comment as holder_comment,
             gh.polyline as holder_polyline,
             m.name as manufacturer_name
         FROM NCTools n
@@ -229,9 +230,15 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         # Tipo attacco da coupling
         tipo_attacco = None
         holder_name = row['holder_name'] or ''
-        if 'HSK' in holder_name: tipo_attacco = 'HSK63'
-        elif 'ISO' in holder_name: tipo_attacco = 'ISO50'
-        elif 'SK40' in holder_name: tipo_attacco = 'SK40'
+        holder_comment = row.get('holder_comment') or ''
+        holder_str = holder_name + ' ' + holder_comment
+        try: holder_comment = row['holder_comment'] or ''
+        except: holder_comment = ''
+        holder_str = holder_name + ' ' + holder_comment
+        if 'HSK' in holder_str: tipo_attacco = 'HSK63'
+        elif 'ISO 50' in holder_str or 'ISO50' in holder_str or 'DIN69871' in holder_str: tipo_attacco = 'ISO50'
+        elif 'SK40' in holder_str or 'SK 40' in holder_str: tipo_attacco = 'SK40'
+        elif 'CAPTO' in holder_str.upper(): tipo_attacco = 'Capto'
 
         utensile = {
             'codice_interno':        f"{row['nc_number_str'] or row['nc_name'] or ''}_hm_{row['nc_id']}",
