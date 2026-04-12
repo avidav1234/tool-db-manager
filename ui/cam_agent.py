@@ -482,19 +482,35 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
     if filepath:
         messaggio_utente = f"File disponibile: {filepath}\n\n{messaggio_utente}"
 
-    # Se utente scrive "continua" senza task_id, mostra lista checkpoint
-    msg_low = messaggio_utente.strip().lower()
-    if msg_low in ('continua', 'riprendi', 'checkpoint'):
+    # Gestione "continua" intelligente
+    msg_strip = messaggio_utente.strip()
+    msg_low = msg_strip.lower()
+    if msg_low.startswith(('continua', 'riprendi')):
+        parts = msg_strip.split(None, 1)
+        task_id_richiesto = parts[1].strip() if len(parts) > 1 else None
         cp_list = tool_lista_checkpoint()
-        if cp_list.get('totale', 0) == 0:
-            return {'risposta': 'Nessun checkpoint salvato. Nessun task in sospeso.', 'history': []}
         tasks = cp_list.get('tasks', [])
-        lines = ['Task in sospeso:']
-        for t in tasks:
-            lines.append(f"  - {t['task_id']} (ultimo step: {t['ultimo_step']})")
-        lines.append('')
-        lines.append('Scrivi: continua [task_id]')
-        return {'risposta': '\n'.join(lines), 'history': []}
+        if not tasks:
+            return {'risposta': 'Nessun checkpoint salvato. Nessun task in sospeso.', 'history': []}
+        # Se task_id non specificato e c'e' solo uno: riprendi automaticamente
+        if not task_id_richiesto:
+            if len(tasks) == 1:
+                task_id_richiesto = tasks[0]['task_id']
+            else:
+                lines = ['Piu task in sospeso, specifica quale:']
+                for t in tasks:
+                    lines.append(f"  continua {t['task_id']}  (ultimo step: {t['ultimo_step']})")
+                return {'risposta': '\n'.join(lines), 'history': []}
+        # Riprendi il task specificato
+        cp = tool_leggi_checkpoint(task_id_richiesto)
+        if not cp.get('trovato'):
+            return {'risposta': f'Checkpoint "{task_id_richiesto}" non trovato.', 'history': []}
+        steps_fatti = [k for k in cp['dati'] if k not in ('ultimo_step','task_id')]
+        messaggio_utente = (f'Riprendi il task "{task_id_richiesto}" dal checkpoint.\n'
+                           f'Steps gia completati: {steps_fatti}\n'
+                           f'Ultimo step: {cp["ultimo_step"]}\n'
+                           f'Dati salvati: {json.dumps(cp["dati"], ensure_ascii=False, default=str)[:1000]}\n'
+                           f'Continua dal prossimo step senza ripetere quelli gia fatti.')
 
     messages = list(history or [])
     messages.append({'role':'user','content':messaggio_utente})
