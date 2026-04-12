@@ -367,6 +367,7 @@ def analizza():
         except Exception:
             usa_orche = False
 
+        log_ev = []  # inizializzato qui per essere disponibile in tutto il blocco
         if usa_orche:
             # PERCORSO 1: Orchestratore L1->L4 (autorevole)
             # SKIP per Cimatron: ha parser nativo dedicato, l'orchestratore spreca token
@@ -409,7 +410,7 @@ def analizza():
                     if df_tmp is not None:
                         print('[DBG] col_names[:10]=' + str(list(df_tmp.columns)[:10]), flush=True)
                 except Exception as _ez:
-                    log_ev.append({'livello': 'ERR', 'msg': 'leggi_cimatron_zip: ' + str(_ez)})
+                    print('[ERR] leggi_cimatron_zip: ' + str(_ez), flush=True)
                     # Fallback: parser manuale
                     import zipfile, io
                     try:
@@ -439,7 +440,7 @@ def analizza():
                     pass
 
             if df_tmp is not None and len(df_tmp) > 0:
-                log_ev = []
+                log_ev = []  # reset per questa analisi
                 res = _oa_module.orchestra_learning(
                     df_tmp, nome_file=f.filename,
                     log_callback=lambda lv, msg: log_ev.append({'livello': lv, 'msg': msg})
