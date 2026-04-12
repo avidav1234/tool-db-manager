@@ -40,8 +40,9 @@ MODEL_VERIFICATORE  = 'claude-sonnet-4-20250514'
 
 MASTER_FIELDS = {
     # Identificazione
+    'alias':                    'NOME OFFICINA - indipendente dal CAM (Cimatron=Commento, Hypermill=Tool ID)',
     'codice_interno':           'Codice univoco utensile (obbligatorio)',
-    'descrizione':              'Descrizione / commento libero',
+    'descrizione':              'Descrizione tecnica libera',
     'sito_web':                 'URL scheda tecnica fornitore',
     'num_magazzino':            'Posizione magazzino utensili',
     'codice_catalogo':          'Codice catalogo fornitore',
@@ -434,7 +435,7 @@ def _cimatron_fast_path(df, nome_file, log):
         NOMI_MAP = {
             # Nomi CORTI (riga 7 CSV Cimatron, versione italiana abbreviata)
             'Nome Utensile':           'codice_interno',
-            'Commento':                'descrizione',
+            'Commento':                'alias',            # Commento Cimatron = NOME OFFICINA
             'Sito':                    'sito_web',
             'Sito web':                'sito_web',
             'Numero Ut.':              'num_magazzino',
