@@ -485,7 +485,7 @@ File principali:
 - plugins/cimatron/_core.py — core plugin Cimatron
 - plugins/_loader.py — loader plugin dinamico"""
 
-def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
+def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
     import urllib.request, ssl
     api_key = _get_api_key()
     if not api_key:
@@ -556,9 +556,14 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=15):
             # Tieni sempre il primo messaggio utente + ultimi 18 messaggi
             messages = [messages[0]] + messages[-18:]
 
+        # Routing modello: Sonnet per debug/fix codice, Haiku per import/mapping
+        usa_sonnet = any(k in messaggio_utente.lower() for k in
+            ['errore','bug','fix','traceback','undefined','exception','non funziona',
+             'sbagliato','correggi','debug','riga','stacktrace','procedi immediatamente'])
+        modello = 'claude-sonnet-4-5' if usa_sonnet else 'claude-haiku-4-5-20251001'
         body = json.dumps({
-            'model': 'claude-haiku-4-5-20251001',
-            'max_tokens': 2048,
+            'model': modello,
+            'max_tokens': 4096 if usa_sonnet else 2048,
             'system': SYSTEM_PROMPT,
             'tools': TOOLS,
             'messages': messages
