@@ -419,9 +419,14 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=8):
     ctx.verify_mode = ssl.CERT_NONE
 
     for turn in range(max_turns):
+        # Comprimi history: se > 20 messaggi, rimuovi tool_results vecchi (tieni ultimi 10 scambi)
+        if len(messages) > 20:
+            # Tieni sempre il primo messaggio utente + ultimi 18 messaggi
+            messages = [messages[0]] + messages[-18:]
+
         body = json.dumps({
-            'model': 'claude-sonnet-4-6',
-            'max_tokens': 4096,
+            'model': 'claude-haiku-4-5-20251001',
+            'max_tokens': 1024,
             'system': SYSTEM_PROMPT,
             'tools': TOOLS,
             'messages': messages
@@ -468,8 +473,9 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=8):
                 res = {'errore': str(e), 'traceback': traceback.format_exc()}
             tool_calls_log.append({'tool':tu['name'],'input':tu.get('input',{}),
                                     'result_summary':str(res)[:200]})
-            results.append({'type':'tool_result','tool_use_id':tu['id'],
-                            'content':json.dumps(res,ensure_ascii=False,default=str)})
+            res_str=json.dumps(res,ensure_ascii=False,default=str)
+            if len(res_str)>3000: res_str=res_str[:2000]+'...[troncato]'
+            results.append({'type':'tool_result','tool_use_id':tu['id'],'content':res_str})
         messages.append({'role':'user','content':results})
 
     return {'risposta':'Limite turni raggiunto.','tool_calls':tool_calls_log,'history':messages}
