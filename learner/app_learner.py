@@ -381,8 +381,17 @@ tr:hover td{background:#263344}
 <thead><tr><th>Sorgente Hypermill</th><th>Campo DB Master</th><th>Esempio</th><th>Stato</th></tr></thead>
 <tbody>
 {% set rows = [
-  ('nc_name','codice_interno','Codice NC macchina'),
-  ('nc_number_str','alias','Nome officina'),
+  ('nc_number_str','codice_interno','Nome officina (codice)'),
+  ('nc_name','alias','Codice NC macchina'),
+  ('holder_name','nome_pinza','Nome portautensile'),
+  ('polyline','lungh_presa_mm','Lunghezza corpo holder mm'),
+  ('tool_length+reach','fuori_pinza_mm','Fuori pinza mm'),
+  ('ext_reach','lungh_libera_prolunga_mm','Reach prolunga mm'),
+  ('tipo_attacco','tipo_attacco','Tipo attacco HSK/ISO'),
+  ('tech.p2','fz_default','Fz mm/dente'),
+  ('tech.p5','passo_lat_default','Ae mm'),
+  ('tech.p6','passo_z_default','Ap mm'),
+  ('tech.p10','vc_default','Vc m/min'),
   ('tool_name','descrizione','Nome utensile completo'),
   ('ordering_code','codice_catalogo','Codice catalogo'),
   ('tool_type_id','tipo','BALL/BULL/FLAT/DRILL'),
@@ -422,9 +431,13 @@ tr:hover td{background:#263344}
 <td style="color:#94a3b8">{{ u.get('alias','') }}</td>
 <td><span class="tag tag-ok">{{ u.get('tipo','?') }}</span></td>
 <td>{{ u.get('diametro_mm','') }}</td>
+<td>{{ u.get('raggio_punta_mm','') }}</td>
 <td>{{ u.get('fuori_pinza_mm','') }}</td>
+<td style="color:#94a3b8;font-size:.8rem">{{ u.get('nome_pinza','')[:20] }}</td>
+<td>{{ u.get('lungh_presa_mm','') }}</td>
 <td>{{ u.get('avanzamento_default','') }}</td>
 <td>{{ u.get('fz_default','') }}</td>
+<td>{{ u.get('vc_default','') }}</td>
 </tr>
 {% endfor %}
 </tbody>
