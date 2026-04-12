@@ -459,13 +459,13 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#6366f1;box-sh
       <div class="section-title">Identificazione</div>
       <div class="grid">
         <div class="field"><label>Codice interno *</label>
-          <input name="codice_interno" value="{{ u.get('codice_interno','') }}" required {% if modifica %}readonly{% endif %}></div>
+          <input name="codice_interno" value="{{ (u.get('codice_interno') or '') | replace('None','') }}" required {% if modifica %}readonly{% endif %}></div>
         <div class="field"><label>Alias (nome officina)</label>
-          <input name="alias" value="{{ u.get('alias','') }}"></div>
+          <input name="alias" value="{{ (u.get('alias') or '') | replace('None','') }}"></div>
         <div class="field"><label>Codice catalogo</label>
-          <input name="codice_catalogo" value="{{ u.get('codice_catalogo','') }}"></div>
+          <input name="codice_catalogo" value="{{ (u.get('codice_catalogo') or '') | replace('None','') }}"></div>
         <div class="field"><label>Descrizione</label>
-          <input name="descrizione" value="{{ u.get('descrizione','') }}"></div>
+          <input name="descrizione" value="{{ (u.get('descrizione') or '') | replace('None','') }}"></div>
         <div class="field"><label>Tipo *</label>
           <select name="tipo">{% for t in tipi %}<option value="{{ t }}" {% if t==u.get('tipo') %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
         <div class="field"><label>Materiale *</label>
@@ -477,35 +477,35 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#6366f1;box-sh
     <div class="card">
       <div class="section-title">Geometria</div>
       <div class="grid">
-        <div class="field"><label>Diametro [mm] *</label><input name="diametro_mm" type="number" step="any" value="{{ u.get('diametro_mm','') }}"></div>
-        <div class="field"><label>Raggio punta [mm]</label><input name="raggio_punta_mm" type="number" step="any" value="{{ u.get('raggio_punta_mm','') }}"></div>
-        <div class="field"><label>Angolo punta [°]</label><input name="angolo_punta_gradi" type="number" step="any" value="{{ u.get('angolo_punta_gradi','') }}"></div>
-        <div class="field"><label>Lunghezza totale [mm]</label><input name="lunghezza_totale_mm" type="number" step="any" value="{{ u.get('lunghezza_totale_mm','') }}"></div>
-        <div class="field"><label>Lunghezza tagliente [mm]</label><input name="lunghezza_tagl_mm" type="number" step="any" value="{{ u.get('lunghezza_tagl_mm','') }}"></div>
-        <div class="field"><label>Numero taglienti</label><input name="num_taglienti" type="number" value="{{ u.get('num_taglienti','') }}"></div>
-        <div class="field"><label>Angolo elica [°]</label><input name="angolo_elica_gradi" type="number" step="any" value="{{ u.get('angolo_elica_gradi','') }}"></div>
-        <div class="field"><label>Passo filetto [mm]</label><input name="passo_mm" type="number" step="any" value="{{ u.get('passo_mm','') }}"></div>
+        <div class="field"><label>Diametro [mm] *</label><input name="diametro_mm" type="number" step="any" value="{{ (u.get('diametro_mm') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Raggio punta [mm]</label><input name="raggio_punta_mm" type="number" step="any" value="{{ (u.get('raggio_punta_mm') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Angolo punta [°]</label><input name="angolo_punta_gradi" type="number" step="any" value="{{ (u.get('angolo_punta_gradi') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Lunghezza totale [mm]</label><input name="lunghezza_totale_mm" type="number" step="any" value="{{ (u.get('lunghezza_totale_mm') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Lunghezza tagliente [mm]</label><input name="lunghezza_tagl_mm" type="number" step="any" value="{{ (u.get('lunghezza_tagl_mm') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Numero taglienti</label><input name="num_taglienti" type="number" value="{{ (u.get('num_taglienti') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Angolo elica [°]</label><input name="angolo_elica_gradi" type="number" step="any" value="{{ (u.get('angolo_elica_gradi') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Passo filetto [mm]</label><input name="passo_mm" type="number" step="any" value="{{ (u.get('passo_mm') or '') | replace('None','') }}"></div>
       </div>
     </div>
     <div class="card">
       <div class="section-title">Portautensile</div>
       <div class="grid">
-        <div class="field"><label>Nome pinza</label><input name="nome_pinza" value="{{ u.get('nome_pinza','') }}"></div>
-        <div class="field"><label>Lunghezza presa [mm]</label><input name="lungh_presa_mm" type="number" step="any" value="{{ u.get('lungh_presa_mm','') }}"></div>
-        <div class="field"><label>Fuori pinza [mm]</label><input name="fuori_pinza_mm" type="number" step="any" value="{{ u.get('fuori_pinza_mm','') }}"></div>
+        <div class="field"><label>Nome pinza</label><input name="nome_pinza" value="{{ (u.get('nome_pinza') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Lunghezza presa [mm]</label><input name="lungh_presa_mm" type="number" step="any" value="{{ (u.get('lungh_presa_mm') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Fuori pinza [mm]</label><input name="fuori_pinza_mm" type="number" step="any" value="{{ (u.get('fuori_pinza_mm') or '') | replace('None','') }}"></div>
       </div>
     </div>
     <div class="card">
       <div class="section-title">Parametri taglio default</div>
       <div class="grid">
-        <div class="field"><label>Avanzamento Vf [mm/min]</label><input name="avanzamento_default" type="number" step="any" value="{{ u.get('avanzamento_default','') }}"></div>
-        <div class="field"><label>Rotazione [RPM]</label><input name="rotazione_default" type="number" step="any" value="{{ u.get('rotazione_default','') }}"></div>
-        <div class="field"><label>Vc [m/min]</label><input name="vc_default" type="number" step="any" value="{{ u.get('vc_default','') }}"></div>
-        <div class="field"><label>Fz [mm/z]</label><input name="fz_default" type="number" step="any" value="{{ u.get('fz_default','') }}"></div>
-        <div class="field"><label>Passo Z [mm]</label><input name="passo_z_default" type="number" step="any" value="{{ u.get('passo_z_default','') }}"></div>
-        <div class="field"><label>Passo lat. [mm]</label><input name="passo_lat_default" type="number" step="any" value="{{ u.get('passo_lat_default','') }}"></div>
-        <div class="field"><label>Tolleranza [mm]</label><input name="tolleranza_default" type="number" step="any" value="{{ u.get('tolleranza_default','') }}"></div>
-        <div class="field"><label>Vita utensile</label><input name="vita_utensile" type="number" value="{{ u.get('vita_utensile','') }}"></div>
+        <div class="field"><label>Avanzamento Vf [mm/min]</label><input name="avanzamento_default" type="number" step="any" value="{{ (u.get('avanzamento_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Rotazione [RPM]</label><input name="rotazione_default" type="number" step="any" value="{{ (u.get('rotazione_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Vc [m/min]</label><input name="vc_default" type="number" step="any" value="{{ (u.get('vc_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Fz [mm/z]</label><input name="fz_default" type="number" step="any" value="{{ (u.get('fz_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Passo Z [mm]</label><input name="passo_z_default" type="number" step="any" value="{{ (u.get('passo_z_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Passo lat. [mm]</label><input name="passo_lat_default" type="number" step="any" value="{{ (u.get('passo_lat_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Tolleranza [mm]</label><input name="tolleranza_default" type="number" step="any" value="{{ (u.get('tolleranza_default') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Vita utensile</label><input name="vita_utensile" type="number" value="{{ (u.get('vita_utensile') or '') | replace('None','') }}"></div>
         <div class="field"><label>Dir. rotazione</label>
           <select name="dir_rotazione"><option value="">--</option>
             <option value="CW" {% if u.get('dir_rotazione')=='CW' %}selected{% endif %}>CW</option>
@@ -520,7 +520,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#6366f1;box-sh
     </div>
     <div class="card">
       <div class="section-title">Note</div>
-      <div class="field"><textarea name="note" rows="3" style="resize:vertical">{{ u.get('note','') }}</textarea></div>
+      <div class="field"><textarea name="note" rows="3" style="resize:vertical">{{ (u.get('note') or '') | replace('None','') }}</textarea></div>
     </div>
     <div class="actions">
       <button type="submit" class="btn btn-primary">&#10003; Salva</button>
