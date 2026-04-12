@@ -193,6 +193,66 @@ def tool_leggi_utensili(filtro=None, limit=10):
         FROM utensile u JOIN tipo_utensile t ON u.id_tipo=t.id
         {where} ORDER BY u.id DESC LIMIT {limit}""")
 
+
+def _safe_path(relpath):
+    """Risolve un percorso relativo alla root del progetto e blocca path traversal."""
+    root = os.path.normpath(os.path.join(_DIR, '..'))
+    full = os.path.normpath(os.path.join(root, relpath))
+    if not full.startswith(root):
+        raise ValueError(f'Path non consentito: {relpath}')
+    # Solo file Python, SQL, JSON, CSV del progetto
+    ext = os.path.splitext(full)[1].lower()
+    if ext not in ('.py', '.sql', '.json', '.csv', '.txt', '.md'):
+        raise ValueError(f'Estensione non consentita: {ext}')
+    return full
+
+def tool_leggi_file(percorso):
+    """
+    Legge un file del progetto (percorso relativo alla root, es. 'learner/orchestrator_agent.py').
+    Restituisce il contenuto con numeri di riga per facilitare il debug.
+    """
+    try:
+        full = _safe_path(percorso)
+        with open(full, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        # Restituisce con numeri di riga
+        numbered = ''.join(f'{i+1:4d}  {l}' for i, l in enumerate(lines))
+        return {'percorso': percorso, 'righe_totali': len(lines), 'contenuto': numbered}
+    except Exception as e:
+        return {'errore': str(e)}
+
+def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
+    """
+    Esegue un str_replace su un file del progetto.
+    vecchio_testo deve apparire ESATTAMENTE UNA VOLTA nel file.
+    Prima del replace mostra un diff per conferma.
+    """
+    try:
+        full = _safe_path(percorso)
+        with open(full, 'r', encoding='utf-8') as f:
+            contenuto = f.read()
+        count = contenuto.count(vecchio_testo)
+        if count == 0:
+            return {'errore': f'Testo non trovato nel file. Verifica con leggi_file prima.'}
+        if count > 1:
+            return {'errore': f'Testo trovato {count} volte — troppo ambiguo. Aggiungi più contesto.'}
+        nuovo_contenuto = contenuto.replace(vecchio_testo, nuovo_testo, 1)
+        with open(full, 'w', encoding='utf-8') as f:
+            f.write(nuovo_contenuto)
+        # Calcola righe modificate
+        old_lines = vecchio_testo.count('\n') + 1
+        new_lines = nuovo_testo.count('\n') + 1
+        return {
+            'ok': True,
+            'percorso': percorso,
+            'descrizione': descrizione,
+            'righe_rimosse': old_lines,
+            'righe_aggiunte': new_lines,
+            'nota': 'File modificato. Riavvia il server per applicare le modifiche Python.'
+        }
+    except Exception as e:
+        return {'errore': str(e)}
+
 # ── TOOL REGISTRY ──────────────────────────────────────────────────────────
 
 TOOLS = [
@@ -209,7 +269,16 @@ TOOLS = [
     {"name":"importa_file","description":"Importa file CAM nel DB. dry_run=true per simulazione.",
      "input_schema":{"type":"object","properties":{"filepath":{"type":"string"},"dry_run":{"type":"boolean"}},"required":["filepath"]}},
     {"name":"leggi_utensili","description":"Legge utensili dal DB per verifica. Accetta filtro WHERE.",
-     "input_schema":{"type":"object","properties":{"filtro":{"type":"string"},"limit":{"type":"integer"}},"required":[]}}
+     "input_schema":{"type":"object","properties":{"filtro":{"type":"string"},"limit":{"type":"integer"}},"required":[]}},
+    {"name":"leggi_file","description":"Legge un file del progetto con numeri di riga (es. 'learner/orchestrator_agent.py'). Usalo per analizzare bug nel codice prima di correggerli.",
+     "input_schema":{"type":"object","properties":{"percorso":{"type":"string","description":"Percorso relativo alla root del progetto"}},"required":["percorso"]}},
+    {"name":"modifica_file","description":"Corregge un bug in un file del progetto tramite str_replace. vecchio_testo deve apparire ESATTAMENTE una volta. Usalo dopo leggi_file per verificare il contesto.",
+     "input_schema":{"type":"object","properties":{
+       "percorso":{"type":"string","description":"Percorso relativo alla root, es. 'learner/orchestrator_agent.py'"},
+       "vecchio_testo":{"type":"string","description":"Testo esatto da sostituire (deve essere unico nel file)"},
+       "nuovo_testo":{"type":"string","description":"Testo sostitutivo"},
+       "descrizione":{"type":"string","description":"Descrizione del fix per il log"}
+     },"required":["percorso","vecchio_testo","nuovo_testo"]}}
 ]
 
 TOOL_FN = {
@@ -220,23 +289,35 @@ TOOL_FN = {
     'esegui_sql':           lambda i: tool_esegui_sql(i['sql'], i.get('params')),
     'importa_file':         lambda i: tool_importa_file(i['filepath'], i.get('dry_run',False)),
     'leggi_utensili':       lambda i: tool_leggi_utensili(i.get('filtro'), i.get('limit',10)),
+    'leggi_file':           lambda i: tool_leggi_file(i['percorso']),
+    'modifica_file':        lambda i: tool_modifica_file(i['percorso'], i['vecchio_testo'],
+                                                          i['nuovo_testo'], i.get('descrizione','')),
 }
 
 # ── AGENT LOOP ─────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """Sei un agente specializzato nella gestione di database utensili CNC (Tool DB Manager).
-Il tuo obiettivo e aiutare a importare file CAM nel DB master universale.
+Il tuo obiettivo e aiutare a importare file CAM nel DB master universale E a diagnosticare/correggere bug nel codice.
 
 CAM supportati: Cimatron, Hypermill, Mastercam, Fusion 360, WorkNC, NX (e altri CSV).
 
-Regole operative:
+Regole operative - Import:
 - Usa leggi_schema_db come primo passo per capire lo stato del DB
 - Usa analizza_file_cam per capire la struttura del file
 - Proponi SEMPRE dry_run prima dell import reale
 - Prima di ALTER TABLE, spiega all utente cosa farai e perche
 - Quando l utente dice 'procedi', 'ok', 'si', esegui l azione
 - L alias e il nome officina: Cimatron=Commento, Hypermill=Tool ID, Mastercam=Tool comment
-- fuori_pinza_mm e il dato piu critico per la sicurezza in macchina: verificalo sempre"""
+- fuori_pinza_mm e il dato piu critico per la sicurezza in macchina: verificalo sempre
+
+Regole operative - Debug e fix codice:
+- Quando un import produce risultati anomali (0 campi mappati, errori nel log), ANALIZZA il codice
+- Usa leggi_file per leggere il file incriminato con numeri di riga
+- Identifica il bug esatto con motivazione tecnica precisa
+- Usa modifica_file con vecchio_testo UNICO nel file per applicare il fix
+- Dopo il fix, spiega cosa hai cambiato e perche
+- NON modificare mai database/tool_master.db o file di configurazione con credenziali
+- Dopo modifica_file su file .py, avvisa l utente di riavviare il server per applicare le modifiche"""
 
 def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=8):
     import urllib.request, ssl
