@@ -2557,6 +2557,164 @@ def _inject_widget(resp):
             resp.set_data(html.replace('</body>', _WIDGET + '</body>'))
     return resp
 
+
+
+# =======================================================================
+# CHAT WIDGET — iniettato via file statico in ogni pagina HTML
+# =======================================================================
+
+_WIDGET_MARKUP = (
+    '<div id="ai-fab" onclick="aiT()" title="Agente CAM" '
+    'style="position:fixed;bottom:24px;right:24px;width:52px;height:52px;'
+    'background:#6366f1;color:#fff;border:none;border-radius:50%;cursor:pointer;'
+    'font-size:1.4rem;box-shadow:0 4px 20px rgba(99,102,241,.5);z-index:9998;'
+    'display:flex;align-items:center;justify-content:center;transition:transform .15s;'
+    'user-select:none">&#129302;</div>'
+    '<div id="ai-panel" style="position:fixed;bottom:88px;right:24px;width:420px;height:560px;'
+    'background:#1e293b;border:1px solid #334155;border-radius:16px;'
+    'box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:9999;display:none;flex-direction:column;overflow:hidden">'
+    '<div style="background:#0f172a;padding:.75rem 1rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid #334155">'
+    '<span style="color:#fff;font-weight:600;font-size:.875rem;flex:1">&#129302; Agente CAM</span>'
+    '<small id="ai-pg" style="color:#475569;font-size:.7rem">pronto</small>'
+    '<span onclick="aiT()" style="color:#64748b;cursor:pointer;font-size:1rem;padding:.2rem;user-select:none">&#10005;</span>'
+    '</div>'
+    '<div id="ai-ms" style="flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.5rem">'
+    '<div style="background:#0d2d1a;color:#86efac;align-self:center;font-size:.7rem;padding:.2rem .6rem;border-radius:12px">'
+    'Sono qui &#8212; scrivi o incolla un log.</div>'
+    '</div>'
+    '<div style="padding:.6rem;border-top:1px solid #334155;display:flex;flex-direction:column;gap:.4rem">'
+    '<div style="display:flex;align-items:center;gap:.4rem">'
+    '<label for="ai-fi" style="background:#0f172a;border:1px dashed #334155;border-radius:5px;'
+    'padding:.3rem .6rem;cursor:pointer;font-size:.72rem;color:#64748b;white-space:nowrap">'
+    '&#128194; File CAM</label>'
+    '<input type="file" id="ai-fi" style="display:none" accept=".zip,.csv,.xml,.tdm,.tdb">'
+    '<span id="ai-fn" style="font-size:.7rem;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">nessun file</span>'
+    '</div>'
+    '<div style="display:flex;gap:.4rem">'
+    '<textarea id="ai-in" rows="1" placeholder="Scrivi o incolla un log..." '
+    'style="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;'
+    'padding:.5rem .7rem;color:#e2e8f0;font-size:.8rem;resize:none;min-height:34px;max-height:80px"></textarea>'
+    '<button id="ai-sb" onclick="aiS()" '
+    'style="background:#6366f1;color:#fff;border:none;border-radius:8px;'
+    'padding:.5rem .9rem;cursor:pointer;font-size:.9rem;font-weight:600">&#9658;</button>'
+    '</div></div></div>'
+    '<script src="/static/widget.js"><' '/script>'
+)
+
+
+@app.route('/static/widget.js')
+def widget_js():
+    """Serve il widget JS per il pannello chat flottante."""
+    js = r"""
+(function(){
+var H=[],FP=null,MID=0,OPEN=false;
+var PG=(function(){
+  var p=location.pathname;
+  if(p==='/') return 'Lista utensili';
+  if(p.indexOf('/modifica')>-1) return 'Modifica utensile '+p.split('/')[2];
+  if(p.indexOf('/nuovo')>-1) return 'Nuovo utensile';
+  if(p.indexOf('/importa')>-1) return 'Import CAM';
+  if(p.indexOf('/impostazioni')>-1) return 'Impostazioni';
+  if(p.indexOf('/log')>-1) return 'Log';
+  if(p.indexOf('/cam-agent')>-1) return 'Agente CAM';
+  return p;
+})();
+var pg=document.getElementById('ai-pg');
+if(pg) pg.textContent=PG;
+var fab=document.getElementById('ai-fab');
+var panel=document.getElementById('ai-panel');
+var inp=document.getElementById('ai-in');
+var btn=document.getElementById('ai-sb');
+var fi=document.getElementById('ai-fi');
+var fn=document.getElementById('ai-fn');
+var ms=document.getElementById('ai-ms');
+
+if(inp) inp.addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();aiS();}
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&OPEN) aiT();
+});
+
+window.aiT=function(){
+  OPEN=!OPEN;
+  if(panel) panel.style.display=OPEN?'flex':'none';
+  if(fab) fab.innerHTML=OPEN?'&#10005;':'&#129302;';
+  if(OPEN&&inp) inp.focus();
+};
+
+if(fi) fi.addEventListener('change',async function(e){
+  var f=e.target.files[0]; if(!f) return;
+  if(fn) fn.textContent=f.name;
+  var fd=new FormData(); fd.append('file',f);
+  add('s','Caricamento '+f.name+'...');
+  try{
+    var r=await fetch('/cam-agent/upload',{method:'POST',body:fd});
+    var d=await r.json();
+    if(d.filepath){FP=d.filepath;add('s','✓ Pronto: '+f.name);}
+    else add('e','Errore upload');
+  }catch(ex){add('e',ex.message);}
+});
+
+window.aiS=async function(){
+  var m=(inp&&inp.value||'').trim(); if(!m) return;
+  if(inp){inp.value='';inp.style.height='auto';}
+  add('u',m);
+  if(btn){btn.disabled=true;btn.textContent='...';}
+  var tid=add('t','elaborazione...');
+  var ctx=(H.length===0)?('[Pagina: '+PG+']
+'+m):m;
+  if(FP) ctx='[File: '+FP+']
+'+ctx;
+  try{
+    var r=await fetch('/cam-agent/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messaggio:ctx,filepath:FP,history:H})
+    });
+    var d=await r.json();
+    rm(tid);
+    if(d.errore){add('e',d.errore);}
+    else{add('a',d.risposta||'');H=d.history||H;}
+  }catch(ex){rm(tid);add('e',ex.message);}
+  if(btn){btn.disabled=false;btn.innerHTML='&#9658;';}
+};
+
+function add(t,txt){
+  if(!ms) return '';
+  var id='m'+(++MID);
+  var el=document.createElement('div');
+  el.id=id;
+  el.style.cssText={
+    u:'background:#1d4ed8;color:#fff;align-self:flex-end;border-radius:10px 10px 2px 10px',
+    a:'background:#0f172a;color:#e2e8f0;align-self:flex-start;border-radius:10px 10px 10px 2px',
+    s:'background:#0d2d1a;color:#86efac;align-self:center;border-radius:12px',
+    e:'background:#450a0a;color:#fca5a5;align-self:flex-start',
+    t:'color:#475569;font-style:italic;align-self:flex-start'
+  }[t]||'';
+  el.style.cssText+=';font-size:.8rem;line-height:1.5;padding:.55rem .75rem;max-width:95%;white-space:pre-wrap;word-break:break-word;margin-bottom:2px';
+  el.textContent=txt||'';
+  ms.appendChild(el);
+  el.scrollIntoView({behavior:'smooth',block:'end'});
+  return id;
+}
+function rm(id){var e=document.getElementById(id);if(e)e.remove();}
+})();
+"""
+    from flask import Response
+    return Response(js, mimetype='application/javascript')
+
+
+@app.after_request
+def _inject_widget(resp):
+    """Inietta markup widget in ogni pagina HTML — il JS viene da /static/widget.js."""
+    if resp.content_type and 'text/html' in resp.content_type:
+        html = resp.get_data(as_text=True)
+        if '</body>' in html and 'ai-fab' not in html:
+            resp.set_data(html.replace('</body>', _WIDGET_MARKUP + '</body>'))
+    return resp
+
+
 if __name__ == '__main__':
     init_db()
     try:
