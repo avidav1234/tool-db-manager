@@ -432,37 +432,62 @@ def _cimatron_fast_path(df, nome_file, log):
     # Se nessun record trovato con ID, prova con nomi italiani
     if not records and nome_match >= 4:
         NOMI_MAP = {
-            # --- Identificazione (nomi esatti riga 7 del CSV Cimatron) ---
+            # Nomi CORTI (riga 7 CSV Cimatron, versione italiana abbreviata)
             'Nome Utensile':           'codice_interno',
             'Commento':                'descrizione',
+            'Sito':                    'sito_web',
             'Sito web':                'sito_web',
+            'Numero Ut.':              'num_magazzino',
             'Numero Magazzino':        'num_magazzino',
+            'N. Mag.':                 'num_magazzino',
             'Nome Catalogo':           'codice_catalogo',
-            # --- Classificazione ---
+            # Classificazione
             'Tecnologia':              'tecnologia',
             'Punta/Tipo':              'tipo',
-            # --- Geometria principale ---
+            # Geometria
             'Diametro':                'diametro_mm',
             'Raggio Base':             'raggio_punta_mm',
             'Angolo Punta':            'angolo_punta_gradi',
             'Lunghezza Totale Ut.':    'lunghezza_totale_mm',
             'Lunghezza Utile':         'lunghezza_tagl_mm',
+            'Lungh. Tagliente':        'lunghezza_tagl2_mm',
             'Lunghezza Taglio secondaria': 'lunghezza_tagl2_mm',
             'Conico':                  'conico',
+            # Angolo conicita con e senza accento
             'Angolo Conicit\u00e0':   'angolo_conico_gradi',
-            # --- Stelo ---
+            'Angolo Conicita':         'angolo_conico_gradi',
+            # Stelo
+            'Diametro Gambo':          'diam_stelo_mm',
             'Diametro Gambo/Stelo':    'diam_stelo_mm',
+            'Dia. Superiore Stelo':    'diam_stelo_sup_mm',
             'Diametro Stelo Sup':      'diam_stelo_sup_mm',
+            'Dia. Inferiore Stelo':    'diam_stelo_inf_mm',
             'Diametro Stelo Inf':      'diam_stelo_inf_mm',
+            'Lungh. Cono Stelo':       'lungh_cono_stelo_mm',
             'Lunghezza Cono Stelo':    'lungh_cono_stelo_mm',
+            'Lungh. Libera Stelo':     'lungh_libera_stelo_mm',
             'Lunghezza Libera Stelo':  'lungh_libera_stelo_mm',
             'Angolo Cono Stelo':       'angolo_cono_stelo_gradi',
-            # --- Portautensile ---
+            # Portautensile
             'Nome Pinza':              'nome_pinza',
             'Nome Porta Utensile':     'nome_pinza',
             'Lunghezza Presa':         'lungh_presa_mm',
+            'Lungh. Presa':            'lungh_presa_mm',
+            'Lungh. Libera':           'fuori_pinza_mm',
             'Lunghezza Libera':        'fuori_pinza_mm',
-            # --- Parametri taglio ---
+            # Parametri taglio - nomi CORTI (parser manuale)
+            'Avanz.':                  'avanzamento_default',
+            'Rotaz.':                  'rotazione_default',
+            'Vt':                      'vc_default',
+            'Fz':                      'fz_default',
+            'Denti':                   'num_taglienti',
+            'Vita Utensile':           'vita_utensile',
+            'Dir Rotaz.':              'dir_rotazione',
+            'Refrigerante':            'refrigerante',
+            'Passo in Z':              'passo_z_default',
+            'Passo Laterale':          'passo_lat_default',
+            'Tolleranza':              'tolleranza_default',
+            # Parametri taglio - nomi ESTESI (cimatron_parser.leggi_cimatron_zip)
             'Avanzamento Vf mm/min':   'avanzamento_default',
             'Rotazione RPM':           'rotazione_default',
             'Velocita taglio Vc m/min':'vc_default',
@@ -471,9 +496,7 @@ def _cimatron_fast_path(df, nome_file, log):
             'Vita utensile':           'vita_utensile',
             'Direzione mandrino':      'dir_rotazione',
             'Tipo refrigerante':       'refrigerante',
-            'Passo in Z':              'passo_z_default',
             'Passo laterale':          'passo_lat_default',
-            'Tolleranza':              'tolleranza_default',
         }
         TIPO_N = {
                   'diametro_mm':'float','raggio_punta_mm':'float','angolo_punta_gradi':'float',
