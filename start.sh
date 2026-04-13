@@ -117,3 +117,8 @@ fi
 echo ""
 echo "  Per fermare: bash stop.sh"
 echo ""
+
+# Dev exec server per Claude
+echo "Avvio dev_exec server..."
+python3 dev_exec.py &
+echo $! > .pid_devexec
