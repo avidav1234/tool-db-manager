@@ -429,6 +429,8 @@ def home():
         except: return v
 
     q_filter = request.args.get('q', '').strip().lower()
+    tipo_filter = request.args.get('tipo', '').strip()
+    pinza_filter = request.args.get('pinza', '').strip()
     try:
         conn=get_conn()
         rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno").fetchall()
@@ -439,7 +441,13 @@ def home():
         utensili=[]
         for row in rows:
             u=dict(row)
-            # Filtro da URL (?q=D10)
+            # Filtro tipo da URL (?tipo=BALL)
+            if tipo_filter and u.get('tipo') != tipo_filter:
+                continue
+            # Filtro pinza da URL (?pinza=TSF...)
+            if pinza_filter and u.get('nome_pinza') != pinza_filter:
+                continue
+            # Filtro testo da URL (?q=D10)
             if q_filter:
                 searchable = ' '.join(str(v) for v in u.values() if v).lower()
                 if q_filter not in searchable:
@@ -1017,9 +1025,17 @@ def utensile_dettaglio(uid):
                 ).fetchall()
     finally:
         conn.close()
+    # Genera profilo SVG
+    try:
+        from svg_profilo import genera_svg_profilo
+        svg = genera_svg_profilo(dict(u), [dict(s) for s in holder_segs])
+    except Exception:
+        svg = ''
+
     return render_template_string(DETTAGLIO_HTML,
         u=dict(u), taglio=[dict(t) for t in taglio],
         holder_segs=[dict(s) for s in holder_segs],
+        svg_profilo=svg,
         active='home', msg='', mtype='')
 
 DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
@@ -1031,7 +1047,23 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <a class="btn" style="margin-left:auto" href="/utensile/{{ u.id }}/modifica">Modifica</a>
 </div>
 
-<div class="grid2" style="margin-bottom:1.25rem">
+<div style="display:grid;grid-template-columns:auto 1fr;gap:1.25rem;margin-bottom:1.25rem">
+
+  <!-- PROFILO SVG -->
+  <div class="card" style="text-align:center;padding:1rem;min-width:200px">
+    <h2 style="font-size:12px;margin-bottom:.5rem">Profilo 2D</h2>
+    {% if svg_profilo %}
+    {{ svg_profilo | safe }}
+    <div style="margin-top:.5rem">
+      <a href="javascript:void(0)" onclick="var s=document.querySelector('.card svg');if(!s)return;var b=new Blob([s.outerHTML],{type:'image/svg+xml'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='profilo_{{u.codice_interno}}.svg';a.click()" style="font-size:11px;color:#3b82f6;cursor:pointer">Scarica SVG</a>
+    </div>
+    {% else %}
+    <div style="color:#aaa;font-size:12px;padding:2rem">Dati insufficienti</div>
+    {% endif %}
+  </div>
+
+  <div>
+  <div class="grid2" style="margin-bottom:0">
 
   <!-- COLONNA SINISTRA: geometria + stelo -->
   <div>
@@ -1148,6 +1180,9 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
     {% endif %}
   </div>
 </div>
+  </div> <!-- chiude grid2 interno -->
+  </div> <!-- chiude colonna destra -->
+</div> <!-- chiude grid profilo+dettagli -->
 
 <!-- CONDIZIONI DI TAGLIO PER MATERIALE -->
 <div class="card">
