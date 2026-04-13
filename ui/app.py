@@ -333,6 +333,7 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
       title="{{ u.nome_pinza or '' }}">{{ u.nome_pinza or '—' }}</td>
   <td style="text-align:center;font-size:13px;font-weight:600">{{ u.num_taglienti }}</td>
   <td style="white-space:nowrap;text-align:right">
+<div id="pg-bar" style="display:flex;align-items:center;gap:6px;padding:.75rem 0;flex-wrap:wrap;margin-top:.5rem"></div>
     <a class="btn" style="padding:3px 8px;font-size:12px" title="Dettaglio"
        href="/utensile/{{ u.id }}">&#8505;</a>
     <a class="btn" style="padding:3px 8px;font-size:12px" title="Modifica"
@@ -348,19 +349,8 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
 <script>
 function filtra(){
-  var q=document.getElementById('search').value.toLowerCase();
-  var tipo=document.getElementById('filtro-tipo').value;
-  var pinza=document.getElementById('filtro-pinza').value;
-  var n=0;
-  document.querySelectorAll('#tbl tbody tr').forEach(function(r){
-    var ok=true;
-    if(q && !r.dataset.search.includes(q)) ok=false;
-    if(tipo && r.dataset.tipo!==tipo) ok=false;
-    if(pinza && r.dataset.pinza!==pinza) ok=false;
-    r.style.display=ok?'':'none';
-    if(ok) n++;
-  });
-  document.getElementById('count-vis').textContent=n+' utensili';
+  if(typeof _pg!=='undefined'){_pg.page=1;}
+  if(typeof _doFiltra==='function') _doFiltra();
 }
 document.addEventListener('keydown',function(e){
   if((e.ctrlKey||e.metaKey)&&e.key==='f'){
@@ -381,6 +371,44 @@ document.addEventListener('keydown',function(e){
 </div>
 """)
 
+
+@app.route('/api/utensili')
+def api_utensili():
+    def _arr(v, dec=3):
+        if v is None: return v
+        try:
+            f=float(v); return round(f,1) if abs(f-round(f))<0.0001 else round(f,dec)
+        except: return v
+    page=int(request.args.get('page',1))
+    per_page=int(request.args.get('per_page',50))
+    tipo=request.args.get('tipo','').strip()
+    pinza=request.args.get('pinza','').strip()
+    q=request.args.get('q','').strip().lower()
+    scol=request.args.get('sort','tipo')
+    sdir=request.args.get('dir','asc')
+    if scol not in {'tipo','diametro_mm','lunghezza_totale_mm','fuori_pinza_mm','codice_interno'}: scol='tipo'
+    if sdir not in ('asc','desc'): sdir='asc'
+    where=['attivo=1']; params=[]
+    if tipo:  where.append('tipo=?');       params.append(tipo)
+    if pinza: where.append('nome_pinza=?'); params.append(pinza)
+    wsql=' AND '.join(where)
+    try:
+        conn=get_conn()
+        total=conn.execute(f'SELECT COUNT(*) FROM utensile_completo WHERE {wsql}',params).fetchone()[0]
+        rows=conn.execute(f'SELECT * FROM utensile_completo WHERE {wsql} ORDER BY {scol} {sdir} LIMIT ? OFFSET ?',params+[per_page,(page-1)*per_page]).fetchall()
+        conn.close()
+        utensili=[]
+        for row in rows:
+            u=dict(row)
+            for c in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm','lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
+                if u.get(c) is not None: u[c]=_arr(u[c])
+            if q:
+                if q not in ' '.join(str(v) for v in u.values() if v).lower(): continue
+            utensili.append(u)
+        return jsonify({'utensili':utensili,'total':total,'page':page,'per_page':per_page,'pages':(total+per_page-1)//per_page})
+    except Exception as e:
+        return jsonify({'error':str(e),'utensili':[],'total':0,'page':1,'pages':1})
+
 @app.route('/')
 def home():
     def arrotonda(v, dec=3):
@@ -392,24 +420,21 @@ def home():
 
     try:
         conn=get_conn()
-        rows=conn.execute(
-            "SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo, diametro_mm, codice_interno"
-        ).fetchall()
+        rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno LIMIT 50").fetchall()
+        total=conn.execute("SELECT COUNT(*) FROM utensile_completo WHERE attivo=1").fetchone()[0]
+        tipi_lista=sorted(set(r['tipo'] for r in conn.execute("SELECT DISTINCT tipo FROM utensile_completo WHERE attivo=1 AND tipo IS NOT NULL")))
+        pinze_lista=sorted(set(r['nome_pinza'] for r in conn.execute("SELECT DISTINCT nome_pinza FROM utensile_completo WHERE attivo=1 AND nome_pinza IS NOT NULL")))
         conn.close()
         utensili=[]
         for row in rows:
-            u = dict(row)
-            for campo in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm',
-                          'lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
-                if u.get(campo) is not None:
-                    u[campo] = arrotonda(u[campo])
+            u=dict(row)
+            for campo in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm','lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
+                if u.get(campo) is not None: u[campo]=arrotonda(u[campo])
             utensili.append(u)
-    except Exception: utensili=[]
-    cfg=carica_config(); profili=profili_learner()
-    tipi_lista  = sorted(set(u['tipo']       for u in utensili if u.get('tipo')))
-    pinze_lista = sorted(set(u['nome_pinza'] for u in utensili if u.get('nome_pinza')))
+    except Exception: utensili=[]; total=0; tipi_lista=[]; pinze_lista=[]
+    cfg=carica_cfg()
     return render_template_string(HOME_HTML,
-        utensili=utensili, n=len(utensili),
+        utensili=utensili,n=total,
         n_tipi=len(tipi_lista),
         n_profili=len(profili),
         n_attivi=len(cfg.get('formati_attivi',[])),
