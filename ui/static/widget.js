@@ -38,7 +38,7 @@ function _aiInit(){var pg=document.getElementById("ai-pg");if(pg)pg.textContent=
   }var inp=document.getElementById("ai-in");if(inp)inp.onkeydown=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();aiS();}};var fi=document.getElementById("ai-fi");if(fi)fi.onchange=function(e){if(e.target.files[0])_aiUpload(e.target.files[0]);};}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_aiInit);else _aiInit();
 
-/* Ã¢ÂÂÃ¢ÂÂ PAGINAZIONE ASINCRONA Ã¢ÂÂÃ¢ÂÂ */
+/* ââ PAGINAZIONE ASINCRONA ââ */
 var _pg={page:1,per_page:50,total:0,pages:1,loading:false,sort:'tipo',dir:'asc'};
 
 function _buildPaginationBar(data){
@@ -47,13 +47,13 @@ function _buildPaginationBar(data){
   if(!bar) return;
   if(_pg.pages<=1){bar.innerHTML='<span class="pg-info">'+_pg.total.toLocaleString('it-IT')+' utensili</span>';return;}
   var h='';
-  h+='<button class="btn pg-btn" onclick="changePage(1)" '+(_pg.page===1?'disabled':'')+'>ÃÂ«</button>';
-  h+='<button class="btn pg-btn" onclick="changePage('+(_pg.page-1)+')" '+(_pg.page===1?'disabled':'')+'>Ã¢ÂÂ¹</button>';
+  h+='<button class="btn pg-btn" onclick="changePage(1)" '+(_pg.page===1?'disabled':'')+'>Â«</button>';
+  h+='<button class="btn pg-btn" onclick="changePage('+(_pg.page-1)+')" '+(_pg.page===1?'disabled':'')+'>â¹</button>';
   var s=Math.max(1,_pg.page-2),e=Math.min(_pg.pages,s+4);
   for(var i=s;i<=e;i++) h+='<button class="btn pg-btn'+(i===_pg.page?' pg-active':'')+'" onclick="changePage('+i+')">'+i+'</button>';
-  h+='<button class="btn pg-btn" onclick="changePage('+(_pg.page+1)+')" '+(_pg.page===_pg.pages?'disabled':'')+'>Ã¢ÂÂº</button>';
-  h+='<button class="btn pg-btn" onclick="changePage('+_pg.pages+')" '+(_pg.page===_pg.pages?'disabled':'')+'>ÃÂ»</button>';
-  h+='<span class="pg-info">Pag. '+_pg.page+'/'+_pg.pages+' &nbsp;ÃÂ·&nbsp; '+_pg.total.toLocaleString('it-IT')+' utensili totali</span>';
+  h+='<button class="btn pg-btn" onclick="changePage('+(_pg.page+1)+')" '+(_pg.page===_pg.pages?'disabled':'')+'>âº</button>';
+  h+='<button class="btn pg-btn" onclick="changePage('+_pg.pages+')" '+(_pg.page===_pg.pages?'disabled':'')+'>Â»</button>';
+  h+='<span class="pg-info">Pag. '+_pg.page+'/'+_pg.pages+' &nbsp;Â·&nbsp; '+_pg.total.toLocaleString('it-IT')+' utensili totali</span>';
   bar.innerHTML=h;
 }
 
@@ -63,10 +63,10 @@ function _renderRows(utensili){
   if(!utensili||utensili.length===0){
     var q=(document.getElementById('search')||{}).value||'';
     tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2.5rem 1rem;color:#888885">'+
-      '<div style="font-size:22px;margin-bottom:8px">Ã°ÂÂÂ</div>'+
+      '<div style="font-size:22px;margin-bottom:8px">ð</div>'+
       '<div style="font-size:14px;font-weight:500;color:#555;margin-bottom:6px">Nessun utensile trovato</div>'+
       (q?'<div style="font-size:12.5px;margin-bottom:12px">per &ldquo;'+q+'&rdquo;</div>':'')+
-      '<button class="btn btn-s" onclick="resetFiltri()" style="font-size:12px;padding:5px 14px">Ã¢ÂÂ Cancella filtri</button>'+
+      '<button class="btn btn-s" onclick="resetFiltri()" style="font-size:12px;padding:5px 14px">â Cancella filtri</button>'+
       '</td></tr>';
     return;
   }
@@ -76,7 +76,7 @@ function _renderRows(utensili){
     var tipo=u.tipo||'';
     var tClass=typeColors[tipo]||'';
     rows+='<tr>';
-    rows+='<td><span style="color:#059669;margin-right:4px">Ã¢ÂÂ</span><strong style="font-size:13px">'+
+    rows+='<td><span style="color:#059669;margin-right:4px">â</span><strong style="font-size:13px">'+
       (u.codice_interno||'')+'</strong>'+
       (u.descrizione?' <span style="color:#888885;font-size:11.5px">'+u.descrizione+'</span>':'')+
       (u.codice_catalogo?'<br><span style="font-size:11px;color:#aaa">'+u.codice_catalogo+'</span>':'')+
@@ -89,9 +89,9 @@ function _renderRows(utensili){
     rows+='<td style="font-size:12px;color:#555">'+(u.nome_pinza||'')+'</td>';
     rows+='<td>'+(u.numero_taglienti||'')+'</td>';
     rows+='<td style="white-space:nowrap">'+
-      '<a href="/utensile/'+u.id+'" class="btn-icon" title="Dettagli">Ã¢ÂÂ¹</a> '+
-      '<a href="/utensile/'+u.id+'/modifica" class="btn-icon" title="Modifica">Ã¢ÂÂ</a> '+
-      '<a href="/utensile/'+u.id+'/elimina" class="btn-icon btn-icon-del" title="Elimina" onclick="return _confirmDel(event,this,\x27\x27+String(u.codice_interno||\x27\x27).replace(/\x27/g,\x27\x27)+\x27\x27)">Ã°ÂÂÂ</a>'+
+      '<a href="/utensile/'+u.id+'" class="btn-icon" title="Dettagli">&#9432;</a> '+
+      '<a href="/utensile/'+u.id+'/modifica" class="btn-icon" title="Modifica">&#9998;</a> '+
+      '<a href="/utensile/'+u.id+'/elimina" class="btn-icon btn-icon-del" title="Elimina" onclick="return _confirmDel(event,this,\x27\x27+String(u.codice_interno||\x27\x27).replace(/\x27/g,\x27\x27)+\x27\x27)">&#128465;</a>'+
       '</td>';
     rows+='</tr>';
   });
@@ -100,7 +100,7 @@ function _renderRows(utensili){
 
 function _confirmDel(e,el,codice){
   e.preventDefault();
-  if(confirm('Eliminare utensile "'+codice+'"?\nQuesta operazione non puÃÂ² essere annullata.')){
+  if(confirm('Eliminare utensile "'+codice+'"?\nQuesta operazione non può essere annullata.')){
     window.location.href=el.href;
   }
   return false;
