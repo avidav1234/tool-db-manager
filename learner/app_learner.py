@@ -29,7 +29,8 @@ def _preload_moduli():
             pass
 
 _preload_moduli()
-UPLOAD_FOLDER = tempfile.mkdtemp()
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads_learner')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 BASE = """<!DOCTYPE html><html lang="it"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
