@@ -1,3 +1,5 @@
+(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='/static/redesign.css';document.head.appendChild(l)})();
+(function(){var l=document.createElement('link');l.rel='stylesheet';l.href='/static/redesign.css';document.head.appendChild(l)})();
 var _aiH=[],_aiFP=null,_aiMID=0,_aiOPEN=false,_aiJOB=null;
 var _aiAPI=(location.port==="5001")?"http://localhost:5000":"";
 var _aiPG=(function(){var p=location.pathname;if(p.indexOf("/modifica")>-1)return "Modifica";if(p.indexOf("/importa")>-1)return "Import";if(p.indexOf("/impostazioni")>-1)return "Impostazioni";if(p.indexOf("/log")>-1)return "Log";if(p==="/")return "Lista utensili";if(p.indexOf("/analizza")>-1)return "Learner - Analizza";return p;})();
