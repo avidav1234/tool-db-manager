@@ -420,7 +420,7 @@ def home():
 
     try:
         conn=get_conn()
-        rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno LIMIT 50").fetchall()
+        rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno").fetchall()
         total=conn.execute("SELECT COUNT(*) FROM utensile_completo WHERE attivo=1").fetchone()[0]
         tipi_lista=sorted(set(r['tipo'] for r in conn.execute("SELECT DISTINCT tipo FROM utensile_completo WHERE attivo=1 AND tipo IS NOT NULL")))
         pinze_lista=sorted(set(r['nome_pinza'] for r in conn.execute("SELECT DISTINCT nome_pinza FROM utensile_completo WHERE attivo=1 AND nome_pinza IS NOT NULL")))
