@@ -60,6 +60,11 @@ def get_conn():
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
+
+def get_db_path():
+    """Ritorna il path assoluto del DB master."""
+    return DB_PATH
+
 def init_db():
     try:
         schema = os.path.join(os.path.dirname(__file__), '..', 'database', 'schema.sql')
@@ -783,6 +788,62 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <a class="btn btn-p" href="http://localhost:5001" target="_blank">
         Apri Format Learner &#8599;
       </a>
+
+  <div class="card" style="margin-top:1.2rem">
+    <h2>&#128190; Importa da Hypermill (.db)</h2>
+    <p style="color:var(--txt-muted);margin-bottom:.8rem">
+      Carica direttamente il file <code>.db</code> SQLite di hyperMILL.
+      Tutti i 9 tipi vengono riconosciuti automaticamente
+      (BALL, FLAT, BULL, DRILL, THREAD, REAM, LOLLIPOP, WOODRUFF, CHAMFER).
+    </p>
+    <div class="drop-zone" id="hm-dz" style="cursor:pointer;margin-bottom:.8rem;text-align:center;padding:1rem"
+         onclick="document.getElementById('hm_file').click()">
+      <span id="hm-dz-label">&#128190; Trascina il file .db o clicca per sceglierlo</span>
+      <input type="file" id="hm_file" accept=".db" style="display:none"
+             onchange="document.getElementById('hm-dz-label').textContent=this.files[0]?this.files[0].name:'file scelto'">
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="hmImport()" id="hm-btn">Importa</button>
+      <span id="hm-status" style="font-size:.85rem;color:var(--txt-muted)"></span>
+    </div>
+    <div id="hm-result" style="display:none;margin-top:1rem"></div>
+  </div>
+  <script>
+  async function hmImport(){
+    const fi=document.getElementById('hm_file');
+    if(!fi.files[0]){alert('Scegli prima un file .db');return;}
+    const st=document.getElementById('hm-status'),res=document.getElementById('hm-result'),btn=document.getElementById('hm-btn');
+    btn.disabled=true; st.textContent='Importazione in corso…'; res.style.display='none';
+    const fd=new FormData(); fd.append('file',fi.files[0]);
+    try{
+      const r=await fetch('/importa/hypermill',{method:'POST',body:fd});
+      const d=await r.json(); btn.disabled=false; st.textContent='';
+      if(d.ok){
+        res.style.display='block';
+        res.innerHTML='<div class="flash ok" style="margin:0">OK <b>'+d.importati+'</b> importati'+(d.skippati?' &middot; '+d.skippati+' skippati':'')+(d.errori?' &middot; '+d.errori+' errori':'')+'</div>'
+          +'<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.8rem">Log dettaglio</summary>'
+          +'<pre style="font-size:.75rem;max-height:200px;overflow:auto;background:var(--bg-alt,#f5f5f5);padding:.5rem;border-radius:4px">'+(d.log||[]).join('\n')+'</pre></details>';
+      }else{
+        res.style.display='block';
+        res.innerHTML='<div class="flash err" style="margin:0">Errore: '+d.errore+'</div>';
+      }
+    }catch(e){btn.disabled=false;st.textContent='Errore rete: '+e.message;}
+  }
+  (function(){
+    const dz=document.getElementById('hm-dz');
+    if(!dz)return;
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--accent,#2563eb)';});
+    dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
+    dz.addEventListener('drop',e=>{
+      e.preventDefault();dz.style.borderColor='';
+      const f=e.dataTransfer.files[0];
+      if(!f)return;
+      const dt=new DataTransfer();dt.items.add(f);
+      document.getElementById('hm_file').files=dt.files;
+      document.getElementById('hm-dz-label').textContent=f.name;
+    });
+  })();
+  </script>
     </div>
   </div>
 </div>
