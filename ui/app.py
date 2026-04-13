@@ -1034,6 +1034,7 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <table>
   <thead><tr>
     <th>Materiale pezzo</th>
+    <th>Applicazione</th>
     <th>Vc (m/min)</th>
     <th>Fz (mm/z)</th>
     <th>N (rpm)</th>
@@ -1046,6 +1047,7 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   {% for t in taglio %}
   <tr>
     <td><b>{{ t.materiale_pezzo }}</b></td>
+    <td style="font-size:12px;color:#555">{{ t.applicazione or '-' }}</td>
     <td>{{ '%.1f'|format(t.vc_m_min) if t.vc_m_min else '-' }}</td>
     <td>{{ '%.4f'|format(t.fz_mm_z) if t.fz_mm_z else '-' }}</td>
     <td>{{ t.rotazione_rpm|int if t.rotazione_rpm else '-' }}</td>

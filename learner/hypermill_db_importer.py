@@ -12,7 +12,7 @@ Tabelle importate:
   CuttingProfiles  → condizioni_taglio  (per materiale × applicazione)
 
 Decodifica verificata:
-  CuttingProfiles:  feedrate=Vf, dbl_param5=Ae, dbl_param6=Ap, dbl_param7=Fz
+  CuttingProfiles:  feedrate=Vf, dbl_param5=Ae, dbl_param7=Ap, dbl_param13=Fz (p6/p8/p9/p10=fattori)
   Technologies:     feedrate=Vf, dbl_param3=RPM, dbl_param5=Ae, dbl_param6=Fz
   Holder polyline:  104 byte/segmento, double big-endian
 """
@@ -542,8 +542,9 @@ def _importa_condizioni_taglio(hm, master):
         mat_names[r['id']] = r['name']
 
     rows = hm.execute("""
-        SELECT cp.nctool_id, cp.technology_id, cp.feedrate, cp.dbl_param5 as ae, cp.dbl_param6 as ap,
-               cp.dbl_param7 as fz, cp.coolants, tech.material_id, tp.purpose
+        SELECT cp.nctool_id, cp.technology_id, cp.feedrate,
+               cp.dbl_param5 as ae, cp.dbl_param7 as ap, cp.dbl_param13 as fz,
+               cp.coolants, tech.material_id, tp.purpose
         FROM CuttingProfiles cp
         JOIN Technologies tech ON cp.technology_id = tech.technology_id
         LEFT JOIN TechnologyPurposes tp ON tech.purpose_id = tp.id
