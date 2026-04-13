@@ -1,7 +1,7 @@
 """
-hypermill_importer.py  —  v2.0
+hypermill_importer.py  â  v2.0
 Importa utensili da database Hypermill (.db SQLite) nel DB master Tool DB Manager.
-Mappatura verificata empiricamente su Database_Vetimec_2025.db — 468/468 NCTools (100%)
+Mappatura verificata empiricamente su Database_Vetimec_2025.db â 468/468 NCTools (100%)
 
 Tipi supportati:
   1 = Ballmill      /HM02  -> BALL
@@ -106,9 +106,13 @@ def importa_hypermill_db(hm_path, master_path, dry_run=False, log_fn=None):
         LEFT JOIN Manufacturers mfr ON t.manufacturer_id=mfr.manufacturer_id
         ORDER BY t.tool_type_id, t.dbl_param4
     """).fetchall()
-    log(f"Trovati {len(nc_rows)} NCTools")
+    nc_rows = list(nc_rows) if nc_rows else []
+    log(f"Trovati {len(nc_rows) if hasattr(nc_rows, '__len__') else '?'} NCTools")
     for row in nc_rows:
-        nc=dict(row); typ=nc['tool_type_id']; tipo_master=TIPO_MAP.get(typ)
+        try:
+            nc = {k: row[k] for k in row.keys()}
+        except Exception:
+            nc = dict(row); typ=nc['tool_type_id']; tipo_master=TIPO_MAP.get(typ)
         if not tipo_master:
             stats['skippati']+=1; stats['dettaglio'].append({'nc_id':nc['nc_id'],'esito':'skip_tipo','nc_name':nc['nc_name']}); continue
         if not nc.get('dbl_param4'):
