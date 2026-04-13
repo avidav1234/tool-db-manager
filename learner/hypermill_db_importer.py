@@ -26,7 +26,7 @@ TIPO_MAP = {
     4:  'DRILL',
     5:  'BALL',
     6:  'FORM',
-    9:  'TAP',
+    9:  'SPOT',      # Chamfer/smusso (non TAP!)
     15: 'THREAD',
     16: 'REAM',
 }
@@ -173,6 +173,25 @@ def _is_hypermill_db(db_path):
 
 
 def _estrai_geometria(row, tool_type_id):
+    """
+    Estrae parametri geometrici dai dbl_param della tabella Tools.
+    Mappatura verificata su cataloghi Moldino ETM/ETMLN/ASRM/ABPF (2026-04-14):
+
+    Comuni a tutti i tipi:
+      dbl_param2  = diametro pinza/attacco (non gambo fisico)
+      dbl_param3  = diametro nocciolo/scarico (dn)
+      dbl_param4  = DIAMETRO nominale (D)
+
+    Per tipo:
+      1,5 BALL:  p1=lungh libera (l1, NON tagliente!), p8=diam zona ridotta (neck)
+      2   FLAT:  p13=lungh tagliente
+      3   BULL:  p1=lungh libera (l1), p5=l1 ridondante, p8=raggio corner (R)
+      4   DRILL: p1=lungh tagliente, p7=angolo punta
+      6   FORM:  p5=spessore disco, p7=raggio corner disco, p8=diam foro interno
+      9   SPOT:  p7=altezza tagliente chamfer, p8=angolo chamfer
+      15  THREAD: p9=passo filetto
+      16  REAM:  p7=lungh tagliente, p9=diam pilota, p10=angolo entrata
+    """
     def p(i):
         try:
             return row[f'dbl_param{i}'] or 0.0
@@ -187,34 +206,60 @@ def _estrai_geometria(row, tool_type_id):
     geo = {
         'lunghezza_totale_mm':  row['total_length'],
         'num_taglienti':        ip(1) or None,
-        'diam_stelo_mm':        p(2) or None,
-        'angolo_conico_gradi':  p(7) or None,
+        'diam_stelo_mm':        p(2) or None,  # diametro pinza/attacco
     }
 
     if tool_type_id in (1, 5):
+        # BALL: D=p4, R=D/2, p1=lungh libera (l1), p8=diam neck
         geo['diametro_mm']       = p(4)
         geo['raggio_punta_mm']   = round(p(4) / 2.0, 4) if p(4) else None
-        geo['lunghezza_tagl_mm'] = p(1) or None
+        geo['lunghezza_tagl_mm'] = p(1) or None  # l1 = lungh libera (usata come approssimazione)
+        if p(8) and p(8) > 0:
+            geo['diam_libero_mm'] = p(8)  # diametro zona ridotta (neck)
+
     elif tool_type_id == 2:
+        # FLAT/Endmill: D=p4, R=0, p13=lungh tagliente
         geo['diametro_mm']       = p(4)
         geo['raggio_punta_mm']   = 0.0
-        geo['lunghezza_tagl_mm'] = p(1) or None
+        geo['lunghezza_tagl_mm'] = p(13) or p(1) or None  # p13 prioritario, p1 fallback
+
     elif tool_type_id == 3:
+        # BULL/Radius: D=p4, CR=p8, p1=lungh libera (l1)
         geo['diametro_mm']       = p(4)
         geo['raggio_punta_mm']   = p(8) if p(8) else 0.0
-        geo['lunghezza_tagl_mm'] = p(1) or None
+        geo['lunghezza_tagl_mm'] = p(1) or None  # l1 = lungh libera
+
     elif tool_type_id == 4:
+        # DRILL: D=p4, p1=lungh tagliente, p7=angolo punta
         geo['diametro_mm']       = p(4)
         geo['lunghezza_tagl_mm'] = p(1) or None
         geo['angolo_punta_gradi'] = p(7) or None
-    elif tool_type_id == 16:
+
+    elif tool_type_id == 6:
+        # FORM/Woodruff: D=p4, p7=raggio corner disco, p5=spessore, p8=diam foro
         geo['diametro_mm']       = p(4)
-        geo['lunghezza_tagl_mm'] = p(1) or None
+        geo['raggio_punta_mm']   = p(7) if p(7) else 0.0  # raggio corner disco
+        geo['lunghezza_tagl_mm'] = p(5) or None  # spessore disco
+        if p(8) and p(8) > 0:
+            geo['diam_libero_mm'] = p(8)  # diametro foro/albero interno
+
+    elif tool_type_id == 9:
+        # CHAMFER/SPOT: D=p4, p8=angolo chamfer, p7=altezza tagliente
+        geo['diametro_mm']       = p(4)
+        geo['angolo_punta_gradi'] = p(8) if p(8) else None  # angolo chamfer
+        geo['lunghezza_tagl_mm'] = p(7) or None  # altezza tagliente chamfer
+
     elif tool_type_id == 15:
+        # THREAD: D=p4 (diametro nucleo), p9=passo filetto
         geo['diametro_mm']       = p(4)
         geo['passo_mm']          = p(9) or None
-    elif tool_type_id == 9:
+
+    elif tool_type_id == 16:
+        # REAMER: D=p4, p7=lungh tagliente, p9=diam pilota, p10=angolo entrata
         geo['diametro_mm']       = p(4)
+        geo['lunghezza_tagl_mm'] = p(7) or None
+        geo['angolo_punta_gradi'] = p(10) or None  # angolo entrata
+
     else:
         geo['diametro_mm']       = p(4) or None
         geo['lunghezza_tagl_mm'] = p(1) or None
