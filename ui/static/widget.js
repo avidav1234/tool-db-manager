@@ -37,3 +37,133 @@ function _aiInit(){var pg=document.getElementById("ai-pg");if(pg)pg.textContent=
     sb.parentNode.insertBefore(lb,sb);
   }var inp=document.getElementById("ai-in");if(inp)inp.onkeydown=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();aiS();}};var fi=document.getElementById("ai-fi");if(fi)fi.onchange=function(e){if(e.target.files[0])_aiUpload(e.target.files[0]);};}
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",_aiInit);else _aiInit();
+
+/* ── PAGINAZIONE ASINCRONA ── */
+var _pg={page:1,per_page:50,total:0,pages:1,loading:false,sort:'tipo',dir:'asc'};
+
+function _buildPaginationBar(data){
+  _pg.total=data.total; _pg.pages=data.pages; _pg.page=data.page;
+  var bar=document.getElementById('pg-bar');
+  if(!bar) return;
+  if(_pg.pages<=1){bar.innerHTML='<span class="pg-info">'+_pg.total.toLocaleString('it-IT')+' utensili</span>';return;}
+  var h='';
+  h+='<button class="btn pg-btn" onclick="changePage(1)" '+(_pg.page===1?'disabled':'')+'>«</button>';
+  h+='<button class="btn pg-btn" onclick="changePage('+(_pg.page-1)+')" '+(_pg.page===1?'disabled':'')+'>‹</button>';
+  var s=Math.max(1,_pg.page-2),e=Math.min(_pg.pages,s+4);
+  for(var i=s;i<=e;i++) h+='<button class="btn pg-btn'+(i===_pg.page?' pg-active':'')+'" onclick="changePage('+i+')">'+i+'</button>';
+  h+='<button class="btn pg-btn" onclick="changePage('+(_pg.page+1)+')" '+(_pg.page===_pg.pages?'disabled':'')+'>›</button>';
+  h+='<button class="btn pg-btn" onclick="changePage('+_pg.pages+')" '+(_pg.page===_pg.pages?'disabled':'')+'>»</button>';
+  h+='<span class="pg-info">Pag. '+_pg.page+'/'+_pg.pages+' &nbsp;·&nbsp; '+_pg.total.toLocaleString('it-IT')+' utensili totali</span>';
+  bar.innerHTML=h;
+}
+
+function _renderRows(utensili){
+  var tbody=document.querySelector('#tbl tbody');
+  if(!tbody) return;
+  if(!utensili||utensili.length===0){
+    var q=(document.getElementById('search')||{}).value||'';
+    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:2.5rem 1rem;color:#888885">'+
+      '<div style="font-size:22px;margin-bottom:8px">🔍</div>'+
+      '<div style="font-size:14px;font-weight:500;color:#555;margin-bottom:6px">Nessun utensile trovato</div>'+
+      (q?'<div style="font-size:12.5px;margin-bottom:12px">per &ldquo;'+q+'&rdquo;</div>':'')+
+      '<button class="btn btn-s" onclick="resetFiltri()" style="font-size:12px;padding:5px 14px">✕ Cancella filtri</button>'+
+      '</td></tr>';
+    return;
+  }
+  var typeColors={BALL:'badge-BALL',FLAT:'badge-FLAT',BULL:'badge-BULL',DRILL:'badge-DRILL',TAP:'badge-TAP',REAM:'badge-REAM',FORM:'badge-FORM',THREAD:'badge-THREAD'};
+  var rows='';
+  utensili.forEach(function(u){
+    var tipo=u.tipo||'';
+    var tClass=typeColors[tipo]||'';
+    rows+='<tr>';
+    rows+='<td><span style="color:#059669;margin-right:4px">●</span><strong style="font-size:13px">'+
+      (u.codice_interno||'')+'</strong>'+
+      (u.descrizione?' <span style="color:#888885;font-size:11.5px">'+u.descrizione+'</span>':'')+
+      (u.codice_catalogo?'<br><span style="font-size:11px;color:#aaa">'+u.codice_catalogo+'</span>':'')+
+      '</td>';
+    rows+='<td>'+(tClass?'<span class="badge '+tClass+'">'+tipo+'</span>':tipo)+'</td>';
+    rows+='<td style="font-variant-numeric:tabular-nums">'+(u.diametro_mm||'')+'</td>';
+    rows+='<td style="color:#888885">'+(u.raggio_punta_mm||'')+'</td>';
+    rows+='<td>'+(u.lunghezza_totale_mm||'')+'</td>';
+    rows+='<td style="color:#059669;font-weight:600">'+(u.fuori_pinza_mm?u.fuori_pinza_mm+' <span style="font-size:10px;font-weight:400;color:#aaa">mm</span>':'')+'</td>';
+    rows+='<td style="font-size:12px;color:#555">'+(u.nome_pinza||'')+'</td>';
+    rows+='<td>'+(u.numero_taglienti||'')+'</td>';
+    rows+='<td style="white-space:nowrap">'+
+      '<a href="/utensile/'+u.id+'" class="btn-icon" title="Dettagli">ℹ</a> '+
+      '<a href="/utensile/'+u.id+'/modifica" class="btn-icon" title="Modifica">✎</a> '+
+      '<a href="/utensile/'+u.id+'/elimina" class="btn-icon btn-icon-del" title="Elimina" onclick="return _confirmDel(event,this,''+String(u.codice_interno||'').replace(/'/g,'')+'')">🗑</a>'+
+      '</td>';
+    rows+='</tr>';
+  });
+  tbody.innerHTML=rows;
+}
+
+function _confirmDel(e,el,codice){
+  e.preventDefault();
+  if(confirm('Eliminare utensile "'+codice+'"?\nQuesta operazione non può essere annullata.')){
+    window.location.href=el.href;
+  }
+  return false;
+}
+
+function resetFiltri(){
+  var s=document.getElementById('search');
+  var t=document.getElementById('filtro-tipo');
+  var p=document.getElementById('filtro-pinza');
+  if(s)s.value=''; if(t)t.value=''; if(p)p.value='';
+  _pg.page=1; _doFiltra();
+}
+
+function changePage(n){
+  if(n<1||n>_pg.pages||_pg.loading) return;
+  _pg.page=n;
+  _doFiltra();
+  var tbl=document.getElementById('tbl');
+  if(tbl) window.scrollTo({top:tbl.getBoundingClientRect().top+window.scrollY-80,behavior:'smooth'});
+}
+
+function _doFiltra(){
+  if(_pg.loading) return;
+  var q=(document.getElementById('search')||{}).value||'';
+  var tipo=(document.getElementById('filtro-tipo')||{}).value||'';
+  var pinza=(document.getElementById('filtro-pinza')||{}).value||'';
+  _pg.loading=true;
+  var tbl=document.getElementById('tbl');
+  if(tbl) tbl.style.opacity='0.45';
+  var params=new URLSearchParams({
+    page:_pg.page,per_page:_pg.per_page,
+    q:q,tipo:tipo,pinza:pinza,
+    sort:_pg.sort,dir:_pg.dir
+  });
+  fetch('/api/utensili?'+params.toString())
+    .then(function(r){return r.json();})
+    .then(function(data){
+      _renderRows(data.utensili||[]);
+      _buildPaginationBar(data);
+      if(tbl) tbl.style.opacity='1';
+      _pg.loading=false;
+    })
+    .catch(function(err){
+      console.error('_doFiltra error:',err);
+      if(tbl) tbl.style.opacity='1';
+      _pg.loading=false;
+    });
+}
+
+// Wire up search + selects after DOM ready
+(function(){
+  var _t;
+  function setup(){
+    var s=document.getElementById('search');
+    var ft=document.getElementById('filtro-tipo');
+    var fp=document.getElementById('filtro-pinza');
+    if(s){
+      s.removeAttribute('oninput');
+      s.addEventListener('input',function(){clearTimeout(_t);_pg.page=1;_t=setTimeout(_doFiltra,350);});
+    }
+    if(ft){ft.removeAttribute('onchange');ft.addEventListener('change',function(){_pg.page=1;_doFiltra();});}
+    if(fp){fp.removeAttribute('onchange');fp.addEventListener('change',function(){_pg.page=1;_doFiltra();});}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setup);
+  else setup();
+})();
