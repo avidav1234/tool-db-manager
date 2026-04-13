@@ -200,7 +200,8 @@ hr{border:none;border-top:1px solid #e2e2df;margin:1.25rem 0}
 
 BASE = """<!DOCTYPE html><html lang="it"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tool DB Manager</title><style>""" + CSS + """</style></head><body>
+<title>Tool DB Manager</title>
+<link rel="stylesheet" href="/static/redesign.css"></head><body>
 <div class="hdr">
   <h1>Tool DB Manager</h1>
   <a href="/" class="{{ 'active' if active=='home' }}">Utensili</a>
@@ -240,11 +241,11 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </div>
 </div>
 
-<div class="grid4" style="margin-bottom:1.25rem">
-  <div class="stat"><div class="stat-n">{{ n }}</div><div class="stat-l">Utensili totali</div></div>
-  <div class="stat"><div class="stat-n">{{ n_tipi }}</div><div class="stat-l">Tipi diversi</div></div>
-  <div class="stat"><div class="stat-n">{{ n_profili }}</div><div class="stat-l">Profili export</div></div>
-  <div class="stat"><div class="stat-n">{{ n_attivi }}</div><div class="stat-l">Formati attivi</div></div>
+<div class="stats-hero">
+  <div class="stat-card stat-blue"><div class="stat-icon">🔧</div><div class="stat-num">{{ n }}</div><div class="stat-lbl">Utensili nel DB</div></div>
+  <div class="stat-card stat-purple"><div class="stat-icon">📐</div><div class="stat-num">{{ n_tipi }}</div><div class="stat-lbl">Tipi diversi</div></div>
+  <div class="stat-card stat-green"><div class="stat-icon">📤</div><div class="stat-num">{{ n_profili }}</div><div class="stat-lbl">Profili export</div></div>
+  <div class="stat-card stat-amber"><div class="stat-icon">✅</div><div class="stat-num">{{ n_attivi }}</div><div class="stat-lbl">Formati attivi</div></div>
 </div>
 
 <div class="card">
