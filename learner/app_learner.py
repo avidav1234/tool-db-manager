@@ -482,70 +482,85 @@ def analizza():
             campione = {}
             utensili_preview = []
             try:
-                import sqlite3 as _sq
+                import sqlite3 as _sq, math as _math
                 _hm = _sq.connect(fp)
                 _hm.row_factory = _sq.Row
-                # Campione per il mapping (primo utensile con dati)
+                _tipo_map = {1:'BALL',2:'FLAT',3:'BULL',4:'DRILL',5:'BALL',6:'FORM',9:'TAP',15:'THREAD',16:'REAM'}
+
                 _row = _hm.execute("""
                     SELECT n.nc_name, n.nc_number_str, n.tool_length, n.gage_length,
+                           n.holder_reach,
                            t.tool_type_id, t.name as tool_name, t.total_length,
-                           t.dbl_param4, t.dbl_param10, t.int_param1, t.ordering_code,
+                           t.dbl_param1, t.dbl_param4, t.dbl_param8, t.int_param1, t.ordering_code,
                            h.name as holder_name,
-                           cp.feedrate, cp.fz, cp.rpm, cp.vc
+                           cp.feedrate as cp_vf, cp.dbl_param5 as cp_ae,
+                           cp.dbl_param7 as cp_ap, cp.dbl_param13 as cp_fz,
+                           tech.dbl_param3 as tech_rpm
                     FROM NCTools n
-                    JOIN Tools t ON n.tool_id=t.id
-                    LEFT JOIN Holders h ON n.holder_id=h.id
-                    LEFT JOIN CuttingProfiles cp ON cp.nc_tool_id=n.id
-                    WHERE t.dbl_param4 > 0 LIMIT 1
+                    JOIN Tools t ON n.tool_id = t.id
+                    LEFT JOIN Holders h ON n.holder_id = h.id
+                    LEFT JOIN CuttingProfiles cp ON cp.nctool_id = n.id AND cp.feedrate > 0
+                    LEFT JOIN Technologies tech ON cp.technology_id = tech.technology_id
+                    WHERE t.dbl_param4 > 0
+                    ORDER BY cp.feedrate DESC LIMIT 1
                 """).fetchone()
                 if _row:
-                    _tipo_map = {1:'BALL',2:'FLAT',3:'BULL',4:'DRILL',5:'BALL',6:'FORM',9:'FORM',15:'THREAD',16:'REAM'}
+                    _diam = float(_row['dbl_param4']) if _row['dbl_param4'] else 0
+                    _rpm = float(_row['tech_rpm']) if _row['tech_rpm'] else 0
+                    _vc = round(_math.pi * _diam * _rpm / 1000, 1) if _rpm and _diam else ''
+                    _tt = _row['tool_type_id']
+                    _cr = float(_row['dbl_param8']) if _row['dbl_param8'] and _tt == 3 else (round(_diam/2, 3) if _tt in (1,5) else 0)
                     campione = {
                         'codice_interno': _row['nc_number_str'] or _row['nc_name'] or '',
                         'alias': _row['nc_name'] or '',
                         'nome_pinza': _row['holder_name'] or '',
                         'descrizione': _row['tool_name'] or '',
                         'codice_catalogo': _row['ordering_code'] or '',
-                        'tipo': _tipo_map.get(_row['tool_type_id'], '?'),
-                        'diametro_mm': round(float(_row['dbl_param4']),3) if _row['dbl_param4'] else '',
-                        'raggio_punta_mm': round(float(_row['dbl_param10']),3) if _row['dbl_param10'] else '',
-                        'lunghezza_totale_mm': round(float(_row['total_length']),1) if _row['total_length'] else '',
+                        'tipo': _tipo_map.get(_tt, '?'),
+                        'diametro_mm': round(_diam, 3) if _diam else '',
+                        'raggio_punta_mm': _cr if _cr else '',
+                        'lunghezza_totale_mm': round(float(_row['total_length']), 1) if _row['total_length'] else '',
+                        'lunghezza_tagl_mm': round(float(_row['dbl_param1']), 1) if _row['dbl_param1'] else '',
                         'num_taglienti': _row['int_param1'] or '',
-                        'fuori_pinza_mm': round(float(_row['tool_length']),1) if _row['tool_length'] else '',
-                        'avanzamento_default': round(float(_row['feedrate']),1) if _row['feedrate'] else '',
-                        'fz_default': round(float(_row['fz']),4) if _row['fz'] else '',
-                        'vc_default': round(float(_row['vc']),1) if _row['vc'] else '',
+                        'fuori_pinza_mm': round(float(_row['tool_length']) + float(_row['holder_reach'] or 0), 1) if _row['tool_length'] else '',
+                        'gage_length_mm': round(float(_row['gage_length']), 1) if _row['gage_length'] else '',
+                        'avanzamento_default': round(float(_row['cp_vf']), 1) if _row['cp_vf'] else '',
+                        'fz_default': round(float(_row['cp_fz']), 4) if _row['cp_fz'] else '',
+                        'passo_z_default': round(float(_row['cp_ap']), 3) if _row['cp_ap'] else '',
+                        'passo_lat_default': round(float(_row['cp_ae']), 3) if _row['cp_ae'] else '',
+                        'vc_default': _vc,
+                        'rotazione_default': int(_rpm) if _rpm else '',
                     }
-                # Anteprima primi 8 utensili
+
                 _rows = _hm.execute("""
-                    SELECT n.nc_name, n.nc_number_str, n.tool_length, n.gage_length,
-                           t.tool_type_id, t.dbl_param4, t.dbl_param10,
-                           h.name as holder_name,
-                           cp.feedrate, cp.fz, cp.vc
+                    SELECT n.nc_name, n.nc_number_str, n.tool_length, n.gage_length, n.holder_reach,
+                           t.tool_type_id, t.dbl_param4, t.dbl_param8, t.dbl_param1, t.int_param1,
+                           h.name as holder_name
                     FROM NCTools n
-                    JOIN Tools t ON n.tool_id=t.id
-                    LEFT JOIN Holders h ON n.holder_id=h.id
-                    LEFT JOIN CuttingProfiles cp ON cp.nc_tool_id=n.id
+                    JOIN Tools t ON n.tool_id = t.id
+                    LEFT JOIN Holders h ON n.holder_id = h.id
                     WHERE t.dbl_param4 > 0
                     ORDER BY t.tool_type_id, t.dbl_param4 LIMIT 8
                 """).fetchall()
                 for _r in _rows:
+                    _d = float(_r['dbl_param4']) if _r['dbl_param4'] else 0
+                    _t2 = _r['tool_type_id']
+                    _cr2 = float(_r['dbl_param8']) if _r['dbl_param8'] and _t2 == 3 else (round(_d/2, 3) if _t2 in (1,5) else 0)
                     utensili_preview.append({
                         'codice_interno': _r['nc_number_str'] or _r['nc_name'] or '',
                         'alias': _r['nc_name'] or '',
-                        'tipo': _tipo_map.get(_r['tool_type_id'], '?'),
-                        'diametro_mm': round(float(_r['dbl_param4']),3) if _r['dbl_param4'] else '',
-                        'raggio_punta_mm': round(float(_r['dbl_param10']),3) if _r['dbl_param10'] else '',
-                        'fuori_pinza_mm': round(float(_r['tool_length']),1) if _r['tool_length'] else '',
+                        'tipo': _tipo_map.get(_t2, '?'),
+                        'diametro_mm': round(_d, 3) if _d else '',
+                        'raggio_punta_mm': _cr2 if _cr2 else '',
+                        'lunghezza_tagl_mm': round(float(_r['dbl_param1']), 1) if _r['dbl_param1'] else '',
+                        'fuori_pinza_mm': round(float(_r['tool_length']) + float(_r['holder_reach'] or 0), 1) if _r['tool_length'] else '',
                         'nome_pinza': _r['holder_name'] or '',
-                        'avanzamento_default': round(float(_r['feedrate']),1) if _r['feedrate'] else '',
-                        'fz_default': round(float(_r['fz']),4) if _r['fz'] else '',
-                        'vc_default': round(float(_r['vc']),1) if _r['vc'] else '',
-                        'lungh_presa_mm': round(float(_r['gage_length']),1) if _r['gage_length'] else '',
+                        'num_taglienti': _r['int_param1'] or '',
+                        'gage_length_mm': round(float(_r['gage_length']), 1) if _r['gage_length'] else '',
                     })
                 _hm.close()
-            except Exception:
-                pass  # campione vuoto se errore â non blocca il flusso
+            except Exception as _ex:
+                import traceback; traceback.print_exc()
 
             # Salva path in sessione per conferma successiva
             import json as _json
