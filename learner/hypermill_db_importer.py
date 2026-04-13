@@ -1,11 +1,24 @@
 """
-hypermill_db_importer.py
-Importa utensili da database Hypermill (.db) nel DB master Tool DB Manager.
-Formato: SQLite proprietario Open Mind / Hypermill
-"""
-import sqlite3, os, sys
+hypermill_db_importer.py  –  v3.0
+Importa TUTTO dal database Hypermill (.db) nel DB master Tool DB Manager.
 
-# Mappatura tool_type_id tipo master
+Tabelle importate:
+  Materials        → materiale_pezzo
+  CuttingMaterials → grado_utensile
+  MatTechItems     → catalogo_velocita
+  Holders          → portautensile + portautensile_segmento
+  Extensions       → prolunga
+  NCTools + Tools  → utensile  (con gage_length, fattori correzione, ecc.)
+  CuttingProfiles  → condizioni_taglio  (per materiale × applicazione)
+
+Decodifica verificata:
+  CuttingProfiles:  feedrate=Vf, dbl_param5=Ae, dbl_param6=Ap, dbl_param7=Fz
+  Technologies:     feedrate=Vf, dbl_param3=RPM, dbl_param5=Ae, dbl_param6=Fz
+  Holder polyline:  104 byte/segmento, double big-endian
+"""
+import sqlite3, os, sys, struct, re, math
+
+
 TIPO_MAP = {
     1:  'BALL',
     2:  'FLAT',
@@ -18,52 +31,73 @@ TIPO_MAP = {
     16: 'REAM',
 }
 
+COOLANT_MAP = {
+    '':  None,
+    '1': 'OFF',
+    '2': 'Through',
+    '3': 'Flood',
+}
+
+PURPOSE_MAP = {
+    'v Finitura Piani':         'Finitura piani',
+    'v Prefinitura Normale':    'Prefinitura',
+    'v Finitura':               'Finitura',
+    'v Prefinitura Piano':      'Prefinitura piani',
+    'v Prefinitura Spazz':      'Prefinitura spazzata',
+    'v Ripresa':                'Ripresa',
+    'v Incisione':              'Incisione',
+    'v Contornitura':           'Contornitura',
+    'v Cont. verticale':        'Contornitura verticale',
+    'v Coda di rondine Lat':    'Coda di rondine laterale',
+    'v Coda di rondine Pieno':  'Coda di rondine pieno',
+    'v Finitura plunging':      'Finitura plunging',
+    'v Foratura':               'Foratura',
+    'v Smussatura a Tuffo':     'Smussatura tuffo',
+    'v Smussatura 3D':          'Smussatura 3D',
+    'v Filettatura':            'Filettatura',
+    'v Filettatura + Foro':     'Filettatura + foro',
+    'v Alesatura':              'Alesatura',
+    'v Centrino':               'Centratura',
+    'v Sgross Troc (HPC)':     'Sgrossatura HPC',
+    'v Cont. elicoidale':       'Contornitura elicoidale',
+    'v Finitura Spazz':         'Finitura spazzata',
+    'v Prefinitura plunging':   'Prefinitura plunging',
+    'v Sgross elicoidale':      'Sgrossatura elicoidale',
+    'v Prefinitura Ridotta':    'Prefinitura ridotta',
+    'FORATURA':                 'Foratura',
+    'FINITURA DI CONTORNATURA': 'Finitura contornitura',
+    'SEMIFINITURA':             'Semifinitura',
+    'FINITURA PIANI':           'Finitura piani',
+    'SGROSSATURA HPC':          'Sgrossatura HPC',
+    'SGROSSATURA':              'Sgrossatura',
+    'SGROSSATURA HSC':          'Sgrossatura HSC',
+    'FINITURA HSC':             'Finitura HSC',
+}
+
 
 def _decodifica_holder(polyline, holder_name=''):
-    """
-    Decodifica il profilo 2D della polyline del portautensile Hypermill.
-    Verificato sul disegno tecnico Bilz TSF1000-90/HSK-A63 (9078677):
-
-    Struttura polyline (ogni 104 byte = 1 segmento):
-      seg1 @ pos 128,136: (r=D3/2, z=94) — D3=diam esterno corpo, z=fine zona conica
-      seg2 @ pos 232,240: (r=31.5=HSK63/2, z) — flangia HSK standard
-      seg3 @ pos 336,344: (r, z) — zona di transizione
-      seg4 @ pos 440,448: (r, z) — fine cono
-      pos 552: lunghezza totale A
-
-    Quote verificate TSF D10 L090:
-      D1 (foro serraggio) = dal nome (regex)
-      D3 (diam corpo slim) = seg1.r*2 = 25mm (Bilz: Ø25) ✓
-      NL (lungh serraggio) = seg1.z/0.954 = 90mm ✓
-      z_fine_cono = seg2.z = 94mm ✓ (quota 94 del disegno)
-      D_HSK = seg2.r*2 = 63mm ✓ (Ø63 standard)
-      A (lungh totale) = pos552 = 120mm ✓
-    """
-    import struct, re
     if not polyline or len(polyline) < 144:
-        return {}
+        return {}, []
 
     def get_be(pos):
-        if pos + 8 > len(polyline): return None
-        try: return round(struct.unpack('>d', polyline[pos:pos+8])[0], 4)
-        except: return None
+        if pos + 8 > len(polyline):
+            return None
+        try:
+            return round(struct.unpack('>d', polyline[pos:pos+8])[0], 4)
+        except Exception:
+            return None
 
-    # Segmenti del profilo
-    s1r, s1z = get_be(128), get_be(136)  # corpo slim
-    s2r, s2z = get_be(232), get_be(240)  # flangia HSK
-    s3r, s3z = get_be(336), get_be(344)  # transizione
-    s4r, s4z = get_be(440), get_be(448)  # fine cono
-    a_tot    = get_be(552)               # lunghezza totale A
+    s1r, s1z = get_be(128), get_be(136)
+    s2r, s2z = get_be(232), get_be(240)
+    s3r, s3z = get_be(336), get_be(344)
+    s4r, s4z = get_be(440), get_be(448)
+    a_tot    = get_be(552)
 
     result = {}
 
-    # D3 = diametro esterno corpo slim = seg1.r * 2
     if s1r and 5 < s1r < 50:
         result['d3_diam_corpo_mm'] = round(s1r * 2, 1)
 
-    # NL = lunghezza di serraggio (Nutzlaenge)
-    # Formula verificata per TSF: seg1.z / 0.954 = NL
-    # Per SLSA: formula diversa (pos760 + 26)
     name = holder_name.upper()
     if any(x in name for x in ('TSF', 'TFS')):
         if s1z and 5 < s1z < 400:
@@ -79,19 +113,13 @@ def _decodifica_holder(polyline, holder_name=''):
         if s1z and 5 < s1z < 400:
             result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
 
-    # z_fine_cono = seg2.z (quota 94 nel disegno)
     if s2z and 30 < s2z < 400:
         result['z_fine_cono_mm'] = round(s2z, 1)
-
-    # D_HSK = seg2.r*2 (costante per HSK63 = 63mm)
     if s2r and 25 < s2r < 50:
         result['d_hsk_mm'] = round(s2r * 2, 1)
-
-    # A = lunghezza totale holder
     if a_tot and 30 < a_tot < 500:
         result['a_lungh_totale_mm'] = round(a_tot, 1)
 
-    # D1 = diametro foro serraggio dal nome
     m = re.search(r'(?:TSF|TFS)\s*D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
     if not m:
         m = re.search(r'\bT\s+D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
@@ -99,41 +127,62 @@ def _decodifica_holder(polyline, holder_name=''):
         m = re.search(r'\bD(\d+(?:\.\d+)?)\b', holder_name)
     if m:
         result['d1_serraggio_mm'] = float(m.group(1))
-    # Per compatibilità con il campo DB master
-    result['lungh_corpo_mm'] = result.get('nl_lungh_serraggio_mm')
 
-    return result
+    segmenti = []
+    punti = []
+    for (r_val, z_val) in [(s1r, s1z), (s2r, s2z), (s3r, s3z), (s4r, s4z)]:
+        if r_val is not None and z_val is not None and r_val > 0 and z_val > 0:
+            punti.append((round(r_val * 2, 2), round(z_val, 2)))
+
+    if a_tot and a_tot > 0 and punti:
+        segmenti.append({
+            'numero_segmento': 1,
+            'diametro_inf_mm': punti[0][0],
+            'diametro_sup_mm': punti[0][0],
+            'lunghezza_mm': punti[0][1],
+        })
+        for i in range(1, len(punti)):
+            segmenti.append({
+                'numero_segmento': i + 1,
+                'diametro_inf_mm': punti[i-1][0],
+                'diametro_sup_mm': punti[i][0],
+                'lunghezza_mm': round(punti[i][1] - punti[i-1][1], 2),
+            })
+        last_z = punti[-1][1]
+        if a_tot > last_z:
+            segmenti.append({
+                'numero_segmento': len(punti) + 1,
+                'diametro_inf_mm': punti[-1][0],
+                'diametro_sup_mm': punti[-1][0],
+                'lunghezza_mm': round(a_tot - last_z, 2),
+            })
+
+    return result, segmenti
+
 
 def _is_hypermill_db(db_path):
-    """Verifica se il file e' un DB Hypermill."""
     try:
         con = sqlite3.connect(db_path)
-        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        tables = {r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
         con.close()
-        required = {'NCTools', 'Tools', 'Technologies', 'Holders'}
-        return required.issubset(tables)
+        return {'NCTools', 'Tools', 'Technologies', 'Holders'}.issubset(tables)
     except Exception:
         return False
 
+
 def _estrai_geometria(row, tool_type_id):
-    """
-    Estrae parametri geometrici dai dbl_param.
-    Decodifica verificata su manuali Moldino ETM/ETMLN/ASRM/ABPF:
-      dbl_param1  = altezza tagliente (l2)
-      dbl_param2  = diametro stelo/attacco
-      dbl_param3  = lunghezza smusso
-      dbl_param4  = DIAMETRO (D)
-      dbl_param5  = lunghezza punta (l1)
-      dbl_param7  = angolo cono
-      dbl_param8  = raggio corner (CR) per BULL, diam gambo scaricato per BALL
-      total_length = lunghezza totale utensile
-    """
     def p(i):
-        try: return row[f'dbl_param{i}'] or 0.0
-        except: return 0.0
+        try:
+            return row[f'dbl_param{i}'] or 0.0
+        except (KeyError, IndexError):
+            return 0.0
     def ip(i):
-        try: return row[f'int_param{i}'] or 0
-        except: return 0
+        try:
+            return row[f'int_param{i}'] or 0
+        except (KeyError, IndexError):
+            return 0
 
     geo = {
         'lunghezza_totale_mm':  row['total_length'],
@@ -143,83 +192,255 @@ def _estrai_geometria(row, tool_type_id):
     }
 
     if tool_type_id in (1, 5):
-        # Fresa sferica (BALL): D=p4, raggio=D/2, altezza_tagl=p1, lungh_punta=p5
         geo['diametro_mm']       = p(4)
         geo['raggio_punta_mm']   = round(p(4) / 2.0, 4) if p(4) else None
         geo['lunghezza_tagl_mm'] = p(1) or None
-
     elif tool_type_id == 2:
-        # Fresa piatta con inserto: D=p4
         geo['diametro_mm']       = p(4)
         geo['raggio_punta_mm']   = 0.0
         geo['lunghezza_tagl_mm'] = p(1) or None
-
     elif tool_type_id == 3:
-        # Fresa torica/BULL: D=p4, CR=p8, altezza_tagl=p1, lungh_punta=p5
         geo['diametro_mm']       = p(4)
         geo['raggio_punta_mm']   = p(8) if p(8) else 0.0
         geo['lunghezza_tagl_mm'] = p(1) or None
-
     elif tool_type_id == 4:
-        # Punta (DRILL): D=p4, lungh_tagl=p1, angolo_punta=p7
         geo['diametro_mm']       = p(4)
         geo['lunghezza_tagl_mm'] = p(1) or None
         geo['angolo_punta_gradi'] = p(7) or None
-
-    elif tool_type_id in (16,):
-        # Alesatore (REAM): D=p4, lungh_tagl=p1
+    elif tool_type_id == 16:
         geo['diametro_mm']       = p(4)
         geo['lunghezza_tagl_mm'] = p(1) or None
-
     elif tool_type_id == 15:
-        # Fresa per filetti (THREAD): D=p4, passo=p9
         geo['diametro_mm']       = p(4)
         geo['passo_mm']          = p(9) or None
-
     elif tool_type_id == 9:
-        # Maschio (TAP): D=p4
         geo['diametro_mm']       = p(4)
-
     else:
         geo['diametro_mm']       = p(4) or None
         geo['lunghezza_tagl_mm'] = p(1) or None
 
-    # Campi comuni a tutti i tipi
-    if p(5): geo['raggio_raccordo_mm'] = p(5)  # lunghezza punta
-
     return {k: v for k, v in geo.items() if v is not None and v != 0.0}
 
 
+def _detect_tipo_attacco(holder_name, holder_comment=''):
+    s = (holder_name or '') + ' ' + (holder_comment or '')
+    if 'HSK' in s: return 'HSK63'
+    elif any(x in s for x in ('ISO 50', 'ISO50', 'DIN69871')): return 'ISO50'
+    elif any(x in s for x in ('SK40', 'SK 40')): return 'SK40'
+    elif 'CAPTO' in s.upper(): return 'Capto'
+    return None
+
+
 def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
-    """
-    Importa utensili da DB Hypermill nel DB master.
-    Ritorna: {'importati': N, 'errori': N, 'utensili': [...]}
-    """
     if not _is_hypermill_db(hm_db_path):
         return {'errore': 'File non riconosciuto come database Hypermill'}
 
     hm = sqlite3.connect(hm_db_path)
     hm.row_factory = sqlite3.Row
 
+    stats = {
+        'materiali_pezzo': 0, 'gradi_utensile': 0, 'catalogo_velocita': 0,
+        'portautensili': 0, 'segmenti_holder': 0, 'prolunghe': 0,
+        'utensili': 0, 'condizioni_taglio': 0, 'errori': 0, 'dry_run': dry_run,
+    }
+
+    if dry_run:
+        stats['materiali_pezzo'] = hm.execute("SELECT COUNT(*) FROM Materials").fetchone()[0]
+        stats['gradi_utensile'] = hm.execute("SELECT COUNT(*) FROM CuttingMaterials").fetchone()[0]
+        stats['catalogo_velocita'] = hm.execute("SELECT COUNT(*) FROM MatTechItems").fetchone()[0]
+        stats['portautensili'] = hm.execute("SELECT COUNT(*) FROM Holders").fetchone()[0]
+        stats['prolunghe'] = hm.execute("SELECT COUNT(*) FROM Extensions").fetchone()[0]
+        stats['utensili'] = hm.execute("SELECT COUNT(*) FROM NCTools").fetchone()[0]
+        stats['condizioni_taglio'] = hm.execute("SELECT COUNT(*) FROM CuttingProfiles WHERE feedrate > 0").fetchone()[0]
+        hm.close()
+        return stats
+
+    master = sqlite3.connect(master_db_path)
+    master.execute("PRAGMA foreign_keys = ON")
+    master.execute("PRAGMA journal_mode = WAL")
+
+    try:
+        stats['materiali_pezzo'] = _importa_materiali_pezzo(hm, master)
+        stats['gradi_utensile'] = _importa_gradi_utensile(hm, master)
+        stats['catalogo_velocita'] = _importa_catalogo_velocita(hm, master)
+        h_stats = _importa_portautensili(hm, master)
+        stats['portautensili'] = h_stats['holders']
+        stats['segmenti_holder'] = h_stats['segmenti']
+        stats['prolunghe'] = _importa_prolunghe(hm, master)
+        stats['utensili'] = _importa_utensili(hm, master)
+        stats['condizioni_taglio'] = _importa_condizioni_taglio(hm, master)
+        master.commit()
+    except Exception as e:
+        master.rollback()
+        stats['errore'] = str(e)
+        import traceback
+        traceback.print_exc()
+    finally:
+        hm.close()
+        master.close()
+
+    return stats
+
+
+def _importa_materiali_pezzo(hm, master):
+    rows = hm.execute("SELECT id, name, norm_code, milling_factor_vc, milling_factor_fz, milling_factor_ae, milling_factor_ap, drilling_factor_vc, drilling_factor_fz FROM Materials ORDER BY id").fetchall()
+    count = 0
+    for r in rows:
+        nome = r['name']
+        gruppo = _classifica_gruppo_iso(nome)
+        durezza_min, durezza_max = _parse_durezza(nome)
+        master.execute("INSERT OR IGNORE INTO materiale_pezzo (nome, norm_code, gruppo, durezza_min, durezza_max, milling_factor_vc, milling_factor_fz, milling_factor_ae, milling_factor_ap, drilling_factor_vc, drilling_factor_fz, cam_sorgente, id_originale_cam) VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)",
+            (nome, r['norm_code'], gruppo, durezza_min, durezza_max, r['milling_factor_vc'], r['milling_factor_fz'], r['milling_factor_ae'], r['milling_factor_ap'], r['drilling_factor_vc'], r['drilling_factor_fz'], str(r['id'])))
+        count += 1
+    return count
+
+
+def _classifica_gruppo_iso(nome):
+    n = nome.upper()
+    if 'ALLUMINIO' in n or 'ALUMIN' in n: return 'N'
+    elif 'INOX' in n: return 'M'
+    elif 'TEMPRATO' in n or 'HRC' in n: return 'H'
+    elif 'TITANIO' in n: return 'S'
+    elif 'INCONEL' in n: return 'S'
+    elif 'GHISA' in n: return 'K'
+    elif 'ACCIAIO' in n or 'DIEVAR' in n or 'BOHLER' in n or '1.2' in n: return 'P'
+    elif 'OTTONE' in n or 'BRONZO' in n or 'RAME' in n: return 'N'
+    elif 'PLASTICA' in n or 'UREOL' in n or 'LEGNO' in n: return 'O'
+    elif 'MAGNESIO' in n: return 'N'
+    return None
+
+
+def _parse_durezza(nome):
+    m = re.search(r'R[_]?(\d+)-(\d+)', nome)
+    if m: return float(m.group(1)), float(m.group(2))
+    m = re.search(r'HRC(\d+)', nome, re.IGNORECASE)
+    if m: return None, float(m.group(1))
+    m = re.search(r'HBS(\d+)', nome, re.IGNORECASE)
+    if m: return None, float(m.group(1))
+    m = re.search(r'Max(\d+)HB', nome, re.IGNORECASE)
+    if m: return None, float(m.group(1))
+    return None, None
+
+
+def _importa_gradi_utensile(hm, master):
+    rows = hm.execute("SELECT id, name, comment FROM CuttingMaterials ORDER BY id").fetchall()
+    count = 0
+    for r in rows:
+        nome = r['name']
+        comment = r['comment'] or ''
+        famiglia = _classifica_famiglia_grado(nome, comment)
+        master.execute("INSERT OR IGNORE INTO grado_utensile (nome, descrizione, famiglia, cam_sorgente, id_originale_cam) VALUES (?,?,?,'Hypermill',?)",
+            (nome, comment, famiglia, str(r['id'])))
+        count += 1
+    return count
+
+
+def _classifica_famiglia_grado(nome, commento):
+    s = (nome + ' ' + commento).upper()
+    if 'HSS' in s: return 'HSS'
+    elif any(x in s for x in ('HM', 'MD', 'METALLO DURO', 'CARBIDE', 'SOLID CARBIDE')): return 'HM'
+    elif 'CBN' in s: return 'CBN'
+    elif 'PCD' in s or 'DIAMANTE' in s: return 'PCD'
+    elif 'CERAMICA' in s or 'CERAMIC' in s: return 'CERAMICA'
+    elif 'CERMET' in s: return 'CERMET'
+    if 'INS' in s or 'INSERTO' in s: return 'HM'
+    return 'HM'
+
+
+def _importa_catalogo_velocita(hm, master):
+    mat_map = _build_material_map(hm, master)
+    grado_map = _build_grado_map(hm, master)
     rows = hm.execute("""
-        SELECT
-            n.id as nc_id, n.nc_name, n.nc_number_str, n.nc_number_val,
-            n.gage_length, n.tool_length, n.comment as nc_comment,
-            COALESCE(c.reach, 0) as ext_reach,
-            e.name as ext_name,
+        SELECT mti.limiting_diameter, mti.cutting_speed, mti.feedrate_per_edge, mti.drilling_feedrate,
+               mt.material_id, mt.cutting_material_id
+        FROM MatTechItems mti JOIN MatTechs mt ON mti.mat_tech_id = mt.mat_tech_id
+        ORDER BY mt.material_id, mt.cutting_material_id, mti.limiting_diameter
+    """).fetchall()
+    count = 0
+    for r in rows:
+        id_mat = mat_map.get(r['material_id'])
+        id_grado = grado_map.get(r['cutting_material_id'])
+        if not id_mat or not id_grado: continue
+        master.execute("INSERT OR IGNORE INTO catalogo_velocita (id_materiale_pezzo, id_grado_utensile, limiting_diameter_mm, vc_m_min, fz_mm_z, drilling_feedrate, cam_sorgente) VALUES (?,?,?,?,?,?,'Hypermill')",
+            (id_mat, id_grado, r['limiting_diameter'], r['cutting_speed'], r['feedrate_per_edge'], r['drilling_feedrate']))
+        count += 1
+    return count
+
+
+def _importa_portautensili(hm, master):
+    rows = hm.execute("""
+        SELECT h.id, h.name, h.comment, h.ordering_code, h.spindle_speed_factor, h.feedrate_factor,
+               h.infeed_width_factor, h.infeed_length_factor, h.max_spindle_speed, h.max_feedrate, h.coolant_through,
+               g.polyline
+        FROM Holders h LEFT JOIN HolderGeometries hg ON hg.holder_id = h.id
+        LEFT JOIN Geometries g ON g.id = hg.geometry_id ORDER BY h.id
+    """).fetchall()
+    count_h = count_s = 0
+    for r in rows:
+        holder_name = r['name']
+        tipo_attacco = _detect_tipo_attacco(holder_name, r['comment'])
+        holder_geo, segmenti = _decodifica_holder(r['polyline'], holder_name)
+        master.execute("""INSERT OR IGNORE INTO portautensile
+            (codice_interno, descrizione, tipo_attacco, num_segmenti, spindle_speed_factor, feedrate_factor,
+             infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through,
+             cam_sorgente, id_originale_cam)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)""",
+            (holder_name, r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
+             r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
+             r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id'])))
+        row_id = master.execute("SELECT id FROM portautensile WHERE codice_interno = ?", (holder_name,)).fetchone()
+        if row_id:
+            porta_id = row_id[0]
+            for seg in segmenti:
+                master.execute("INSERT OR IGNORE INTO portautensile_segmento (id_portautensile, numero_segmento, diametro_inf_mm, diametro_sup_mm, lunghezza_mm) VALUES (?,?,?,?,?)",
+                    (porta_id, seg['numero_segmento'], seg['diametro_inf_mm'], seg['diametro_sup_mm'], seg['lunghezza_mm']))
+                count_s += 1
+        count_h += 1
+    return {'holders': count_h, 'segmenti': count_s}
+
+
+def _importa_prolunghe(hm, master):
+    rows = hm.execute("SELECT extension_id, name, comment, ordering_code, spindle_speed_factor, feedrate_factor, infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through FROM Extensions ORDER BY extension_id").fetchall()
+    count = 0
+    for r in rows:
+        master.execute("INSERT OR IGNORE INTO prolunga (codice_interno, descrizione, spindle_speed_factor, feedrate_factor, infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through, cam_sorgente, id_originale_cam) VALUES (?,?,?,?,?,?,?,?,?,'Hypermill',?)",
+            (r['name'], r['comment'] or r['ordering_code'], r['spindle_speed_factor'], r['feedrate_factor'],
+             r['infeed_width_factor'], r['infeed_length_factor'], r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['extension_id'])))
+        count += 1
+    return count
+
+
+def _importa_utensili(hm, master):
+    id_tipo_map = {}
+    for row in master.execute("SELECT id, codice FROM tipo_utensile").fetchall():
+        id_tipo_map[row[1]] = row[0]
+    id_tipo_default = id_tipo_map.get('UNKNOWN', 1)
+    id_mat_default = master.execute("SELECT id FROM materiale_utensile WHERE codice='HM'").fetchone()
+    id_mat_default = id_mat_default[0] if id_mat_default else 1
+
+    porta_map = {}
+    for row in master.execute("SELECT id, codice_interno FROM portautensile").fetchall():
+        porta_map[row[1]] = row[0]
+    prol_map = {}
+    for row in master.execute("SELECT id, codice_interno FROM prolunga").fetchall():
+        prol_map[row[1]] = row[0]
+    grado_map = _build_grado_map(hm, master)
+    master_cols = {r[1] for r in master.execute("PRAGMA table_info('utensile')").fetchall()}
+
+    rows = hm.execute("""
+        SELECT n.id as nc_id, n.nc_name, n.nc_number_str, n.nc_number_val,
+            n.gage_length, n.tool_length, n.holder_reach, n.usable_length, n.clearance_length, n.preset_diameter,
+            n.comment as nc_comment, n.spindle_speed_factor as nc_spd_factor, n.feedrate_factor as nc_feed_factor,
+            n.infeed_width_factor as nc_ae_factor, n.infeed_length_factor as nc_ap_factor,
+            COALESCE(c.reach, 0) as ext_reach, e.name as ext_name,
             t.id as tool_id, t.name as tool_name, t.comment as tool_comment,
-            t.tool_type_id, t.total_length, t.ordering_code,
-            t.dbl_param1, t.dbl_param2, t.dbl_param3, t.dbl_param4,
-            t.dbl_param5, t.dbl_param6, t.dbl_param7, t.dbl_param8,
-            t.dbl_param9, t.dbl_param10, t.dbl_param11, t.dbl_param12,
-            t.dbl_param13, t.dbl_param14, t.dbl_param15, t.dbl_param16, t.dbl_param17,
+            t.tool_type_id, t.total_length, t.ordering_code, t.cutting_material_id, t.spindle_direction,
+            t.dbl_param1, t.dbl_param2, t.dbl_param3, t.dbl_param4, t.dbl_param5, t.dbl_param6, t.dbl_param7, t.dbl_param8,
+            t.dbl_param9, t.dbl_param10, t.dbl_param11, t.dbl_param12, t.dbl_param13, t.dbl_param14, t.dbl_param15, t.dbl_param16, t.dbl_param17,
             t.int_param1, t.int_param2, t.int_param3, t.int_param4, t.int_param5, t.int_param6,
-            h.name as holder_name,
-            h.comment as holder_comment,
-            gh.polyline as holder_polyline,
-            m.name as manufacturer_name
-        FROM NCTools n
-        JOIN Tools t ON n.tool_id = t.id
+            h.name as holder_name, h.comment as holder_comment,
+            gh.polyline as holder_polyline, m.name as manufacturer_name
+        FROM NCTools n JOIN Tools t ON n.tool_id = t.id
         LEFT JOIN Holders h ON n.holder_id = h.id
         LEFT JOIN HolderGeometries hg ON hg.holder_id = h.id
         LEFT JOIN Geometries gh ON gh.id = hg.geometry_id
@@ -229,158 +450,152 @@ def importa_hypermill_db(hm_db_path, master_db_path, dry_run=False):
         ORDER BY n.nc_number_val
     """).fetchall()
 
-    techs_raw = hm.execute("""
-        SELECT tt.tool_id, t.feedrate,
-               t.dbl_param2 as fz,
-               t.dbl_param3 as rpm,
-               t.dbl_param5 as ae,
-               t.dbl_param6 as ap,
-               t.dbl_param10 as vc,
-               tp.purpose
-        FROM ToolTechnologies tt
-        JOIN Technologies t ON tt.technology_id = t.technology_id
-        LEFT JOIN TechnologyPurposes tp ON t.purpose_id = tp.id
-        WHERE t.feedrate > 0
-        ORDER BY tt.tool_id, t.purpose_id
-    """).fetchall()
-
-    techs = {}
-    for tech in techs_raw:
+    rpm_map = {}
+    for tech in hm.execute("""
+        SELECT tt.tool_id, tech.dbl_param3 as rpm FROM ToolTechnologies tt
+        JOIN Technologies tech ON tt.technology_id = tech.technology_id WHERE tech.dbl_param3 > 0
+        ORDER BY tt.tool_id, tech.purpose_id
+    """).fetchall():
         tid = tech['tool_id']
-        if tid not in techs or 'Prefinitura Normale' in (tech['purpose'] or ''):
-            techs[tid] = tech
+        if tid not in rpm_map:
+            rpm_map[tid] = tech['rpm']
 
-    utensili = []
+    count = 0
     for row in rows:
         geo = _estrai_geometria(row, row['tool_type_id'])
-        tech = techs.get(row['tool_id'])
-
-        # Rendi codice_interno unico aggiungendo il numero NC come suffisso
-        nc_code = row['nc_name'] or row['tool_name'] or ''
-        # Decodifica geometria portautensile
-        holder_geo = _decodifica_holder(row['holder_polyline'], row['holder_name'] or '') if row['holder_polyline'] else {}
-        # Tipo attacco da coupling
-        tipo_attacco = None
+        tipo_str = TIPO_MAP.get(row['tool_type_id'], 'UNKNOWN')
+        id_tipo = id_tipo_map.get(tipo_str, id_tipo_default)
+        holder_geo, _ = _decodifica_holder(row['holder_polyline'], row['holder_name'] or '') if row['holder_polyline'] else ({}, [])
         holder_name = row['holder_name'] or ''
-        try: holder_comment = row['holder_comment'] or ''
-        except: holder_comment = ''
-        holder_str = holder_name + ' ' + holder_comment
-        if 'HSK' in holder_str: tipo_attacco = 'HSK63'
-        elif 'ISO 50' in holder_str or 'ISO50' in holder_str or 'DIN69871' in holder_str: tipo_attacco = 'ISO50'
-        elif 'SK40' in holder_str or 'SK 40' in holder_str: tipo_attacco = 'SK40'
-        elif 'CAPTO' in holder_str.upper(): tipo_attacco = 'Capto'
+        tipo_attacco = _detect_tipo_attacco(holder_name, row['holder_comment'] or '')
+        id_porta = porta_map.get(holder_name)
+        id_prol = prol_map.get(row['ext_name']) if row['ext_name'] else None
+        id_grado = grado_map.get(row['cutting_material_id'])
+        dir_rot = 'CW' if row['spindle_direction'] == 0 else 'CCW'
+        rpm_default = rpm_map.get(row['tool_id'])
+        vc_default = None
+        diam = geo.get('diametro_mm', 0)
+        if rpm_default and diam:
+            vc_default = round(rpm_default * diam * math.pi / 1000, 2)
+        fuori_pinza = round((row['tool_length'] or 0) + (row['ext_reach'] or 0), 2) or None
 
         utensile = {
-            'codice_interno':        f"{row['nc_number_str'] or row['nc_name'] or ''}_hm_{row['nc_id']}",
-            'alias':                 row['nc_name'] or '',
-            'descrizione':           row['tool_name'] or '',
-            'codice_catalogo':       row['ordering_code'] or '',
-            'tipo':                  TIPO_MAP.get(row['tool_type_id'], 'FLAT'),
-            'cam_sorgente':          'Hypermill',
-            'id_originale_cam':      str(row['nc_id']),
-            'nome_pinza':            holder_name or None,
-            'lungh_presa_mm':        holder_geo.get('nl_lungh_serraggio_mm') or holder_geo.get('lungh_corpo_mm'),
-            'd1_serraggio_mm':       holder_geo.get('d1_serraggio_mm'),
-            'd3_corpo_mm':           holder_geo.get('d3_diam_corpo_mm'),
-            'd_hsk_mm':              holder_geo.get('d_hsk_mm'),
-            'nl_serraggio_mm':       holder_geo.get('nl_lungh_serraggio_mm'),
-            'z_fine_cono_mm':        holder_geo.get('z_fine_cono_mm'),
-            'a_lungh_holder_mm':     holder_geo.get('a_lungh_totale_mm'),
-            'fuori_pinza_mm':        round((row['tool_length'] or 0) + (row['ext_reach'] or 0), 2) or None,
+            'codice_interno': f"{row['nc_number_str'] or row['nc_name'] or ''}_hm_{row['nc_id']}",
+            'alias': row['nc_name'] or '',
+            'descrizione': row['tool_name'] or '',
+            'codice_catalogo': row['ordering_code'] or '',
+            'cam_sorgente': 'Hypermill',
+            'id_originale_cam': str(row['nc_id']),
+            'id_tipo': id_tipo,
+            'id_materiale': id_mat_default,
+            'id_portautensile': id_porta,
+            'id_grado_utensile': id_grado,
+            'id_prolunga': id_prol,
+            'nome_pinza': holder_name or None,
+            'tipo_attacco': tipo_attacco,
+            'fuori_pinza_mm': fuori_pinza,
+            'lungh_presa_mm': holder_geo.get('nl_lungh_serraggio_mm'),
             'lungh_libera_prolunga_mm': row['ext_reach'] or None,
-            'tipo_attacco':          tipo_attacco,
+            'gage_length_mm': row['gage_length'] or None,
+            'usable_length_mm': row['usable_length'] or None,
+            'clearance_length_mm': row['clearance_length'] or None,
+            'preset_diameter_mm': row['preset_diameter'] or None,
+            'd1_serraggio_mm': holder_geo.get('d1_serraggio_mm'),
+            'd3_corpo_mm': holder_geo.get('d3_diam_corpo_mm'),
+            'd_hsk_mm': holder_geo.get('d_hsk_mm'),
+            'nl_serraggio_mm': holder_geo.get('nl_lungh_serraggio_mm'),
+            'z_fine_cono_mm': holder_geo.get('z_fine_cono_mm'),
+            'a_lungh_holder_mm': holder_geo.get('a_lungh_totale_mm'),
+            'rotazione_default': rpm_default,
+            'vc_default': vc_default,
+            'dir_rotazione': dir_rot,
+            'hm_tool_number': row['nc_number_val'],
+            'hm_tool_type_id': str(row['tool_type_id']),
             **geo,
         }
-        if tech:
-            import math as _math
-            feed  = tech['feedrate'] or 0
-            rpm   = tech['rpm'] or 0
-            fz    = tech['fz'] or 0
-            ae    = tech['ae'] or 0
-            ap    = tech['ap'] or 0
-            vc    = tech['vc'] or 0
-            diam  = utensile.get('diametro_mm') or 0
-            denti = utensile.get('num_taglienti') or 0
-            # Fattori correzione NCTool (portautensile lungo riduce parametri)
-            try: feed_factor = row['feedrate_factor'] or 1.0
-            except: feed_factor = 1.0
-            try: spd_factor = row['spindle_speed_factor'] or 1.0
-            except: spd_factor = 1.0
-            try: ae_factor = row['infeed_width_factor'] or 1.0
-            except: ae_factor = 1.0
-            try: ap_factor = row['infeed_length_factor'] or 1.0
-            except: ap_factor = 1.0
-            # Applica fattori
-            if feed:  utensile['avanzamento_default'] = round(feed * feed_factor, 2)
-            if rpm:   utensile['rotazione_default']   = round(rpm * spd_factor, 1)
-            if fz:    utensile['fz_default']           = round(fz, 4)
-            if ae:    utensile['passo_lat_default']    = round(ae * ae_factor, 4)
-            if ap:    utensile['passo_z_default']      = round(ap * ap_factor, 4)
-            if vc:    utensile['vc_default']           = round(vc, 2)
-            # Se Fz non disponibile calcolalo: Fz = Feed / (RPM * denti)
-            if not fz and feed and rpm and denti:
-                utensile['fz_default'] = round((feed * feed_factor) / (rpm * spd_factor * denti), 4)
-            # Se Vc non disponibile calcolalo: Vc = RPM * D * pi / 1000
-            if not vc and rpm and diam:
-                utensile['vc_default'] = round(rpm * spd_factor * diam * _math.pi / 1000, 2)
-
         utensile = {k: v for k, v in utensile.items() if v is not None and v != ''}
-        utensili.append(utensile)
-
-    hm.close()
-
-    if dry_run:
-        return {'importati': 0, 'errori': 0, 'totale': len(utensili),
-                'utensili': utensili, 'dry_run': True}
-
-    master = sqlite3.connect(master_db_path)
-    # PRAGMA senza row_factory per usare indici numerici
-    master_cols = {r[1] for r in master.execute("PRAGMA table_info('utensile')").fetchall()}
-    id_tipo_default = master.execute("SELECT id FROM tipo_utensile LIMIT 1").fetchone()[0]
-    id_mat_default = master.execute("SELECT id FROM materiale_utensile LIMIT 1").fetchone()[0]
-    master.row_factory = sqlite3.Row
-
-    CAMPO_MAP = {
-        'codice_interno', 'alias', 'descrizione', 'codice_catalogo',
-        'cam_sorgente', 'id_originale_cam',
-        'diametro_mm', 'raggio_punta_mm', 'raggio_raccordo_mm',
-        'lunghezza_totale_mm', 'lunghezza_tagl_mm', 'angolo_punta_gradi',
-        'angolo_conico_gradi', 'diam_stelo_mm', 'passo_mm',
-        'num_taglienti', 'nome_pinza', 'fuori_pinza_mm', 'nome_prolunga',
-        'lungh_presa_mm', 'lungh_libera_prolunga_mm', 'tipo_attacco',
-        'd1_serraggio_mm', 'd3_corpo_mm', 'd_hsk_mm',
-        'nl_serraggio_mm', 'z_fine_cono_mm', 'a_lungh_holder_mm',
-        'avanzamento_default', 'rotazione_default', 'vc_default',
-        'fz_default', 'passo_z_default', 'passo_lat_default',
-    }
-
-    importati = errori = ignorati = 0
-    for u in utensili:
+        insert_data = {k: v for k, v in utensile.items() if k in master_cols}
         try:
-            tipo_str = u.get('tipo', 'FLAT')
-            id_tipo_row = master.execute(
-                "SELECT id FROM tipo_utensile WHERE codice=? LIMIT 1", (tipo_str,)
-            ).fetchone()
-            id_tipo = id_tipo_row['id'] if id_tipo_row else id_tipo_default
-
-            insert_data = {'id_tipo': id_tipo, 'id_materiale': id_mat_default}
-            for campo in CAMPO_MAP:
-                if campo in u and campo in master_cols:
-                    insert_data[campo] = u[campo]
-
             cols = ', '.join(insert_data.keys())
             ph = ', '.join(['?'] * len(insert_data))
-            master.execute(f"INSERT INTO utensile ({cols}) VALUES ({ph})",
-                           list(insert_data.values()))
-            importati += 1
+            master.execute(f"INSERT INTO utensile ({cols}) VALUES ({ph})", list(insert_data.values()))
+            count += 1
         except Exception as e:
-            errori += 1
-            if errori == 1:
-                import sys as _sys
-                print(f'Primo errore: {e} | utensile: {u.get("codice_interno","?")} | dati: {list(insert_data.items())[:5]}', file=_sys.stderr)
+            if count == 0:
+                print(f'Errore utensile: {e} | {utensile.get("codice_interno","?")}', file=sys.stderr)
+    return count
 
-    master.commit()
-    master.close()
 
-    return {'importati': importati, 'errori': errori, 'ignorati': ignorati,
-            'totale': len(utensili), 'utensili': utensili}
+def _importa_condizioni_taglio(hm, master):
+    ut_map = {}
+    for row in master.execute("SELECT id, id_originale_cam FROM utensile WHERE cam_sorgente='Hypermill'").fetchall():
+        ut_map[row[1]] = row[0]
+    mat_map = _build_material_map(hm, master)
+    tool_info = {}
+    for row in hm.execute("SELECT n.id as nc_id, t.dbl_param4 as diam, t.int_param1 as denti FROM NCTools n JOIN Tools t ON n.tool_id = t.id").fetchall():
+        tool_info[row['nc_id']] = (row['diam'] or 0, row['denti'] or 0)
+    rpm_lookup = {}
+    for tech in hm.execute("SELECT cp.nctool_id, cp.technology_id, tech.dbl_param3 as rpm FROM CuttingProfiles cp JOIN Technologies tech ON cp.technology_id = tech.technology_id WHERE tech.dbl_param3 > 0").fetchall():
+        rpm_lookup[(tech['nctool_id'], tech['technology_id'])] = tech['rpm']
+    mat_names = {}
+    for r in hm.execute("SELECT id, name FROM Materials").fetchall():
+        mat_names[r['id']] = r['name']
+
+    rows = hm.execute("""
+        SELECT cp.nctool_id, cp.technology_id, cp.feedrate, cp.dbl_param5 as ae, cp.dbl_param6 as ap,
+               cp.dbl_param7 as fz, cp.coolants, tech.material_id, tp.purpose
+        FROM CuttingProfiles cp
+        JOIN Technologies tech ON cp.technology_id = tech.technology_id
+        LEFT JOIN TechnologyPurposes tp ON tech.purpose_id = tp.id
+        WHERE cp.feedrate > 0
+        ORDER BY cp.nctool_id, tech.material_id, tech.purpose_id
+    """).fetchall()
+
+    count = 0
+    for r in rows:
+        nc_id_str = str(r['nctool_id'])
+        id_ut = ut_map.get(nc_id_str)
+        if not id_ut: continue
+        mat_name = mat_names.get(r['material_id'], 'Sconosciuto')
+        id_mat = mat_map.get(r['material_id'])
+        purpose = r['purpose'] or ''
+        applicazione = PURPOSE_MAP.get(purpose, purpose) or 'Default'
+        vf = r['feedrate']
+        ae = r['ae'] if r['ae'] and r['ae'] > 0 else None
+        ap = r['ap'] if r['ap'] and r['ap'] > 0 else None
+        fz = r['fz'] if r['fz'] and r['fz'] > 0 else None
+        rpm = rpm_lookup.get((r['nctool_id'], r['technology_id']))
+        diam, denti = tool_info.get(r['nctool_id'], (0, 0))
+        if not rpm and fz and denti:
+            rpm = round(vf / (fz * denti), 1)
+        vc = None
+        if rpm and diam:
+            vc = round(math.pi * diam * rpm / 1000, 2)
+        refrig = COOLANT_MAP.get(r['coolants'], None)
+        try:
+            master.execute("""INSERT OR REPLACE INTO condizioni_taglio
+                (id_utensile, id_materiale_pezzo, materiale_pezzo, applicazione, cam_sorgente,
+                 vc_m_min, rotazione_rpm, fz_mm_z, avanzamento_mm_min, ap_mm, ae_mm, refrigerante)
+                VALUES (?,?,?,?,'Hypermill',?,?,?,?,?,?,?)""",
+                (id_ut, id_mat, mat_name, applicazione, vc, rpm, fz, vf, ap, ae, refrig))
+            count += 1
+        except Exception as e:
+            if count == 0:
+                print(f'Errore condizioni_taglio: {e}', file=sys.stderr)
+    return count
+
+
+def _build_material_map(hm, master):
+    result = {}
+    for r in hm.execute("SELECT id, name FROM Materials").fetchall():
+        row = master.execute("SELECT id FROM materiale_pezzo WHERE nome = ?", (r['name'],)).fetchone()
+        if row: result[r['id']] = row[0]
+    return result
+
+
+def _build_grado_map(hm, master):
+    result = {}
+    for r in hm.execute("SELECT id, name FROM CuttingMaterials").fetchall():
+        row = master.execute("SELECT id FROM grado_utensile WHERE nome = ?", (r['name'],)).fetchone()
+        if row: result[r['id']] = row[0]
+    return result

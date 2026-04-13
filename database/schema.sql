@@ -29,6 +29,67 @@ CREATE TABLE IF NOT EXISTS fornitore (
     note    TEXT
 );
 
+-- ── Materiale pezzo (workpiece) ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS materiale_pezzo (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome                TEXT NOT NULL UNIQUE,
+    norm_code           TEXT,
+    gruppo              TEXT,
+    durezza_min         REAL,
+    durezza_max         REAL,
+    milling_factor_vc   REAL DEFAULT 1.0,
+    milling_factor_fz   REAL DEFAULT 1.0,
+    milling_factor_ae   REAL DEFAULT 1.0,
+    milling_factor_ap   REAL DEFAULT 1.0,
+    drilling_factor_vc  REAL DEFAULT 1.0,
+    drilling_factor_fz  REAL DEFAULT 1.0,
+    cam_sorgente        TEXT,
+    id_originale_cam    TEXT,
+    note                TEXT
+);
+
+-- ── Grado utensile (cutting material) ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS grado_utensile (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome                TEXT NOT NULL UNIQUE,
+    descrizione         TEXT,
+    famiglia            TEXT,
+    cam_sorgente        TEXT,
+    id_originale_cam    TEXT
+);
+
+-- ── Catalogo velocità (MatTechItems) ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS catalogo_velocita (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_materiale_pezzo      INTEGER NOT NULL REFERENCES materiale_pezzo(id) ON DELETE CASCADE,
+    id_grado_utensile       INTEGER NOT NULL REFERENCES grado_utensile(id) ON DELETE CASCADE,
+    limiting_diameter_mm    REAL NOT NULL,
+    vc_m_min                REAL,
+    fz_mm_z                 REAL,
+    drilling_feedrate       REAL,
+    cam_sorgente            TEXT,
+    UNIQUE(id_materiale_pezzo, id_grado_utensile, limiting_diameter_mm)
+);
+
+-- ── Prolunga (extension) ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS prolunga (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    codice_interno          TEXT NOT NULL UNIQUE,
+    descrizione             TEXT,
+    reach_mm                REAL,
+    tipo_attacco_sup        TEXT,
+    tipo_attacco_inf        TEXT,
+    spindle_speed_factor    REAL DEFAULT 1.0,
+    feedrate_factor         REAL DEFAULT 1.0,
+    infeed_width_factor     REAL DEFAULT 1.0,
+    infeed_length_factor    REAL DEFAULT 1.0,
+    max_spindle_speed       REAL,
+    max_feedrate            REAL,
+    coolant_through         INTEGER DEFAULT 0,
+    cam_sorgente            TEXT,
+    id_originale_cam        TEXT
+);
+
 -- ── Portautensile ──────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS portautensile (
@@ -39,6 +100,15 @@ CREATE TABLE IF NOT EXISTS portautensile (
     num_segmenti     INTEGER DEFAULT 0,
     num_seg_mandrino INTEGER DEFAULT 0,
     tipo_visualiz    INTEGER DEFAULT 0,
+    spindle_speed_factor    REAL DEFAULT 1.0,
+    feedrate_factor         REAL DEFAULT 1.0,
+    infeed_width_factor     REAL DEFAULT 1.0,
+    infeed_length_factor    REAL DEFAULT 1.0,
+    max_spindle_speed       REAL,
+    max_feedrate            REAL,
+    coolant_through         INTEGER DEFAULT 0,
+    cam_sorgente            TEXT,
+    id_originale_cam        TEXT,
     attivo           INTEGER NOT NULL DEFAULT 1,
     data_inserimento TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -83,6 +153,8 @@ CREATE TABLE IF NOT EXISTS utensile (
     id_materiale            INTEGER NOT NULL DEFAULT 1 REFERENCES materiale_utensile(id),
     id_fornitore            INTEGER REFERENCES fornitore(id),
     id_portautensile        INTEGER REFERENCES portautensile(id),
+    id_grado_utensile       INTEGER REFERENCES grado_utensile(id),
+    id_prolunga             INTEGER REFERENCES prolunga(id),
     tecnologia              TEXT,       -- Fresatura, Foratura, Filettatura, Alesatura, Tornitura
 
     -- ── Geometria corpo utensile ───────────────────────────────────────────
@@ -142,6 +214,20 @@ CREATE TABLE IF NOT EXISTS utensile (
                                         -- usato da tutti i CAM per sicurezza in macchina
     lungh_libera_prolunga_mm REAL,      -- lunghezza libera con eventuale prolunga
 
+    -- ── Geometria holder (decodificata dalla polyline Hypermill) ─────────
+    d1_serraggio_mm         REAL,
+    d3_corpo_mm             REAL,
+    d_hsk_mm                REAL,
+    nl_serraggio_mm         REAL,
+    z_fine_cono_mm          REAL,
+    a_lungh_holder_mm       REAL,
+
+    -- ── Lunghezze assemblaggio (NCTool level) ─────────────────────────────
+    gage_length_mm          REAL,
+    usable_length_mm        REAL,
+    clearance_length_mm     REAL,
+    preset_diameter_mm      REAL,
+
     -- ── Parametri di taglio DEFAULT ────────────────────────────────────────
     -- Valori generici dell'utensile (non legati al materiale pezzo).
     -- I valori per materiale specifico sono in condizioni_taglio.
@@ -191,6 +277,7 @@ CREATE TABLE IF NOT EXISTS utensile (
 CREATE TABLE IF NOT EXISTS condizioni_taglio (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     id_utensile         INTEGER NOT NULL REFERENCES utensile(id) ON DELETE CASCADE,
+    id_materiale_pezzo      INTEGER REFERENCES materiale_pezzo(id),
     materiale_pezzo     TEXT NOT NULL,  -- es. '1.2311', 'Alluminio', 'Acciaio'
     applicazione        TEXT,           -- es. 'Sgrossatura', 'Finitura'
     cam_sorgente        TEXT,           -- da quale CAM viene questo set di parametri
@@ -249,6 +336,10 @@ CREATE INDEX IF NOT EXISTS idx_utensile_alias     ON utensile(alias);
 CREATE INDEX IF NOT EXISTS idx_utensile_tipo      ON utensile(id_tipo);
 CREATE INDEX IF NOT EXISTS idx_utensile_cam       ON utensile(cam_sorgente);
 CREATE INDEX IF NOT EXISTS idx_condizioni_ut      ON condizioni_taglio(id_utensile);
+CREATE INDEX IF NOT EXISTS idx_condizioni_mat    ON condizioni_taglio(id_materiale_pezzo);
+CREATE INDEX IF NOT EXISTS idx_catalogo_mat      ON catalogo_velocita(id_materiale_pezzo);
+CREATE INDEX IF NOT EXISTS idx_catalogo_grado    ON catalogo_velocita(id_grado_utensile);
+CREATE INDEX IF NOT EXISTS idx_utensile_grado    ON utensile(id_grado_utensile);
 
 -- ── Dati default dizionari ─────────────────────────────────────────────────
 
