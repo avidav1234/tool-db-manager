@@ -50,3 +50,26 @@ tbody td:last-child a,tbody td:last-child button{display:inline-flex!important;a
 tbody td:last-child a:hover,tbody td:last-child button:hover{background:#f0efec!important;border-color:var(--border-strong)!important}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
+
+
+/* ── STATS HERO CARDS ── */
+.stats-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-top:3px solid transparent;border-radius:var(--radius-lg);padding:1.25rem 1.5rem;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:4px;transition:box-shadow .15s,transform .15s}
+.stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.stat-icon{font-size:22px;margin-bottom:2px}
+.stat-num{font-size:32px;font-weight:700;line-height:1;letter-spacing:-1px}
+.stat-lbl{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-top:2px}
+.stat-blue{border-top-color:#1a56db}.stat-blue .stat-num{color:#1a56db}
+.stat-purple{border-top-color:#7c3aed}.stat-purple .stat-num{color:#7c3aed}
+.stat-green{border-top-color:#059669}.stat-green .stat-num{color:#059669}
+.stat-amber{border-top-color:#d97706}.stat-amber .stat-num{color:#d97706}
+@media(max-width:768px){.stats-hero{grid-template-columns:repeat(2,1fr)}}
+
+/* ── SEARCH BAR ── */
+.search-wrap{position:relative;flex:1;min-width:240px}
+.search-wrap input{padding-left:36px!important}
+.search-wrap::before{content:"🔍";position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;z-index:1}
+
+/* ── TABLE VALUE HIGHLIGHTS ── */
+.fuori-ok{color:#059669!important;font-weight:600!important}
+.fuori-warn{color:#d97706!important;font-weight:600!important}
