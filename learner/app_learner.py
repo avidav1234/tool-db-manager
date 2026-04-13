@@ -121,7 +121,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
   {% if r.agente_usato %}
   <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.6rem 1rem;margin-bottom:1rem;font-size:13px;color:#1d4ed8">
     L'agente AI ha suggerito mapping per le colonne non identificate automaticamente.
-    I suggerimenti sono evidenziati in blu â verificali e correggi se necessario.
+    I suggerimenti sono evidenziati in blu Ã¢ÂÂ verificali e correggi se necessario.
   </div>
   {% endif %}
   {% if r.agente_errore %}
@@ -165,7 +165,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     </td>
     <td><select name="map_{{ info.colonna_file }}">
       <option value="">-- ignora --</option>
-      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} â {{ v.label }}</option>{% endfor %}
+      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} Ã¢ÂÂ {{ v.label }}</option>{% endfor %}
     </select></td>
     <td><span class="badge b-{{ info.confidenza[0] }}">{{ info.confidenza }}</span></td>
     <td style="font-size:11px;color:#888">{{ info.get('motivazione','') }}</td>
@@ -176,7 +176,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     <td><code>{{ col }}</code></td>
     <td><select name="map_{{ col }}">
       <option value="">-- ignora --</option>
-      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} â {{ v.label }}</option>{% endfor %}
+      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} Ã¢ÂÂ {{ v.label }}</option>{% endfor %}
     </select></td>
     <td><span class="badge b-n">non rilevata</span></td>
     <td></td>
@@ -260,13 +260,13 @@ function lrnImportaDB() {
     } else {
       box.style.background = dry ? '#fef9c3' : '#dcfce7';
       box.style.color = dry ? '#713f12' : '#166534';
-      let msg = (dry ? 'SIMULAZIONE â ' : '') +
+      let msg = (dry ? 'SIMULAZIONE Ã¢ÂÂ ' : '') +
         d.inseriti + ' inseriti, ' +
         d.aggiornati + ' aggiornati';
       if (d.taglio_inserite) msg += ', ' + d.taglio_inserite + ' condizioni taglio';
       if (d.versione) msg += ' (v' + d.versione + ')';
-      if (d.errori && d.errori.length) msg += ' â ' + d.errori.length + ' errori';
-      if (!dry) msg += ' â <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master â</a>';
+      if (d.errori && d.errori.length) msg += ' Ã¢ÂÂ ' + d.errori.length + ' errori';
+      if (!dry) msg += ' Ã¢ÂÂ <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master Ã¢ÂÂ</a>';
       box.innerHTML = msg;
     }
   })
@@ -545,7 +545,7 @@ def analizza():
                     })
                 _hm.close()
             except Exception:
-                pass  # campione vuoto se errore — non blocca il flusso
+                pass  # campione vuoto se errore â non blocca il flusso
 
             # Salva path in sessione per conferma successiva
             import json as _json
@@ -838,7 +838,7 @@ def converti_page():
 
 
 
-# ââ Widget agente CAM (pannello flottante) ââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂ Widget agente CAM (pannello flottante) Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 _WIDGET_MARKUP_L = (
     '<div id="ai-fab" onclick="aiT()" title="Agente CAM" '
@@ -945,7 +945,7 @@ def conferma_import_hypermill():
         _root = _os.path.join(_ld, '..')
         master_db = _os.path.join(_root, 'database', 'tool_master.db')
         result = importa_hypermill_db(filepath, master_db, dry_run=False)
-        importati = result.get('importati', 0)
+        importati = result.get('utensili', result.get('importati', 0))
         errori = result.get('errori', 0)
         msg = f'Hypermill: {importati} utensili importati nel DB master'
         if errori: msg += f' ({errori} non importati)'
