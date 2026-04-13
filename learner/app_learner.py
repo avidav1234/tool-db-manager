@@ -89,7 +89,7 @@ HOME = BASE.replace('{% block content %}{% endblock %}', """
     <label class="up" for="fi">
       <div style="font-size:2rem">&#8679;</div>
       <div>Trascina qui il file o clicca per sceglierlo</div>
-      <input type="file" id="fi" name="file" accept=".csv,.xls,.xlsx,.zip,.db"
+      <input type="file" id="fi" name="file" accept=".csv,.xls,.xlsx,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt"
              style="display:none" onchange="document.querySelector('.up div+div').textContent=this.files[0].name">
     </label>
     <div style="margin-top:1rem">
@@ -314,7 +314,7 @@ CONVERTI_P = BASE.replace('{% block content %}{% endblock %}', """
   <form method="post" action="/converti" enctype="multipart/form-data">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
     <div><label style="font-size:12px;font-weight:600">File sorgente</label>
-         <input type="file" name="file" accept=".csv,.xls,.xlsx,.zip" required></div>
+         <input type="file" name="file" accept=".csv,.xls,.xlsx,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt" required></div>
     <div></div>
     <div><label style="font-size:12px;font-weight:600">Profilo DA (sorgente)</label>
          <select name="profilo_input" required>
@@ -793,7 +793,7 @@ _WIDGET_MARKUP_L = (
     '<label for="ai-fi" style="background:#0f172a;border:1px dashed #334155;border-radius:5px;'
     'padding:.3rem .6rem;cursor:pointer;font-size:.72rem;color:#64748b;white-space:nowrap">'
     'File CAM</label>'
-    '<input type="file" id="ai-fi" style="display:none" accept=".zip,.csv,.xml,.tdm,.tdb,.db">'
+    '<input type="file" id="ai-fi" style="display:none" accept=".zip,.csv,.xml,.tdm,.tdb,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xls,.xlsx">'
     '<span id="ai-fn" style="font-size:.7rem;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">nessun file</span>'
     '</div>'
     '<div style="display:flex;gap:.4rem">'

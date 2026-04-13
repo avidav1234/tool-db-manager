@@ -705,14 +705,14 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div class="grid2">
   <div>
     <div class="card">
-      <h2>Carica file Excel, CSV o ZIP Cimatron</h2>
+      <h2>Carica file utensili da qualsiasi CAM</h2>
       <form method="post" action="/importa" enctype="multipart/form-data">
         <label class="drop-zone" for="file_input" id="dz">
           <div style="font-size:2.5rem;margin-bottom:.5rem">&#128196;</div>
           <div id="dz-label">Trascina qui il file o clicca per sceglierlo</div>
-          <div style="font-size:12px;color:#aaa;margin-top:.4rem">.xlsx  .xls  .csv</div>
+          <div style="font-size:12px;color:#aaa;margin-top:.4rem">Cimatron (.csv .zip .xls) · Hypermill (.db) · Mastercam (.tooldb) · Fusion 360 (.tools .json) · WorkNC (.wkz .js) · CSV/Excel generico</div>
           <input type="file" id="file_input" name="file"
-                 accept=".xlsx,.xls,.csv,.zip" style="display:none"
+                 accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt" style="display:none"
                  onchange="document.getElementById('dz-label').textContent=this.files[0].name">
         </label>
         <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
@@ -1275,106 +1275,169 @@ def importa():
                 for _p in [_root, _learner]:
                     if _p not in sys.path:
                         sys.path.insert(0, _p)
-                # Rileva Cimatron dai magic bytes PRIMA di qualsiasi import
-                with open(import_path, 'rb') as fh:
-                    magic = fh.read(2)
-                is_cimatron = magic in (b'\xff\xfe', b'\xfe\xff')
-                # Controlla anche ZIP
-                if not is_cimatron:
-                    import zipfile
-                    if zipfile.is_zipfile(import_path):
-                        with zipfile.ZipFile(import_path) as z:
-                            is_cimatron = any('Cutters' in os.path.basename(n) and n.endswith('.csv') for n in z.namelist())
-                if is_cimatron:
+
+                _ext = os.path.splitext(import_path)[1].lower()
+                _detected = None
+
+                # ── Auto-detect formato ──────────────────────────────
+                # 1. Hypermill .db (SQLite con tabelle NCTools/Tools)
+                if _ext == '.db':
+                    try:
+                        from hypermill_db_importer import _is_hypermill_db
+                        if _is_hypermill_db(import_path):
+                            _detected = 'hypermill'
+                    except Exception:
+                        pass
+
+                # 2. Mastercam .tooldb (SQLite)
+                if _ext == '.tooldb' or (_ext == '.db' and not _detected):
+                    try:
+                        from mastercam_importer import _is_mastercam_tooldb
+                        if _is_mastercam_tooldb(import_path):
+                            _detected = 'mastercam'
+                    except Exception:
+                        pass
+
+                # 3. Fusion 360 .tools (ZIP+JSON) o .json
+                if _ext in ('.tools', '.json'):
+                    _detected = 'fusion360'
+
+                # 4. WorkNC .wkz
+                if _ext == '.wkz':
+                    _detected = 'worknc'
+
+                # 5. Cimatron (UTF-16 magic bytes o ZIP con Cutters.csv)
+                if not _detected:
+                    with open(import_path, 'rb') as fh:
+                        magic = fh.read(2)
+                    if magic in (b'\xff\xfe', b'\xfe\xff'):
+                        _detected = 'cimatron'
+                    elif _ext == '.zip':
+                        import zipfile
+                        if zipfile.is_zipfile(import_path):
+                            with zipfile.ZipFile(import_path) as z:
+                                names = z.namelist()
+                                if any('Cutters' in os.path.basename(n) and n.endswith('.csv') for n in names):
+                                    _detected = 'cimatron'
+                                elif any(n.endswith('.json') for n in names):
+                                    _detected = 'fusion360'
+
+                # 6. File .js (WorkNC o JSON-like tool data)
+                if _ext == '.js' and not _detected:
+                    _detected = 'js_tools'
+
+                # 7. CSV/Excel/TSV generico (fallback)
+                if not _detected and _ext in ('.csv', '.tsv', '.txt', '.xls', '.xlsx'):
+                    _detected = 'csv_generico'
+
+                # 8. Ultimo fallback: prova come CSV generico
+                if not _detected:
+                    _detected = 'csv_generico'
+
+                # ── Esegui import per formato rilevato ────────────────
+                if _detected == 'hypermill':
+                    from hypermill_db_importer import importa_hypermill_db
+                    r = importa_hypermill_db(import_path, DB_PATH, dry_run=dry_run)
+                    risultato = {
+                        'inseriti': r.get('utensili', 0),
+                        'aggiornati': 0,
+                        'errori': [r['errore']] if 'errore' in r else [],
+                        'software': 'Hypermill',
+                        'taglio_inserite': r.get('condizioni_taglio', 0),
+                    }
+
+                elif _detected == 'mastercam':
+                    from mastercam_importer import importa_mastercam_tooldb
+                    r = importa_mastercam_tooldb(import_path, DB_PATH, dry_run=dry_run)
+                    risultato = {
+                        'inseriti': r.get('utensili', 0),
+                        'aggiornati': 0,
+                        'errori': [r['errore']] if 'errore' in r else [],
+                        'software': 'Mastercam',
+                        'taglio_inserite': r.get('condizioni_taglio', 0),
+                    }
+
+                elif _detected == 'fusion360':
+                    from fusion360_importer import importa_fusion360
+                    r = importa_fusion360(import_path, DB_PATH, dry_run=dry_run)
+                    risultato = {
+                        'inseriti': r.get('utensili', 0),
+                        'aggiornati': 0,
+                        'errori': [r['errore']] if 'errore' in r else [],
+                        'software': 'Fusion 360',
+                        'taglio_inserite': r.get('condizioni_taglio', 0),
+                    }
+
+                elif _detected == 'worknc':
+                    from worknc_importer import importa_worknc
+                    r = importa_worknc(import_path, DB_PATH, dry_run=dry_run)
+                    risultato = {
+                        'inseriti': r.get('utensili', 0),
+                        'aggiornati': 0,
+                        'errori': [r['errore']] if 'errore' in r else [],
+                        'software': 'WorkNC',
+                        'taglio_inserite': r.get('condizioni_taglio', 0),
+                    }
+
+                elif _detected == 'cimatron':
                     from cimatron_importer import importa_file
                     r = importa_file(import_path, dry_run=dry_run)
                     risultato = {
-                        'inseriti':          r.get('utensili_inseriti', 0),
-                        'aggiornati':        r.get('utensili_aggiornati', 0),
-                        'errori':            r.get('utensili_errori', []),
-                        'dry_run':           dry_run,
-                        'versione':          r.get('versione', ''),
-                        'taglio_inserite':   r.get('taglio_inserite', 0),
+                        'inseriti': r.get('utensili_inseriti', 0),
+                        'aggiornati': r.get('utensili_aggiornati', 0),
+                        'errori': r.get('utensili_errori', []),
+                        'versione': r.get('versione', ''),
+                        'software': 'Cimatron',
+                        'taglio_inserite': r.get('taglio_inserite', 0),
                         'taglio_aggiornate': r.get('taglio_aggiornate', 0),
                     }
-                else:
-                    # Usa universal_parser per CSV/ZIP/altri formati CAM
-                    _ext = os.path.splitext(import_path)[1].lower()
-                    _is_excel = _ext in ('.xlsx', '.xls')
-                    if not _is_excel:
-                        try:
-                            import importlib as _il
-                            if 'universal_parser' in sys.modules:
-                                _il.reload(sys.modules['universal_parser'])
-                            from universal_parser import parse_any_file
-                            _api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-                            _up_result = parse_any_file(
-                                import_path,
-                                api_key=_api_key if _api_key else None,
-                            )
-                            # Inserisce i record nel DB master
-                            _ins = _agg = 0; _errs = _up_result.get('errori', [])
-                            _conn = sqlite3.connect(DB_PATH)
-                            _conn.row_factory = sqlite3.Row
-                            for _rec in _up_result.get('records', []):
-                                _cod = _rec.get('codice_interno')
-                                if not _cod: continue
-                                try:
-                                    # Risolve id_tipo
-                                    _tipo = _rec.get('tipo','FLAT')
-                                    _r = _conn.execute('SELECT id FROM tipo_utensile WHERE codice=?',(_tipo,)).fetchone()
-                                    if not _r:
-                                        _conn.execute('INSERT OR IGNORE INTO tipo_utensile(codice,descrizione) VALUES(?,?)',(_tipo,_tipo))
-                                        _r = _conn.execute('SELECT id FROM tipo_utensile WHERE codice=?',(_tipo,)).fetchone()
-                                    _tid = _r['id']
-                                    # Risolve id_materiale
-                                    _mat = _rec.get('materiale_tagliente','HM')
-                                    _rm = _conn.execute('SELECT id FROM materiale_utensile WHERE codice=?',(_mat,)).fetchone()
-                                    if not _rm:
-                                        _conn.execute('INSERT OR IGNORE INTO materiale_utensile(codice,descrizione) VALUES(?,?)',(_mat,_mat))
-                                        _rm = _conn.execute('SELECT id FROM materiale_utensile WHERE codice=?',(_mat,)).fetchone()
-                                    _mid = _rm['id']
-                                    # Parametri colonna
-                                    _p = {k:v for k,v in _rec.items() if k not in ('tipo','materiale_tagliente','codice_interno')}
-                                    _esiste = _conn.execute('SELECT id FROM utensile WHERE codice_interno=?',(_cod,)).fetchone()
-                                    # Filtra _p alle sole colonne presenti nello schema
-                                    _schema_cols = {r[1] for r in _conn.execute("PRAGMA table_info(utensile)").fetchall()}
-                                    _p_safe = {k:v for k,v in _p.items() if k in _schema_cols}
-                                    if not dry_run:
-                                        if _esiste:
-                                            if _p_safe:
-                                                _sets = ','.join(f'{k}=:{k}' for k in _p_safe)
-                                                _conn.execute(f'UPDATE utensile SET {_sets} WHERE codice_interno=:_cod',{**_p_safe,'_cod':_cod})
-                                            _agg += 1
-                                        else:
-                                            _cols = 'codice_interno,id_tipo,id_materiale,' + ','.join(_p_safe)
-                                            _vals = ':_cod,:_tid,:_mid,' + ','.join(f':{k}' for k in _p_safe)
-                                            _conn.execute(f'INSERT INTO utensile ({_cols}) VALUES ({_vals})',{**_p_safe,'_cod':_cod,'_tid':_tid,'_mid':_mid})
-                                            _ins += 1
-                                    else:
-                                        if _esiste: _agg += 1
-                                        else: _ins += 1
-                                except Exception as _ex:
-                                    _errs.append(f'{_cod}: {_ex}')
-                            if not dry_run: _conn.commit()
-                            _conn.close()
-                            risultato = {
-                                'inseriti': _ins, 'aggiornati': _agg, 'errori': _errs,
-                                'dry_run': dry_run,
-                                'software': _up_result.get('software','unknown'),
-                                'confidence': _up_result.get('confidence', 0),
-                                'ai_usato': _up_result.get('ai_usato', False),
-                                'righe_totali': _up_result.get('righe_totali', 0),
-                            }
-                        except Exception as _upe:
-                            _errs = [f'universal_parser: {_upe}']
-                            risultato = {'inseriti':0,'aggiornati':0,'errori':_errs,'dry_run':dry_run}
-                    else:
-                        import importlib
-                        if 'importers.import_from_excel' in sys.modules:
-                            importlib.reload(sys.modules['importers.import_from_excel'])
-                        from importers.import_from_excel import importa as do_import
-                        risultato = do_import(import_path, dry_run=dry_run)
+
+                elif _detected == 'js_tools':
+                    # File .js: estrai JSON dal wrapper JavaScript
+                    from generic_csv_importer import importa_csv_generico
+                    import json as _json
+                    with open(import_path, 'r', encoding='utf-8', errors='replace') as _jf:
+                        _js_content = _jf.read()
+                    # Rimuovi wrapper JS: var x = [...]; module.exports = {...}; export default [...]
+                    import re as _re
+                    _js_clean = _re.sub(r'^(?:var|let|const|export\s+default|module\.exports)\s*(?:\w+\s*)?=\s*', '', _js_content.strip())
+                    _js_clean = _js_clean.rstrip(';').strip()
+                    try:
+                        _js_data = _json.loads(_js_clean)
+                        # Salva come JSON temporaneo e importa con Fusion360 importer (gestisce JSON)
+                        _tmp_json = import_path + '.json'
+                        with open(_tmp_json, 'w', encoding='utf-8') as _tjf:
+                            _json.dump(_js_data if isinstance(_js_data, dict) else {'data': _js_data}, _tjf)
+                        from fusion360_importer import importa_fusion360
+                        r = importa_fusion360(_tmp_json, DB_PATH, dry_run=dry_run)
+                        os.remove(_tmp_json)
+                        risultato = {
+                            'inseriti': r.get('utensili', 0),
+                            'aggiornati': 0,
+                            'errori': [r['errore']] if 'errore' in r else [],
+                            'software': 'JS Tool Library',
+                            'taglio_inserite': r.get('condizioni_taglio', 0),
+                        }
+                    except (_json.JSONDecodeError, Exception):
+                        # Non è JSON — prova come CSV generico (tab/comma separated dentro .js)
+                        r = importa_csv_generico(import_path, DB_PATH, dry_run=dry_run)
+                        risultato = {
+                            'inseriti': r.get('inseriti', 0),
+                            'aggiornati': r.get('aggiornati', 0),
+                            'errori': r.get('errori', []) if isinstance(r.get('errori'), list) else [],
+                            'software': 'JS/CSV',
+                        }
+
+                else:  # csv_generico
+                    from generic_csv_importer import importa_csv_generico
+                    r = importa_csv_generico(import_path, DB_PATH, dry_run=dry_run)
+                    risultato = {
+                        'inseriti': r.get('inseriti', 0),
+                        'aggiornati': r.get('aggiornati', 0),
+                        'errori': r.get('errori', []) if isinstance(r.get('errori'), list) else [],
+                        'software': r.get('file_info', {}).get('encoding', 'CSV'),
+                    }
+
                 risultato['dry_run'] = dry_run
             except Exception as e:
                 risultato = {'inseriti':0,'aggiornati':0,'errori':[str(e)],'dry_run':dry_run}
