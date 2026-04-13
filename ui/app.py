@@ -432,11 +432,16 @@ def home():
                 if u.get(campo) is not None: u[campo]=arrotonda(u[campo])
             utensili.append(u)
     except Exception: utensili=[]; total=0; tipi_lista=[]; pinze_lista=[]
-    cfg=carica_cfg()
+    cfg=carica_config()
+    try:
+        _conn2=get_conn()
+        profili=_conn2.execute("SELECT COUNT(DISTINCT profilo_export) FROM utensile_completo WHERE attivo=1 AND profilo_export IS NOT NULL").fetchone()[0]
+        _conn2.close()
+    except Exception: profili=0
     return render_template_string(HOME_HTML,
         utensili=utensili,n=total,
         n_tipi=len(tipi_lista),
-        n_profili=len(profili),
+        n_profili=profili,
         n_attivi=len(cfg.get('formati_attivi',[])),
         tipi_lista=tipi_lista,
         pinze_lista=pinze_lista,
