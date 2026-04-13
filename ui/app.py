@@ -428,6 +428,7 @@ def home():
             return round(f, 1) if abs(f - round(f)) < 0.0001 else round(f, dec)
         except: return v
 
+    q_filter = request.args.get('q', '').strip().lower()
     try:
         conn=get_conn()
         rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno").fetchall()
@@ -438,6 +439,11 @@ def home():
         utensili=[]
         for row in rows:
             u=dict(row)
+            # Filtro da URL (?q=D10)
+            if q_filter:
+                searchable = ' '.join(str(v) for v in u.values() if v).lower()
+                if q_filter not in searchable:
+                    continue
             for campo in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm','lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
                 if u.get(campo) is not None: u[campo]=arrotonda(u[campo])
             utensili.append(u)
