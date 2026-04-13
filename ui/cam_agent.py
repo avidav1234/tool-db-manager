@@ -24,7 +24,7 @@ def _conn():
     con.row_factory = sqlite3.Row
     return con
 
-# ── TOOL IMPLEMENTATIONS ───────────────────────────────────────────────────
+# ââ TOOL IMPLEMENTATIONS âââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 def tool_leggi_schema_db():
     con = _conn()
@@ -246,7 +246,7 @@ def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
         if count == 0:
             return {'errore': f'Testo non trovato nel file. Verifica con leggi_file prima.'}
         if count > 1:
-            return {'errore': f'Testo trovato {count} volte — troppo ambiguo. Aggiungi più contesto.'}
+            return {'errore': f'Testo trovato {count} volte â troppo ambiguo. Aggiungi piÃ¹ contesto.'}
         nuovo_contenuto = contenuto.replace(vecchio_testo, nuovo_testo, 1)
         with open(full, 'w', encoding='utf-8') as f:
             f.write(nuovo_contenuto)
@@ -384,9 +384,358 @@ def tool_cancella_checkpoint(task_id):
     except Exception as e:
         return {'errore': str(e)}
 
-# ── TOOL REGISTRY ──────────────────────────────────────────────────────────
+# ââ TOOL REGISTRY ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+
+
+# ─────────────────────────────────────────────────────────────────
+# TOOL: cerca_web — ricerca documentazione tecnica via Anthropic
+# ─────────────────────────────────────────────────────────────────
+def tool_cerca_web(query: str, max_results: int = 5) -> str:
+    """
+    Cerca documentazione tecnica su formati CAM, parametri DB, schemi proprietari.
+    Usa l'API Anthropic con web_search tool — stessa chiave API del progetto.
+    Ritorna un riassunto dei risultati trovati.
+    """
+    import requests as _req
+    key = _get_api_key()
+    if not key:
+        return "ERRORE: API key Anthropic non configurata."
+    try:
+        resp = _req.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01",
+                "anthropic-beta": "web-search-2025-03-05",
+                "content-type": "application/json"
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 1024,
+                "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": max_results}],
+                "messages": [{"role": "user", "content":
+                    f"Cerca informazioni tecniche su: {query}\n"
+                    f"Riassumi in italiano i risultati piu rilevanti per decodificare "
+                    f"parametri di database CAM industriali (campi numerici, tipi utensile, geometrie). "
+                    f"Sii conciso e tecnico."
+                }]
+            },
+            timeout=30
+        )
+        data = resp.json()
+        # Estrai testo dalla risposta
+        results = []
+        for block in data.get("content", []):
+            if block.get("type") == "text":
+                results.append(block["text"])
+        return "\n".join(results) if results else "Nessun risultato trovato."
+    except Exception as e:
+        return f"Errore ricerca web: {e}"
+
+
+# ─────────────────────────────────────────────────────────────────
+# TOOL: formato_noto — knowledge base mappature CAM verificate
+# ─────────────────────────────────────────────────────────────────
+def _ensure_formato_noto_table():
+    """Crea la tabella formato_noto se non esiste."""
+    conn = _conn()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS formato_noto (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            software TEXT NOT NULL,
+            versione TEXT DEFAULT '',
+            tipo_file TEXT DEFAULT '',
+            mappatura_json TEXT NOT NULL,
+            confidenza REAL DEFAULT 0.5,
+            verificato INTEGER DEFAULT 0,
+            note TEXT DEFAULT '',
+            data_creazione TEXT DEFAULT (datetime('now')),
+            n_import INTEGER DEFAULT 0
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_fn_software ON formato_noto(software)")
+    conn.commit()
+    conn.close()
+
+
+def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
+                       versione: str = '', confidenza: float = 0.5,
+                       verificato: bool = False, note: str = '') -> str:
+    """
+    Gestisce la knowledge base dei formati CAM gia decodificati.
+    azioni:
+      'cerca'  — cerca se il software e gia noto (ritorna mappatura JSON o None)
+      'salva'  — salva una nuova mappatura (richiede software + mappatura dict)
+      'lista'  — elenca tutti i formati noti
+      'aggiorna_count' — incrementa il contatore import per un software
+    """
+    _ensure_formato_noto_table()
+    conn = _conn()
+    try:
+        if azione == 'cerca':
+            if not software:
+                return "ERRORE: specificare software per la ricerca."
+            rows = conn.execute(
+                "SELECT * FROM formato_noto WHERE software LIKE ? ORDER BY verificato DESC, confidenza DESC LIMIT 3",
+                (f'%{software}%',)
+            ).fetchall()
+            if not rows:
+                return f"Formato '{software}' non ancora in knowledge base."
+            results = []
+            for r in rows:
+                d = dict(r)
+                results.append(
+                    f"software={d['software']} ver={d['versione']} "
+                    f"confidenza={d['confidenza']:.0%} verificato={'SI' if d['verificato'] else 'NO'} "
+                    f"import_ok={d['n_import']}\n"
+                    f"mappatura: {d['mappatura_json'][:300]}"
+                )
+            return "\n\n".join(results)
+
+        elif azione == 'salva':
+            if not software or not mappatura:
+                return "ERRORE: specificare software e mappatura."
+            # Controlla se esiste già
+            existing = conn.execute(
+                "SELECT id FROM formato_noto WHERE software=? AND versione=?",
+                (software, versione)
+            ).fetchone()
+            mappa_str = json.dumps(mappatura, ensure_ascii=False)
+            if existing:
+                conn.execute(
+                    "UPDATE formato_noto SET mappatura_json=?, confidenza=?, verificato=?, note=? WHERE id=?",
+                    (mappa_str, confidenza, int(verificato), note, existing[0])
+                )
+                msg = f"Mappatura aggiornata per '{software}' v{versione}."
+            else:
+                conn.execute(
+                    "INSERT INTO formato_noto (software, versione, tipo_file, mappatura_json, confidenza, verificato, note) VALUES (?,?,?,?,?,?,?)",
+                    (software, versione, '', mappa_str, confidenza, int(verificato), note)
+                )
+                msg = f"Nuova mappatura salvata per '{software}' v{versione}."
+            conn.commit()
+            return msg
+
+        elif azione == 'lista':
+            rows = conn.execute(
+                "SELECT software, versione, confidenza, verificato, n_import, data_creazione FROM formato_noto ORDER BY data_creazione DESC"
+            ).fetchall()
+            if not rows:
+                return "Knowledge base vuota — nessun formato ancora imparato."
+            lines = ["=== FORMATI NOTI ==="]
+            for r in rows:
+                d = dict(r)
+                lines.append(
+                    f"  {d['software']} {d['versione']} | "
+                    f"conf={d['confidenza']:.0%} | "
+                    f"{'✓ verificato' if d['verificato'] else '? ipotesi'} | "
+                    f"{d['n_import']} import | {d['data_creazione'][:10]}"
+                )
+            return "\n".join(lines)
+
+        elif azione == 'aggiorna_count':
+            conn.execute(
+                "UPDATE formato_noto SET n_import=n_import+1 WHERE software LIKE ?",
+                (f'%{software}%',)
+            )
+            conn.commit()
+            return f"Contatore aggiornato per '{software}'."
+
+        else:
+            return f"Azione sconosciuta: {azione}. Usa: cerca, salva, lista, aggiorna_count."
+    finally:
+        conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────
+# TOOL: decodifica_db — analisi statistica autonoma DB sconosciuti
+# ─────────────────────────────────────────────────────────────────
+def tool_decodifica_db(filepath: str) -> str:
+    """
+    Analisi statistica + pattern matching per decodificare un DB CAM sconosciuto.
+    Strategia:
+    1. Fingerprint: identifica software dal nome tabelle
+    2. Schema discovery: lista tabelle, colonne, tipi
+    3. Statistica: min/max/media/nonzero per ogni colonna numerica
+    4. Pattern matching: confronta con range attesi (diametri 0.1-300, angoli 0-180, ecc.)
+    5. Cross-check: se c'è una colonna nome/descrizione, cerca pattern tipo D10R0.5
+    6. Consulta formato_noto per software simili gia noti
+    """
+    import re as _re
+    path = _safe_path(filepath)
+    if not os.path.exists(path):
+        path = filepath
+    if not os.path.exists(path):
+        return f"File non trovato: {filepath}"
+
+    try:
+        conn2 = sqlite3.connect(path)
+        conn2.row_factory = sqlite3.Row
+    except Exception as e:
+        return f"Impossibile aprire come SQLite: {e}"
+
+    report = [f"=== DECODIFICA DB: {os.path.basename(filepath)} ===\n"]
+
+    try:
+        # 1. Lista tabelle
+        tables = [r[0] for r in conn2.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        ).fetchall()]
+        report.append(f"TABELLE ({len(tables)}): {', '.join(tables)}\n")
+
+        # 2. Fingerprint software
+        software_hint = ''
+        t_lower = [t.lower() for t in tables]
+        if 'nctools' in t_lower and 'geometryclasses' in t_lower:
+            software_hint = 'hypermill'
+        elif 'tool' in t_lower and 'holder' in t_lower:
+            software_hint = 'generic_cam'
+        elif any('cutter' in t for t in t_lower):
+            software_hint = 'mastercam_generic'
+        report.append(f"SOFTWARE RILEVATO: {software_hint or 'sconosciuto'}\n")
+
+        # 3. Consulta knowledge base
+        _ensure_formato_noto_table()
+        kb_result = tool_formato_noto('cerca', software=software_hint) if software_hint else ''
+        if kb_result and 'non ancora' not in kb_result:
+            report.append(f"FORMATO GIA NOTO:\n{kb_result}\n")
+
+        # 4. Per ogni tabella: schema + statistiche colonne numeriche
+        RANGE_HINTS = {
+            'diametro': (0.1, 350.0),
+            'raggio': (0.05, 175.0),
+            'lunghezza': (0.5, 600.0),
+            'angolo': (0.0, 180.0),
+            'passo': (0.1, 10.0),
+            'taglienti': (1, 16),
+            'stelo': (1.0, 50.0),
+        }
+
+        for table in tables[:8]:  # max 8 tabelle
+            try:
+                cols_info = conn2.execute(f"PRAGMA table_info({table})").fetchall()
+                n_rows = conn2.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                if n_rows == 0:
+                    continue
+
+                num_cols = [c[1] for c in cols_info if c[2].upper() in ('REAL','FLOAT','DOUBLE','NUMERIC','INTEGER','INT')]
+                txt_cols = [c[1] for c in cols_info if 'TEXT' in c[2].upper() or 'CHAR' in c[2].upper() or 'NAME' in c[1].lower()]
+
+                report.append(f"\n--- {table} ({n_rows} righe) ---")
+
+                # Campione di nomi per cross-check
+                if txt_cols:
+                    name_col = next((c for c in txt_cols if any(k in c.lower() for k in ['name','nome','nc_name','descrizione'])), txt_cols[0])
+                    samples = [r[0] for r in conn2.execute(
+                        f"SELECT {name_col} FROM {table} WHERE {name_col} IS NOT NULL LIMIT 5"
+                    ).fetchall()]
+                    report.append(f"  Campione nomi: {samples}")
+
+                    # Estrai valori geometrici dai nomi (es. D10R0.5L30)
+                    geo_from_names = {}
+                    for s in samples:
+                        if not s: continue
+                        for pattern, key in [
+                            (r'D(\d+\.?\d*)', 'D_da_nome'),
+                            (r'R(\d+\.?\d*)', 'R_da_nome'),
+                            (r'L(\d+\.?\d*)', 'L_da_nome'),
+                        ]:
+                            m = _re.search(pattern, str(s))
+                            if m:
+                                geo_from_names.setdefault(key, []).append(float(m.group(1)))
+                    if geo_from_names:
+                        report.append(f"  Geo estratta dai nomi: {geo_from_names}")
+
+                # Statistiche colonne numeriche
+                if num_cols:
+                    report.append(f"  Colonne numeriche ({len(num_cols)}):")
+                    for col in num_cols[:20]:  # max 20 colonne
+                        try:
+                            stats = conn2.execute(
+                                f"SELECT MIN({col}), MAX({col}), AVG({col}), "
+                                f"COUNT(CASE WHEN {col} != 0 AND {col} IS NOT NULL THEN 1 END) "
+                                f"FROM {table}"
+                            ).fetchone()
+                            mn, mx, avg, nonzero = stats
+                            if mn is None or (mn == 0 and mx == 0): continue
+                            mn, mx, avg = round(float(mn),3), round(float(mx),3), round(float(avg or 0),3)
+
+                            # Indovina il significato
+                            guesses = []
+                            for hint, (lo, hi) in RANGE_HINTS.items():
+                                if lo <= avg <= hi and lo <= mn or mx <= hi * 1.5:
+                                    guesses.append(hint)
+
+                            # Cross-check con valori estratti dai nomi
+                            for geo_key, geo_vals in geo_from_names.items():
+                                geo_avg = sum(geo_vals)/len(geo_vals)
+                                if abs(avg - geo_avg) / max(geo_avg, 0.001) < 0.15:
+                                    geo_name = geo_key.replace('_da_nome','')
+                                    if geo_name == 'D': guesses.insert(0, '>>> DIAMETRO (match nome)')
+                                    elif geo_name == 'R': guesses.insert(0, '>>> RAGGIO (match nome)')
+                                    elif geo_name == 'L': guesses.insert(0, '>>> LUNGHEZZA (match nome)')
+
+                            report.append(
+                                f"    {col}: min={mn} max={mx} avg={avg} nonzero={nonzero}"
+                                + (f" → IPOTESI: {', '.join(guesses)}" if guesses else "")
+                            )
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                report.append(f"  Errore tabella {table}: {e}")
+
+        report.append("\n=== FINE ANALISI ===")
+        report.append("Suggerimento: usa 'cerca_web' per verificare le ipotesi e 'formato_noto salva' per memorizzare la mappatura.")
+
+    finally:
+        conn2.close()
+
+    return "\n".join(report)
+
 
 TOOLS = [
+    {
+        "name": "cerca_web",
+        "description": "Cerca documentazione tecnica su formati CAM, schemi DB proprietari, parametri utensile su internet. Usa questa funzione SEMPRE quando non conosci un formato o hai dubbi su un parametro.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Query di ricerca tecnica (es: 'hypermill database dbl_param fields documentation')"},
+                "max_results": {"type": "integer", "description": "Numero massimo risultati (default 5)", "default": 5}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "formato_noto",
+        "description": "Knowledge base dei formati CAM gia decodificati. Usa 'cerca' prima di ogni analisi per vedere se il formato e gia noto. Usa 'salva' dopo aver verificato una mappatura. Usa 'lista' per vedere tutto.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "azione": {"type": "string", "enum": ["cerca", "salva", "lista", "aggiorna_count"]},
+                "software": {"type": "string", "description": "Nome software CAM (es: hypermill, cimatron, mastercam)"},
+                "mappatura": {"type": "object", "description": "Dict con mappatura campi DB -> significato"},
+                "versione": {"type": "string", "description": "Versione del software"},
+                "confidenza": {"type": "number", "description": "0.0-1.0"},
+                "verificato": {"type": "boolean", "description": "True se confermato da import reale"},
+                "note": {"type": "string"}
+            },
+            "required": ["azione"]
+        }
+    },
+    {
+        "name": "decodifica_db",
+        "description": "Analisi statistica autonoma di un DB CAM sconosciuto. Usa questa funzione per capire la struttura di qualsiasi file .db SQLite: identifica il software, analizza le colonne numeriche, incrocia con i nomi utensile per indovinare diametro/raggio/lunghezza/angolo. USALA SEMPRE come primo step quando ricevi un file .db non riconosciuto.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filepath": {"type": "string", "description": "Percorso al file .db da analizzare"}
+            },
+            "required": ["filepath"]
+        }
+    },
     {"name":"salva_checkpoint","description":"IMPORTANTE: salva progresso task su disco dopo ogni step. Permette di riprendere se si raggiunge il limite turni. Chiama dopo ogni step completato.",
      "input_schema":{"type":"object","properties":{"task_id":{"type":"string","description":"ID univoco task, es. import_worknc_v2024"},"step":{"type":"string","description":"Step completato: schema_letto|analisi|mapping|dry_run|import|verifica|fix_applicato"},"dati":{"type":"object"}},"required":["task_id","step","dati"]}},
     {"name":"leggi_checkpoint","description":"Legge checkpoint salvato. Usa SUBITO quando utente dice continua o riprendi.","input_schema":{"type":"object","properties":{"task_id":{"type":"string"}},"required":["task_id"]}},
@@ -441,32 +790,53 @@ TOOL_FN = {
     'leggi_file':           lambda i: tool_leggi_file(i['percorso'],i.get('riga_inizio'),i.get('riga_fine')),
     'modifica_file':        lambda i: tool_modifica_file(i['percorso'], i['vecchio_testo'],
                                                           i['nuovo_testo'], i.get('descrizione','')),
+    'cerca_web':            lambda i: tool_cerca_web(i['query'], i.get('max_results', 5)),
+    'formato_noto':         lambda i: tool_formato_noto(i['azione'], i.get('software',''), i.get('mappatura'), i.get('versione',''), i.get('confidenza',0.5), i.get('verificato',False), i.get('note','')),
+    'decodifica_db':        lambda i: tool_decodifica_db(i['filepath']),
 }
 
-# ── AGENT LOOP ─────────────────────────────────────────────────────────────
+# ââ AGENT LOOP âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 SYSTEM_PROMPT = """Sei l'agente tecnico di Tool DB Manager. Gestisci import CAM e fai debug/fix del codice.
 
 MODALITA' DEBUG (quando vedi un log con errore):
-1. Leggi il log — identifica il file e la riga dell'errore
-2. USA SUBITO leggi_file sul file incriminato — non spiegare prima, agisci
+1. Leggi il log â identifica il file e la riga dell'errore
+2. USA SUBITO leggi_file sul file incriminato â non spiegare prima, agisci
 3. Trova il bug esatto nel codice
-4. USA modifica_file per applicare il fix — non descrivere il fix, APPLICALO
+4. USA modifica_file per applicare il fix â non descrivere il fix, APPLICALO
 5. Conferma: "Fix applicato. Riavvia il server con: lsof -ti:PORT | xargs kill -9 && python3 FILE &"
 
 MODALITA' IMPORT (quando vedi un file CAM):
-1. lista_plugin — controlla se esiste gia un plugin per questa versione
-2. analizza_file_cam — studia la struttura
-3. proponi_mapping — fast path Cimatron (0 token) o euristico
-4. importa_file dry_run=true — simula
+1. formato_noto cerca — controlla knowledge base per formati gia noti
+2. lista_plugin — controlla plugin esistenti
+3. analizza_file_cam — studia la struttura del file
+4. Se e un .db SQLite sconosciuto: decodifica_db — analisi statistica autonoma
+5. Se hai dubbi su parametri: cerca_web — cerca documentazione online
+6. proponi_mapping — usa knowledge base + euristica
+7. importa_file dry_run=true — simula l'import
+8. Se import OK (10+ utensili): formato_noto salva con verificato=true
+9. Chiedi conferma, poi importa_file dry_run=false
+
+MODALITA' RICERCA AUTONOMA (formato sconosciuto):
+1. decodifica_db — analisi statistica del file
+2. cerca_web query specifica (es: 'hypermill NCTools dbl_param fields')
+3. cerca_web release notes, documentazione vendor, forum CNC machining
+4. Incrocia risultati web con analisi statistica
+5. Proponi mappatura con confidenza esplicita (es: confidenza 85%)
+6. formato_noto salva con confidenza appropriata
+7. NON fermarti a 'non so' — cambia query e itera fino alla soluzione
+1. lista_plugin â controlla se esiste gia un plugin per questa versione
+2. analizza_file_cam â studia la struttura
+3. proponi_mapping â fast path Cimatron (0 token) o euristico
+4. importa_file dry_run=true â simula
 5. Chiedi conferma, poi importa_file dry_run=false
-6. leggi_utensili — verifica alias e fuori_pinza_mm
+6. leggi_utensili â verifica alias e fuori_pinza_mm
 
 REGOLE ASSOLUTE:
 - Se vedi "errore: name X is not defined" -> leggi_file SUBITO, trova X, usa modifica_file
 - Se vedi "0 colonne mappate" -> leggi_file orchestrator_agent.py, cerca il bug nel batch
 - Se vedi "Limite turni" -> il task e complesso, scrivi "continua" per proseguire
-- NON spiegare cosa faresti — FALLO direttamente con i tool
+- NON spiegare cosa faresti â FALLO direttamente con i tool
 - Dopo modifica_file SEMPRE comunica quale file modificare e come riavviare
 - DROP TABLE e DELETE senza WHERE sono bloccati per sicurezza
 CHECKPOINT - REGOLA FONDAMENTALE:
@@ -479,11 +849,11 @@ CHECKPOINT - REGOLA FONDAMENTALE:
 - Puoi modificare liberamente: learner/*.py, plugins/**/*.py
 
 File principali:
-- learner/orchestrator_agent.py — motore AI di mapping
-- learner/cimatron_importer.py — import Cimatron
-- learner/cimatron_parser.py — parser ZIP Cimatron
-- plugins/cimatron/_core.py — core plugin Cimatron
-- plugins/_loader.py — loader plugin dinamico"""
+- learner/orchestrator_agent.py â motore AI di mapping
+- learner/cimatron_importer.py â import Cimatron
+- learner/cimatron_parser.py â parser ZIP Cimatron
+- plugins/cimatron/_core.py â core plugin Cimatron
+- plugins/_loader.py â loader plugin dinamico"""
 
 def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
     import urllib.request, ssl
