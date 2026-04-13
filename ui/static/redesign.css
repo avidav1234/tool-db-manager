@@ -73,3 +73,25 @@ tbody td:last-child a:hover,tbody td:last-child button:hover{background:#f0efec!
 /* ── TABLE VALUE HIGHLIGHTS ── */
 .fuori-ok{color:#059669!important;font-weight:600!important}
 .fuori-warn{color:#d97706!important;font-weight:600!important}
+
+
+/* ── PAGINATION BAR ── */
+#pg-bar{display:flex;align-items:center;gap:4px;padding:.75rem 0;flex-wrap:wrap;border-top:1px solid var(--border)}
+.pg-btn{min-width:32px!important;height:32px!important;padding:0 8px!important;font-size:13px!important;border-radius:6px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important}
+.pg-btn:disabled{opacity:.35!important;cursor:default!important}
+.pg-active{background:var(--brand)!important;color:#fff!important;border-color:var(--brand)!important;font-weight:600!important}
+.pg-info{font-size:12.5px;color:var(--text-3);margin-left:8px;white-space:nowrap}
+
+/* ── TABLE ACTION ICON BUTTONS ── */
+.btn-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:26px!important;height:26px!important;border-radius:5px!important;border:1px solid transparent!important;font-size:14px!important;text-decoration:none!important;transition:all .12s!important;background:transparent!important;cursor:pointer!important}
+.btn-icon:hover{background:var(--surface-2)!important;border-color:var(--border-strong)!important}
+.btn-icon-del:hover{background:#fee2e2!important;border-color:#fca5a5!important}
+
+/* ── TABLE LOADING STATE ── */
+#tbl{transition:opacity .15s}
+
+/* ── SORT INDICATORS ── */
+th.sort-asc::after{content:" ↑";font-size:10px;opacity:.6}
+th.sort-desc::after{content:" ↓";font-size:10px;opacity:.6}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{background:var(--brand-light)!important;color:var(--brand)!important}
