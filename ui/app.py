@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'learner'))
 
 from flask import (Flask, render_template_string, request,
-                   redirect, url_for, send_file)
+                   redirect, url_for, send_file, jsonify)
 
 DB_PATH     = os.path.join(os.path.dirname(__file__), '..', 'database', 'tool_master.db')
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config.json')
