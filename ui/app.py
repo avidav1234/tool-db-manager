@@ -889,7 +889,7 @@ def utensile_dettaglio(uid):
                               (u['portautensile'],)).fetchone()
             if ph:
                 holder_segs = conn.execute(
-                    "SELECT * FROM portautensile_segmento WHERE id_portautensile=? AND altezza_totale_mm>0 ORDER BY numero_segmento",
+                    "SELECT * FROM portautensile_segmento WHERE id_portautensile=? AND lunghezza_mm>0 ORDER BY numero_segmento",
                     (ph['id'],)
                 ).fetchall()
     finally:
@@ -990,15 +990,14 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
       {% if holder_segs %}
       <p style="font-size:12px;font-weight:600;margin:1rem 0 .5rem;color:#555">Geometria portautensile ({{ holder_segs|length }} segmenti)</p>
       <table style="font-size:12px">
-      <thead><tr><th>Seg.</th><th>Ø inf (mm)</th><th>Ø sup (mm)</th><th>H cono (mm)</th><th>H tot (mm)</th></tr></thead>
+      <thead><tr><th>Seg.</th><th>Ø inf (mm)</th><th>Ø sup (mm)</th><th>Lungh. (mm)</th></tr></thead>
       <tbody>
       {% for s in holder_segs %}
       <tr>
         <td>{{ s.numero_segmento }}</td>
-        <td>{{ '%.3f'|format(s.diametro_inf_mm) if s.diametro_inf_mm else '-' }}</td>
-        <td>{{ '%.3f'|format(s.diametro_sup_mm) if s.diametro_sup_mm else '-' }}</td>
-        <td>{{ '%.3f'|format(s.altezza_cono_mm) if s.altezza_cono_mm else '-' }}</td>
-        <td>{{ '%.3f'|format(s.altezza_totale_mm) if s.altezza_totale_mm else '-' }}</td>
+        <td>{{ '%.2f'|format(s.diametro_inf_mm) if s.diametro_inf_mm else '-' }}</td>
+        <td>{{ '%.2f'|format(s.diametro_sup_mm) if s.diametro_sup_mm else '-' }}</td>
+        <td>{{ '%.2f'|format(s.lunghezza_mm) if s.lunghezza_mm else '-' }}</td>
       </tr>
       {% endfor %}
       </tbody></table>
@@ -1048,9 +1047,9 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <tr>
     <td><b>{{ t.materiale_pezzo }}</b></td>
     <td>{{ '%.1f'|format(t.vc_m_min) if t.vc_m_min else '-' }}</td>
-    <td>{{ '%.4f'|format(t.fz_mm) if t.fz_mm else '-' }}</td>
-    <td>{{ t.n_rpm|int if t.n_rpm else '-' }}</td>
-    <td>{{ t.vf_mm_min|int if t.vf_mm_min else '-' }}</td>
+    <td>{{ '%.4f'|format(t.fz_mm_z) if t.fz_mm_z else '-' }}</td>
+    <td>{{ t.rotazione_rpm|int if t.rotazione_rpm else '-' }}</td>
+    <td>{{ t.avanzamento_mm_min|int if t.avanzamento_mm_min else '-' }}</td>
     <td>{{ '%.2f'|format(t.ap_mm) if t.ap_mm else '-' }}</td>
     <td>{{ '%.2f'|format(t.ae_mm) if t.ae_mm else '-' }}</td>
     <td style="font-size:12px;color:#888">{{ t.refrigerante or '-' }}</td>
