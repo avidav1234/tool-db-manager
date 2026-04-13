@@ -712,7 +712,7 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
           <div id="dz-label">Trascina qui il file o clicca per sceglierlo</div>
           <div style="font-size:12px;color:#aaa;margin-top:.4rem">Cimatron (.csv .zip .xls) · Hypermill (.db) · Mastercam (.tooldb) · Fusion 360 (.tools .json) · WorkNC (.wkz .js) · CSV/Excel generico</div>
           <input type="file" id="file_input" name="file"
-                 accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt" style="display:none"
+                 accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml" style="display:none"
                  onchange="document.getElementById('dz-label').textContent=this.files[0].name">
         </label>
         <div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
@@ -804,7 +804,7 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <div class="drop-zone" id="hm-dz" style="cursor:pointer;margin-bottom:.8rem;text-align:center;padding:1rem"
          onclick="document.getElementById('hm_file').click()">
       <span id="hm-dz-label">&#128190; Trascina il file .db o clicca per sceglierlo</span>
-      <input type="file" id="hm_file" accept=".db" style="display:none"
+      <input type="file" id="hm_file" accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml" style="display:none"
              onchange="document.getElementById('hm-dz-label').textContent=this.files[0]?this.files[0].name:'file scelto'">
     </div>
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
@@ -1801,7 +1801,7 @@ CAM_HTML = BASE.replace('{% block content %}{% endblock %}', """
             style="margin-top:.75rem">
         <div style="display:flex;gap:.5rem;align-items:center">
           <input type="file" name="file" style="font-size:12px;flex:1"
-                 accept=".csv,.xls,.xlsx,.zip,.xml">
+                 accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml">
           <button class="btn btn-p" type="submit"
                   style="padding:5px 10px;font-size:12px;white-space:nowrap">
             Carica campione
@@ -2465,7 +2465,7 @@ Carica un file CAM in alto e scrivi cosa vuoi fare, oppure usa i pulsanti rapidi
     <div class="input-area">
       <div class="file-row">
         <label class="file-label" for="file-input">&#128194; Carica file (ZIP, CSV, XML, TDM)</label>
-        <input type="file" id="file-input" accept=".zip,.csv,.xml,.tdm,.tdb">
+        <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml">
         <span class="file-name" id="fname">Nessun file caricato</span>
       </div>
       <div class="quick-row">
@@ -2780,7 +2780,7 @@ _WIDGET = (
     '  <div class="ai-ft">'
     '    <div class="ai-fr">'
     '      <label class="ai-fl" for="ai-fi">&#128194; File CAM</label>'
-    '      <input type="file" id="ai-fi" style="display:none" accept=".zip,.csv,.xml,.tdm,.tdb">'
+    '      <input type="file" id="ai-fi" style="display:none" accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml">'
     '      <span id="ai-fn">nessun file</span>'
     '    </div>'
     '    <div class="ai-ir">'
@@ -2903,7 +2903,7 @@ _WIDGET_MARKUP = (
     '<label for="ai-fi" style="background:#0f172a;border:1px dashed #334155;border-radius:5px;'
     'padding:.3rem .6rem;cursor:pointer;font-size:.72rem;color:#64748b;white-space:nowrap">'
     '&#128194; File CAM</label>'
-    '<input type="file" id="ai-fi" style="display:none" accept=".zip,.csv,.xml,.tdm,.tdb">'
+    '<input type="file" id="ai-fi" style="display:none" accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml">'
     '<span id="ai-fn" style="font-size:.7rem;color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">nessun file</span>'
     '</div>'
     '<div style="display:flex;gap:.4rem">'
