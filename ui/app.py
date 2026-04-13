@@ -314,6 +314,20 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <span style="color:#ddd">—</span>
     {% endif %}
   </td>
+  </tr>
+  {% if u.get('d1_serraggio_mm') or u.get('d3_corpo_mm') or u.get('a_lungh_holder_mm') %}
+  <tr><td colspan="5" style="background:#0f172a;color:#64748b;font-size:.72rem;font-weight:600;padding:6px 12px;letter-spacing:.05em">GEOMETRIA HOLDER</td></tr>
+  <tr>
+    <td colspan="2">{% if u.get('d1_serraggio_mm') %}D1 foro: <b>{{ u.d1_serraggio_mm }} mm</b>{% endif %}</td>
+    <td colspan="2">{% if u.get('d3_corpo_mm') %}D3 corpo: <b>{{ u.d3_corpo_mm }} mm</b>{% endif %}</td>
+    <td>{% if u.get('d_hsk_mm') %}D HSK: <b>{{ u.d_hsk_mm }} mm</b>{% endif %}</td>
+  </tr>
+  <tr>
+    <td colspan="2">{% if u.get('nl_serraggio_mm') %}NL sderr: <b>{{ u.nl_serraggio_mm }} mm</b>{% endif %}</td>
+    <td colspan="2">{% if u.get('z_fine_cono_mm') %}Z cono: <b>{{ u.z_fine_cono_mm }} mm</b>{% endif %}</td>
+    <td>{% if u.get('a_lungh_holder_mm') %}A tot: <b>{{ u.a_lungh_holder_mm }} mm</b>{% endif %}</td>
+  </tr>
+  {% endif %}
   <td style="font-size:12px;color:#666;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
       title="{{ u.nome_pinza or '' }}">{{ u.nome_pinza or '—' }}</td>
   <td style="text-align:center;font-size:13px;font-weight:600">{{ u.num_taglienti }}</td>
