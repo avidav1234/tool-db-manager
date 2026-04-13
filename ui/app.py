@@ -941,6 +941,16 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
           </td>
         </tr>
         {% if u.lungh_libera_prolunga_mm %}<tr><td style="color:#888">Con prolunga</td><td>{{ u.lungh_libera_prolunga_mm }} mm</td></tr>{% endif %}
+        {% if u.d1_serraggio_mm or u.d3_corpo_mm or u.a_lungh_holder_mm %}
+        <tr><td colspan="2" style="background:#0f172a;color:#64748b;font-size:.72rem;font-weight:600;padding:6px 12px;letter-spacing:.05em">GEOMETRIA HOLDER</td></tr>
+        {% if u.d1_serraggio_mm %}<tr><td style="color:#888">D1 foro serraggio</td><td><b>{{ u.d1_serraggio_mm }} mm</b></td></tr>{% endif %}
+        {% if u.d3_corpo_mm %}<tr><td style="color:#888">D3 corpo slim</td><td><b>{{ u.d3_corpo_mm }} mm</b></td></tr>{% endif %}
+        {% if u.d_hsk_mm %}<tr><td style="color:#888">D flangia HSK</td><td><b>{{ u.d_hsk_mm }} mm</b></td></tr>{% endif %}
+        {% if u.nl_serraggio_mm %}<tr><td style="color:#888">NL serraggio</td><td><b>{{ u.nl_serraggio_mm }} mm</b></td></tr>{% endif %}
+        {% if u.z_fine_cono_mm %}<tr><td style="color:#888">Z fine cono</td><td><b>{{ u.z_fine_cono_mm }} mm</b></td></tr>{% endif %}
+        {% if u.a_lungh_holder_mm %}<tr><td style="color:#888">A lungh totale</td><td><b>{{ u.a_lungh_holder_mm }} mm</b></td></tr>{% endif %}
+        {% if u.tipo_attacco %}<tr><td style="color:#888">Tipo attacco</td><td><b>{{ u.tipo_attacco }}</b></td></tr>{% endif %}
+        {% endif %}
       </tbody></table>
       {% else %}
       <p style="color:#aaa;font-size:13px">Nessuna pinza associata.</p>
