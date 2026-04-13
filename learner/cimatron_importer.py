@@ -84,7 +84,7 @@ HOLDERS_MAP = {
     '7002': 'descrizione',
     '7003': 'num_segmenti',
     '7004': 'num_seg_mandrino',
-    '7010': 'tipo_adattatore',
+    '7010': 'tipo_attacco',
     '7901': 'tipo_visualiz',
 }
 # Segmenti 1-20: ID 70N1..70N4 dove N = numero segmento (1=11, 2=21, ...)
@@ -224,7 +224,7 @@ def importa_holders(rows, conn, dry_run=False):
             'cam_sorgente':     'Cimatron',
             'id_originale_cam': codice,
                 'descrizione':      _to_str(row.get('7002', '')),  # descrizione tecnica (non l'alias)
-                'tipo_adattatore':  _to_str(row.get('7010')),
+                'tipo_attacco':  _to_str(row.get('7010')),
                 'num_segmenti':     _to_int(row.get('7003'), 0),
                 'num_seg_mandrino': _to_int(row.get('7004'), 0),
                 'tipo_visualiz':    _to_int(row.get('7901'), 0),
@@ -233,14 +233,14 @@ def importa_holders(rows, conn, dry_run=False):
             if not dry_run:
                 if esiste:
                     conn.execute("""UPDATE portautensile SET descrizione=:descrizione,
-                        tipo_adattatore=:tipo_adattatore, num_segmenti=:num_segmenti
+                        tipo_attacco=:tipo_attacco, num_segmenti=:num_segmenti
                         WHERE codice_interno=:codice_interno""", params)
                     pid = esiste['id']
                     agg += 1
                 else:
                     conn.execute("""INSERT INTO portautensile
-                        (codice_interno,descrizione,tipo_adattatore,num_segmenti,num_seg_mandrino,tipo_visualiz)
-                        VALUES (:codice_interno,:descrizione,:tipo_adattatore,:num_segmenti,:num_seg_mandrino,:tipo_visualiz)""", params)
+                        (codice_interno,descrizione,tipo_attacco,num_segmenti,num_seg_mandrino,tipo_visualiz)
+                        VALUES (:codice_interno,:descrizione,:tipo_attacco,:num_segmenti,:num_seg_mandrino,:tipo_visualiz)""", params)
                     pid = conn.execute("SELECT id FROM portautensile WHERE codice_interno=?", (codice,)).fetchone()['id']
                     ins += 1
                 # Inserisci segmenti
@@ -253,8 +253,8 @@ def importa_holders(rows, conn, dry_run=False):
                     at = _to_float(row.get(str(base + 4)))
                     if at and at > 0:
                         conn.execute("""INSERT OR REPLACE INTO portautensile_segmento
-                            (id_portautensile,numero_segmento,diametro_inf_mm,diametro_sup_mm,altezza_cono_mm,altezza_totale_mm)
-                            VALUES (?,?,?,?,?,?)""", (pid, seg, di, ds, ac, at))
+                            (id_portautensile,numero_segmento,diametro_inf_mm,diametro_sup_mm,lunghezza_mm)
+                            VALUES (?,?,?,?,?)""", (pid, seg, di, ds, at))
             else:
                 if esiste: agg += 1
                 else: ins += 1
