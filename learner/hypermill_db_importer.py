@@ -92,10 +92,13 @@ def _decodifica_holder(polyline, holder_name=''):
         result['a_lungh_totale_mm'] = round(a_tot, 1)
 
     # D1 = diametro foro serraggio dal nome
-    m = re.search(r'(?:TSF|TFS|T\s+D)(\d+(?:\.\d+)?)', name)
+    m = re.search(r'(?:TSF|TFS)\s*D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
+    if not m:
+        m = re.search(r'\bT\s+D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
+    if not m:
+        m = re.search(r'\bD(\d+(?:\.\d+)?)\b', holder_name)
     if m:
         result['d1_serraggio_mm'] = float(m.group(1))
-
     # Per compatibilità con il campo DB master
     result['lungh_corpo_mm'] = result.get('nl_lungh_serraggio_mm')
 
