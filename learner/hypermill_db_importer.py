@@ -334,8 +334,23 @@ def _importa_materiali_pezzo(hm, master):
         nome = r['name']
         gruppo = _classifica_gruppo_iso(nome)
         durezza_min, durezza_max = _parse_durezza(nome)
-        master.execute("INSERT OR IGNORE INTO materiale_pezzo (nome, norm_code, gruppo, durezza_min, durezza_max, milling_factor_vc, milling_factor_fz, milling_factor_ae, milling_factor_ap, drilling_factor_vc, drilling_factor_fz, cam_sorgente, id_originale_cam) VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)",
-            (nome, r['norm_code'], gruppo, durezza_min, durezza_max, r['milling_factor_vc'], r['milling_factor_fz'], r['milling_factor_ae'], r['milling_factor_ap'], r['drilling_factor_vc'], r['drilling_factor_fz'], str(r['id'])))
+        existing = master.execute("SELECT id FROM materiale_pezzo WHERE nome=?", (nome,)).fetchone()
+        if existing:
+            master.execute("""UPDATE materiale_pezzo SET norm_code=?, gruppo=?, durezza_min=?, durezza_max=?,
+                milling_factor_vc=?, milling_factor_fz=?, milling_factor_ae=?, milling_factor_ap=?,
+                drilling_factor_vc=?, drilling_factor_fz=?, cam_sorgente='Hypermill', id_originale_cam=?
+                WHERE nome=?""",
+                (r['norm_code'], gruppo, durezza_min, durezza_max, r['milling_factor_vc'], r['milling_factor_fz'],
+                 r['milling_factor_ae'], r['milling_factor_ap'], r['drilling_factor_vc'], r['drilling_factor_fz'],
+                 str(r['id']), nome))
+        else:
+            master.execute("""INSERT INTO materiale_pezzo (nome, norm_code, gruppo, durezza_min, durezza_max,
+                milling_factor_vc, milling_factor_fz, milling_factor_ae, milling_factor_ap,
+                drilling_factor_vc, drilling_factor_fz, cam_sorgente, id_originale_cam)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)""",
+                (nome, r['norm_code'], gruppo, durezza_min, durezza_max, r['milling_factor_vc'], r['milling_factor_fz'],
+                 r['milling_factor_ae'], r['milling_factor_ap'], r['drilling_factor_vc'], r['drilling_factor_fz'],
+                 str(r['id'])))
         count += 1
     return count
 
@@ -374,8 +389,13 @@ def _importa_gradi_utensile(hm, master):
         nome = r['name']
         comment = r['comment'] or ''
         famiglia = _classifica_famiglia_grado(nome, comment)
-        master.execute("INSERT OR IGNORE INTO grado_utensile (nome, descrizione, famiglia, cam_sorgente, id_originale_cam) VALUES (?,?,?,'Hypermill',?)",
-            (nome, comment, famiglia, str(r['id'])))
+        existing = master.execute("SELECT id FROM grado_utensile WHERE nome=?", (nome,)).fetchone()
+        if existing:
+            master.execute("UPDATE grado_utensile SET descrizione=?, famiglia=?, cam_sorgente='Hypermill', id_originale_cam=? WHERE nome=?",
+                (comment, famiglia, str(r['id']), nome))
+        else:
+            master.execute("INSERT INTO grado_utensile (nome, descrizione, famiglia, cam_sorgente, id_originale_cam) VALUES (?,?,?,'Hypermill',?)",
+                (nome, comment, famiglia, str(r['id'])))
         count += 1
     return count
 
@@ -406,7 +426,7 @@ def _importa_catalogo_velocita(hm, master):
         id_mat = mat_map.get(r['material_id'])
         id_grado = grado_map.get(r['cutting_material_id'])
         if not id_mat or not id_grado: continue
-        master.execute("INSERT OR IGNORE INTO catalogo_velocita (id_materiale_pezzo, id_grado_utensile, limiting_diameter_mm, vc_m_min, fz_mm_z, drilling_feedrate, cam_sorgente) VALUES (?,?,?,?,?,?,'Hypermill')",
+        master.execute("INSERT OR REPLACE INTO catalogo_velocita (id_materiale_pezzo, id_grado_utensile, limiting_diameter_mm, vc_m_min, fz_mm_z, drilling_feedrate, cam_sorgente) VALUES (?,?,?,?,?,?,'Hypermill')",
             (id_mat, id_grado, r['limiting_diameter'], r['cutting_speed'], r['feedrate_per_edge'], r['drilling_feedrate']))
         count += 1
     return count
@@ -425,19 +445,30 @@ def _importa_portautensili(hm, master):
         holder_name = r['name']
         tipo_attacco = _detect_tipo_attacco(holder_name, r['comment'])
         holder_geo, segmenti = _decodifica_holder(r['polyline'], holder_name)
-        master.execute("""INSERT OR IGNORE INTO portautensile
-            (codice_interno, descrizione, tipo_attacco, num_segmenti, spindle_speed_factor, feedrate_factor,
-             infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through,
-             cam_sorgente, id_originale_cam)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)""",
-            (holder_name, r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
-             r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
-             r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id'])))
+        existing_h = master.execute("SELECT id FROM portautensile WHERE codice_interno=?", (holder_name,)).fetchone()
+        if existing_h:
+            master.execute("""UPDATE portautensile SET descrizione=?, tipo_attacco=?, num_segmenti=?,
+                spindle_speed_factor=?, feedrate_factor=?, infeed_width_factor=?, infeed_length_factor=?,
+                max_spindle_speed=?, max_feedrate=?, coolant_through=?, cam_sorgente='Hypermill', id_originale_cam=?
+                WHERE codice_interno=?""",
+                (r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
+                 r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
+             r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id']),
+             holder_name))
+        else:
+            master.execute("""INSERT INTO portautensile
+                (codice_interno, descrizione, tipo_attacco, num_segmenti, spindle_speed_factor, feedrate_factor,
+                 infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through,
+                 cam_sorgente, id_originale_cam)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)""",
+                (holder_name, r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
+                 r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
+                 r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id'])))
         row_id = master.execute("SELECT id FROM portautensile WHERE codice_interno = ?", (holder_name,)).fetchone()
         if row_id:
             porta_id = row_id[0]
             for seg in segmenti:
-                master.execute("INSERT OR IGNORE INTO portautensile_segmento (id_portautensile, numero_segmento, diametro_inf_mm, diametro_sup_mm, lunghezza_mm) VALUES (?,?,?,?,?)",
+                master.execute("INSERT OR REPLACE INTO portautensile_segmento (id_portautensile, numero_segmento, diametro_inf_mm, diametro_sup_mm, lunghezza_mm) VALUES (?,?,?,?,?)",
                     (porta_id, seg['numero_segmento'], seg['diametro_inf_mm'], seg['diametro_sup_mm'], seg['lunghezza_mm']))
                 count_s += 1
         count_h += 1
@@ -448,9 +479,21 @@ def _importa_prolunghe(hm, master):
     rows = hm.execute("SELECT extension_id, name, comment, ordering_code, spindle_speed_factor, feedrate_factor, infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through FROM Extensions ORDER BY extension_id").fetchall()
     count = 0
     for r in rows:
-        master.execute("INSERT OR IGNORE INTO prolunga (codice_interno, descrizione, spindle_speed_factor, feedrate_factor, infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through, cam_sorgente, id_originale_cam) VALUES (?,?,?,?,?,?,?,?,?,'Hypermill',?)",
-            (r['name'], r['comment'] or r['ordering_code'], r['spindle_speed_factor'], r['feedrate_factor'],
-             r['infeed_width_factor'], r['infeed_length_factor'], r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['extension_id'])))
+        existing = master.execute("SELECT id FROM prolunga WHERE codice_interno=?", (r['name'],)).fetchone()
+        if existing:
+            master.execute("""UPDATE prolunga SET descrizione=?, spindle_speed_factor=?, feedrate_factor=?,
+                infeed_width_factor=?, infeed_length_factor=?, max_spindle_speed=?, max_feedrate=?,
+                coolant_through=?, cam_sorgente='Hypermill', id_originale_cam=? WHERE codice_interno=?""",
+                (r['comment'] or r['ordering_code'], r['spindle_speed_factor'], r['feedrate_factor'],
+                 r['infeed_width_factor'], r['infeed_length_factor'], r['max_spindle_speed'] or None,
+                 r['max_feedrate'] or None, r['coolant_through'], str(r['extension_id']), r['name']))
+        else:
+            master.execute("""INSERT INTO prolunga (codice_interno, descrizione, spindle_speed_factor, feedrate_factor,
+                infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through,
+                cam_sorgente, id_originale_cam) VALUES (?,?,?,?,?,?,?,?,?,'Hypermill',?)""",
+                (r['name'], r['comment'] or r['ordering_code'], r['spindle_speed_factor'], r['feedrate_factor'],
+                 r['infeed_width_factor'], r['infeed_length_factor'], r['max_spindle_speed'] or None,
+                 r['max_feedrate'] or None, r['coolant_through'], str(r['extension_id'])))
         count += 1
     return count
 
@@ -560,14 +603,31 @@ def _importa_utensili(hm, master):
         }
         utensile = {k: v for k, v in utensile.items() if v is not None and v != ''}
         insert_data = {k: v for k, v in utensile.items() if k in master_cols}
+        codice = insert_data.get('codice_interno')
         try:
-            cols = ', '.join(insert_data.keys())
-            ph = ', '.join(['?'] * len(insert_data))
-            master.execute(f"INSERT INTO utensile ({cols}) VALUES ({ph})", list(insert_data.values()))
+            # Controlla se esiste già
+            existing = master.execute(
+                "SELECT id FROM utensile WHERE codice_interno=?", (codice,)
+            ).fetchone()
+            if existing:
+                # UPDATE: aggiorna tutti i campi tranne codice_interno
+                upd = {k: v for k, v in insert_data.items() if k != 'codice_interno'}
+                if upd:
+                    sets = ', '.join(f'{k}=?' for k in upd)
+                    master.execute(
+                        f"UPDATE utensile SET {sets} WHERE codice_interno=?",
+                        list(upd.values()) + [codice]
+                    )
+            else:
+                # INSERT nuovo
+                cols = ', '.join(insert_data.keys())
+                ph = ', '.join(['?'] * len(insert_data))
+                master.execute(f"INSERT INTO utensile ({cols}) VALUES ({ph})",
+                               list(insert_data.values()))
             count += 1
         except Exception as e:
             if count == 0:
-                print(f'Errore utensile: {e} | {utensile.get("codice_interno","?")}', file=sys.stderr)
+                print(f'Errore utensile: {e} | {codice}', file=sys.stderr)
     return count
 
 
