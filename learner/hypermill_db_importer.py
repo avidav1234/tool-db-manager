@@ -21,56 +21,85 @@ TIPO_MAP = {
 
 def _decodifica_holder(polyline, holder_name=''):
     """
-    Decodifica la polyline binaria del portautensile Hypermill.
-    Formato double big-endian, 8 byte per valore.
+    Decodifica il profilo 2D della polyline del portautensile Hypermill.
+    Verificato sul disegno tecnico Bilz TSF1000-90/HSK-A63 (9078677):
 
-    Formule verificate per famiglia:
-    TSF/TFS/T (collet): pos=136/0.954 = L_corpo, pos=552-30 = L_totale
-    SLSA06/08/10/12:    pos=760+26 = L_nominale
-    SLSB16/20:          pos=760+26 = L_nominale (offset diverso)
+    Struttura polyline (ogni 104 byte = 1 segmento):
+      seg1 @ pos 128,136: (r=D3/2, z=94) — D3=diam esterno corpo, z=fine zona conica
+      seg2 @ pos 232,240: (r=31.5=HSK63/2, z) — flangia HSK standard
+      seg3 @ pos 336,344: (r, z) — zona di transizione
+      seg4 @ pos 440,448: (r, z) — fine cono
+      pos 552: lunghezza totale A
+
+    Quote verificate TSF D10 L090:
+      D1 (foro serraggio) = dal nome (regex)
+      D3 (diam corpo slim) = seg1.r*2 = 25mm (Bilz: Ø25) ✓
+      NL (lungh serraggio) = seg1.z/0.954 = 90mm ✓
+      z_fine_cono = seg2.z = 94mm ✓ (quota 94 del disegno)
+      D_HSK = seg2.r*2 = 63mm ✓ (Ø63 standard)
+      A (lungh totale) = pos552 = 120mm ✓
     """
-    import struct
+    import struct, re
     if not polyline or len(polyline) < 144:
         return {}
+
     def get_be(pos):
         if pos + 8 > len(polyline): return None
-        try: return round(struct.unpack('>d', polyline[pos:pos+8])[0], 3)
+        try: return round(struct.unpack('>d', polyline[pos:pos+8])[0], 4)
         except: return None
 
+    # Segmenti del profilo
+    s1r, s1z = get_be(128), get_be(136)  # corpo slim
+    s2r, s2z = get_be(232), get_be(240)  # flangia HSK
+    s3r, s3z = get_be(336), get_be(344)  # transizione
+    s4r, s4z = get_be(440), get_be(448)  # fine cono
+    a_tot    = get_be(552)               # lunghezza totale A
+
+    result = {}
+
+    # D3 = diametro esterno corpo slim = seg1.r * 2
+    if s1r and 5 < s1r < 50:
+        result['d3_diam_corpo_mm'] = round(s1r * 2, 1)
+
+    # NL = lunghezza di serraggio (Nutzlaenge)
+    # Formula verificata per TSF: seg1.z / 0.954 = NL
+    # Per SLSA: formula diversa (pos760 + 26)
     name = holder_name.upper()
-    l_corpo = None
-
     if any(x in name for x in ('TSF', 'TFS')):
-        # Termorestrizione: pos136 = L * 0.954
-        p136 = get_be(136)
-        if p136 and 5 < p136 < 400:
-            l_corpo = round(p136 / 0.954, 1)
-
+        if s1z and 5 < s1z < 400:
+            result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
     elif name.startswith('T ') or ('T D' in name and 'TSF' not in name):
-        # Collet mandrino: pos136 = L * 0.954
-        p136 = get_be(136)
-        if p136 and 5 < p136 < 400:
-            l_corpo = round(p136 / 0.954, 1)
-
+        if s1z and 5 < s1z < 400:
+            result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
     elif 'SLSA' in name or 'SLSB' in name:
-        # Pinza a molla A63: pos760 + 26 = L_nominale
         p760 = get_be(760)
         if p760 and 30 < p760 < 400:
-            l_corpo = round(p760 + 26, 1)
-
+            result['nl_lungh_serraggio_mm'] = round(p760 + 26, 1)
     else:
-        # Generico: prova pos136 poi cerca il valore piu grande plausibile
-        p136 = get_be(136)
-        if p136 and 5 < p136 < 400:
-            l_corpo = round(p136 / 0.954, 1)
-        if not l_corpo:
-            for pos in range(len(polyline)-8, 127, -8):
-                v = get_be(pos)
-                if v and 20 < v < 400:
-                    l_corpo = round(v, 1)
-                    break
+        if s1z and 5 < s1z < 400:
+            result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
 
-    return {'lungh_corpo_mm': l_corpo} if l_corpo else {}
+    # z_fine_cono = seg2.z (quota 94 nel disegno)
+    if s2z and 30 < s2z < 400:
+        result['z_fine_cono_mm'] = round(s2z, 1)
+
+    # D_HSK = seg2.r*2 (costante per HSK63 = 63mm)
+    if s2r and 25 < s2r < 50:
+        result['d_hsk_mm'] = round(s2r * 2, 1)
+
+    # A = lunghezza totale holder
+    if a_tot and 30 < a_tot < 500:
+        result['a_lungh_totale_mm'] = round(a_tot, 1)
+
+    # D1 = diametro foro serraggio dal nome
+    m = re.search(r'(?:TSF|TFS|T\s+D)(\d+(?:\.\d+)?)', name)
+    if m:
+        result['d1_serraggio_mm'] = float(m.group(1))
+
+    # Per compatibilità con il campo DB master
+    result['lungh_corpo_mm'] = result.get('nl_lungh_serraggio_mm')
+
+    return result
 
 def _is_hypermill_db(db_path):
     """Verifica se il file e' un DB Hypermill."""
