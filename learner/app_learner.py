@@ -474,16 +474,16 @@ def analizza():
                 return redirect(url_for('home', msg='File .db non riconosciuto come database Hypermill'))
             # Dry run: mostra anteprima mapping prima di importare
             result = importa_hypermill_db(fp, None, dry_run=True)
-            utensili = result.get('utensili', [])
+            n_utensili = result.get('utensili', 0)
+            if isinstance(n_utensili, list):
+                n_utensili = len(n_utensili)
             # Salva path in sessione per conferma successiva
             import json as _json
             session['hm_filepath'] = fp
-            session['hm_count'] = len(utensili)
-            # Costruisci tabella mapping da primo utensile
-            campione = utensili[0] if utensili else {}
+            session['hm_count'] = n_utensili
             return render_template_string(HYPERMILL_PREVIEW,
-                filepath=fp, utensili=utensili[:10],
-                totale=len(utensili), campione=campione)
+                filepath=fp, utensili=[],
+                totale=n_utensili, campione={})
         except Exception as e:
             import traceback as _tb
             return redirect(url_for('home', msg=f'Errore DB Hypermill: {str(e)[:100]}'))
