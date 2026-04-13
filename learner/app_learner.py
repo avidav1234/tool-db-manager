@@ -121,7 +121,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
   {% if r.agente_usato %}
   <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.6rem 1rem;margin-bottom:1rem;font-size:13px;color:#1d4ed8">
     L'agente AI ha suggerito mapping per le colonne non identificate automaticamente.
-    I suggerimenti sono evidenziati in blu — verificali e correggi se necessario.
+    I suggerimenti sono evidenziati in blu â verificali e correggi se necessario.
   </div>
   {% endif %}
   {% if r.agente_errore %}
@@ -165,7 +165,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     </td>
     <td><select name="map_{{ info.colonna_file }}">
       <option value="">-- ignora --</option>
-      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} — {{ v.label }}</option>{% endfor %}
+      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} â {{ v.label }}</option>{% endfor %}
     </select></td>
     <td><span class="badge b-{{ info.confidenza[0] }}">{{ info.confidenza }}</span></td>
     <td style="font-size:11px;color:#888">{{ info.get('motivazione','') }}</td>
@@ -176,7 +176,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     <td><code>{{ col }}</code></td>
     <td><select name="map_{{ col }}">
       <option value="">-- ignora --</option>
-      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} — {{ v.label }}</option>{% endfor %}
+      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} â {{ v.label }}</option>{% endfor %}
     </select></td>
     <td><span class="badge b-n">non rilevata</span></td>
     <td></td>
@@ -260,13 +260,13 @@ function lrnImportaDB() {
     } else {
       box.style.background = dry ? '#fef9c3' : '#dcfce7';
       box.style.color = dry ? '#713f12' : '#166534';
-      let msg = (dry ? 'SIMULAZIONE — ' : '') +
+      let msg = (dry ? 'SIMULAZIONE â ' : '') +
         d.inseriti + ' inseriti, ' +
         d.aggiornati + ' aggiornati';
       if (d.taglio_inserite) msg += ', ' + d.taglio_inserite + ' condizioni taglio';
       if (d.versione) msg += ' (v' + d.versione + ')';
-      if (d.errori && d.errori.length) msg += ' — ' + d.errori.length + ' errori';
-      if (!dry) msg += ' — <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master →</a>';
+      if (d.errori && d.errori.length) msg += ' â ' + d.errori.length + ' errori';
+      if (!dry) msg += ' â <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master â</a>';
       box.innerHTML = msg;
     }
   })
@@ -472,18 +472,88 @@ def analizza():
             from hypermill_db_importer import importa_hypermill_db, _is_hypermill_db
             if not _is_hypermill_db(fp):
                 return redirect(url_for('home', msg='File .db non riconosciuto come database Hypermill'))
-            # Dry run: mostra anteprima mapping prima di importare
+            # Dry run: mostra anteprima mapping con dati reali
             result = importa_hypermill_db(fp, None, dry_run=True)
             n_utensili = result.get('utensili', 0)
             if isinstance(n_utensili, list):
                 n_utensili = len(n_utensili)
+
+            # Costruisci campione reale leggendo direttamente dal DB
+            campione = {}
+            utensili_preview = []
+            try:
+                import sqlite3 as _sq
+                _hm = _sq.connect(fp)
+                _hm.row_factory = _sq.Row
+                # Campione per il mapping (primo utensile con dati)
+                _row = _hm.execute("""
+                    SELECT n.nc_name, n.nc_number_str, n.tool_length, n.gage_length,
+                           t.tool_type_id, t.name as tool_name, t.total_length,
+                           t.dbl_param4, t.dbl_param10, t.int_param1, t.ordering_code,
+                           h.name as holder_name,
+                           cp.feedrate, cp.fz, cp.rpm, cp.vc
+                    FROM NCTools n
+                    JOIN Tools t ON n.tool_id=t.id
+                    LEFT JOIN Holders h ON n.holder_id=h.id
+                    LEFT JOIN CuttingProfiles cp ON cp.nc_tool_id=n.id
+                    WHERE t.dbl_param4 > 0 LIMIT 1
+                """).fetchone()
+                if _row:
+                    _tipo_map = {1:'BALL',2:'FLAT',3:'BULL',4:'DRILL',5:'BALL',6:'FORM',9:'FORM',15:'THREAD',16:'REAM'}
+                    campione = {
+                        'codice_interno': _row['nc_number_str'] or _row['nc_name'] or '',
+                        'alias': _row['nc_name'] or '',
+                        'nome_pinza': _row['holder_name'] or '',
+                        'descrizione': _row['tool_name'] or '',
+                        'codice_catalogo': _row['ordering_code'] or '',
+                        'tipo': _tipo_map.get(_row['tool_type_id'], '?'),
+                        'diametro_mm': round(float(_row['dbl_param4']),3) if _row['dbl_param4'] else '',
+                        'raggio_punta_mm': round(float(_row['dbl_param10']),3) if _row['dbl_param10'] else '',
+                        'lunghezza_totale_mm': round(float(_row['total_length']),1) if _row['total_length'] else '',
+                        'num_taglienti': _row['int_param1'] or '',
+                        'fuori_pinza_mm': round(float(_row['tool_length']),1) if _row['tool_length'] else '',
+                        'avanzamento_default': round(float(_row['feedrate']),1) if _row['feedrate'] else '',
+                        'fz_default': round(float(_row['fz']),4) if _row['fz'] else '',
+                        'vc_default': round(float(_row['vc']),1) if _row['vc'] else '',
+                    }
+                # Anteprima primi 8 utensili
+                _rows = _hm.execute("""
+                    SELECT n.nc_name, n.nc_number_str, n.tool_length, n.gage_length,
+                           t.tool_type_id, t.dbl_param4, t.dbl_param10,
+                           h.name as holder_name,
+                           cp.feedrate, cp.fz, cp.vc
+                    FROM NCTools n
+                    JOIN Tools t ON n.tool_id=t.id
+                    LEFT JOIN Holders h ON n.holder_id=h.id
+                    LEFT JOIN CuttingProfiles cp ON cp.nc_tool_id=n.id
+                    WHERE t.dbl_param4 > 0
+                    ORDER BY t.tool_type_id, t.dbl_param4 LIMIT 8
+                """).fetchall()
+                for _r in _rows:
+                    utensili_preview.append({
+                        'codice_interno': _r['nc_number_str'] or _r['nc_name'] or '',
+                        'alias': _r['nc_name'] or '',
+                        'tipo': _tipo_map.get(_r['tool_type_id'], '?'),
+                        'diametro_mm': round(float(_r['dbl_param4']),3) if _r['dbl_param4'] else '',
+                        'raggio_punta_mm': round(float(_r['dbl_param10']),3) if _r['dbl_param10'] else '',
+                        'fuori_pinza_mm': round(float(_r['tool_length']),1) if _r['tool_length'] else '',
+                        'nome_pinza': _r['holder_name'] or '',
+                        'avanzamento_default': round(float(_r['feedrate']),1) if _r['feedrate'] else '',
+                        'fz_default': round(float(_r['fz']),4) if _r['fz'] else '',
+                        'vc_default': round(float(_r['vc']),1) if _r['vc'] else '',
+                        'lungh_presa_mm': round(float(_r['gage_length']),1) if _r['gage_length'] else '',
+                    })
+                _hm.close()
+            except Exception:
+                pass  # campione vuoto se errore — non blocca il flusso
+
             # Salva path in sessione per conferma successiva
             import json as _json
             session['hm_filepath'] = fp
             session['hm_count'] = n_utensili
             return render_template_string(HYPERMILL_PREVIEW,
-                filepath=fp, utensili=[],
-                totale=n_utensili, campione={})
+                filepath=fp, utensili=utensili_preview,
+                totale=n_utensili, campione=campione)
         except Exception as e:
             import traceback as _tb
             return redirect(url_for('home', msg=f'Errore DB Hypermill: {str(e)[:100]}'))
@@ -768,7 +838,7 @@ def converti_page():
 
 
 
-# ── Widget agente CAM (pannello flottante) ──────────────────────────────
+# ââ Widget agente CAM (pannello flottante) ââââââââââââââââââââââââââââââ
 
 _WIDGET_MARKUP_L = (
     '<div id="ai-fab" onclick="aiT()" title="Agente CAM" '
