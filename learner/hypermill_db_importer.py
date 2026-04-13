@@ -76,7 +76,7 @@ PURPOSE_MAP = {
 
 
 def _decodifica_holder(polyline, holder_name=''):
-    if not polyline or len(polyline) < 144:
+    if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return {}, []
 
     def get_be(pos):
