@@ -462,11 +462,23 @@ def home():
         profili=_conn2.execute("SELECT COUNT(DISTINCT profilo_export) FROM utensile_completo WHERE attivo=1 AND profilo_export IS NOT NULL").fetchone()[0]
         _conn2.close()
     except Exception: profili=0
+    n_worknc=0; n_parametri=0
+    try:
+        _c3=get_conn()
+        tbls={r[0] for r in _c3.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        if 'utensile_worknc' in tbls:
+            n_worknc=_c3.execute("SELECT COUNT(*) FROM utensile_worknc").fetchone()[0]
+        if 'parametri_taglio' in tbls:
+            n_parametri=_c3.execute("SELECT COUNT(*) FROM parametri_taglio").fetchone()[0]
+        _c3.close()
+    except Exception: pass
     return render_template_string(HOME_HTML,
         utensili=utensili,n=total,
         n_tipi=len(tipi_lista),
         n_profili=profili,
         n_attivi=len(cfg.get('formati_attivi',[])),
+        n_worknc=n_worknc,
+        n_parametri=n_parametri,
         tipi_lista=tipi_lista,
         pinze_lista=pinze_lista,
         msg=request.args.get('msg',''),
@@ -809,6 +821,59 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
       </a>
 
   <div class="card" style="margin-top:1.2rem">
+    <h2>&#128196; Importa da WorkNC (database.js)</h2>
+    <p style="color:var(--txt-muted);margin-bottom:.8rem">
+      Carica il file <code>database.js</code> esportato da WorkNC
+      (CSV tra backtick). Popola le tabelle
+      <code>utensile_worknc</code> e <code>parametri_taglio</code>.
+    </p>
+    <div class="drop-zone" id="wn-dz" style="cursor:pointer;margin-bottom:.8rem;text-align:center;padding:1rem"
+         onclick="document.getElementById('wn_file').click()">
+      <span id="wn-dz-label">&#128196; Trascina il file .js o clicca per sceglierlo</span>
+      <input type="file" id="wn_file" accept=".js" style="display:none"
+             onchange="document.getElementById('wn-dz-label').textContent=this.files[0]?this.files[0].name:'file scelto'">
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="wnImport()" id="wn-btn">Importa</button>
+      <span id="wn-status" style="font-size:.85rem;color:var(--txt-muted)"></span>
+    </div>
+    <div id="wn-result" style="display:none;margin-top:1rem"></div>
+  </div>
+  <script>
+  async function wnImport(){
+    const fi=document.getElementById('wn_file');
+    if(!fi.files[0]){alert('Scegli prima un file .js');return;}
+    const st=document.getElementById('wn-status'),res=document.getElementById('wn-result'),btn=document.getElementById('wn-btn');
+    btn.disabled=true; st.textContent='Importazione in corso...'; res.style.display='none';
+    const fd=new FormData(); fd.append('file',fi.files[0]);
+    try{
+      const r=await fetch('/importa/database-js',{method:'POST',body:fd});
+      const d=await r.json(); btn.disabled=false; st.textContent='';
+      res.style.display='block';
+      if(d.ok){
+        res.innerHTML='<div class="flash ok" style="margin:0">OK <b>'+d.utensili+'</b> utensili &middot; <b>'+d.parametri+'</b> set parametri</div>';
+      }else{
+        res.innerHTML='<div class="flash err" style="margin:0">Errore: '+d.errore+'</div>';
+      }
+    }catch(e){btn.disabled=false;st.textContent='Errore rete: '+e.message;}
+  }
+  (function(){
+    const dz=document.getElementById('wn-dz');
+    if(!dz)return;
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.style.borderColor='var(--accent,#2563eb)';});
+    dz.addEventListener('dragleave',()=>{dz.style.borderColor='';});
+    dz.addEventListener('drop',e=>{
+      e.preventDefault();dz.style.borderColor='';
+      const f=e.dataTransfer.files[0];
+      if(!f)return;
+      const dt=new DataTransfer();dt.items.add(f);
+      document.getElementById('wn_file').files=dt.files;
+      document.getElementById('wn-dz-label').textContent=f.name;
+    });
+  })();
+  </script>
+
+  <div class="card" style="margin-top:1.2rem">
     <h2>&#128190; Importa da Hypermill (.db)</h2>
     <p style="color:var(--txt-muted);margin-bottom:.8rem">
       Carica direttamente il file <code>.db</code> SQLite di hyperMILL.
@@ -986,6 +1051,63 @@ def importa_hypermill():
             import os as _os; _os.unlink(tmp.name)
         except Exception:
             pass
+
+
+@app.route('/importa/database-js', methods=['POST'])
+def importa_database_js():
+    """Importa un file database.js (WorkNC CSV estratto) nel DB master."""
+    import tempfile
+    _imp_dir = os.path.join(os.path.dirname(__file__), '..', 'importers')
+    if _imp_dir not in sys.path:
+        sys.path.insert(0, _imp_dir)
+    try:
+        from import_from_database_js import import_file
+    except ImportError as ie:
+        return jsonify({'ok': False, 'errore': f'Modulo non trovato: {ie}'})
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'errore': 'Nessun file ricevuto'})
+    if not f.filename.lower().endswith('.js'):
+        return jsonify({'ok': False, 'errore': 'Il file deve avere estensione .js'})
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.js')
+    try:
+        f.save(tmp.name); tmp.close()
+        stats = import_file(tmp.name, get_db_path())
+        return jsonify({'ok': True, 'utensili': stats.get('utensili', 0),
+                        'parametri': stats.get('parametri', 0)})
+    except Exception as e:
+        return jsonify({'ok': False, 'errore': str(e)})
+    finally:
+        try:
+            import os as _os; _os.unlink(tmp.name)
+        except Exception:
+            pass
+
+
+@app.route('/export/worknc')
+def export_worknc_route():
+    """Esporta CSV WorkNC da parametri_taglio + utensile_worknc."""
+    _exp_dir = os.path.join(os.path.dirname(__file__), '..', 'exporters')
+    if _exp_dir not in sys.path:
+        sys.path.insert(0, _exp_dir)
+    try:
+        from export_worknc import export_worknc
+    except ImportError as ie:
+        return redirect(url_for('export_page', msg=f'Modulo non trovato: {ie}', mtype='err'))
+    try:
+        path, n_righe = export_worknc()
+    except Exception as e:
+        return redirect(url_for('export_page', msg=f'Errore export WorkNC: {e}', mtype='err'))
+    if n_righe == 0:
+        return redirect(url_for('export_page',
+            msg='Nessuna riga da esportare. Importa prima un database.js.', mtype='warn'))
+    try:
+        conn = get_conn()
+        conn.execute("INSERT INTO log_export (cam,num_utensili,file_output) VALUES (?,?,?)",
+                     ('WORKNC', n_righe, path)); conn.commit(); conn.close()
+    except Exception: pass
+    return send_file(path, as_attachment=True,
+                     download_name=os.path.basename(path), mimetype='text/csv')
 
 
 @app.route('/admin/copy-importer')
@@ -1560,6 +1682,15 @@ EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
         <a href="/impostazioni">Configura in Impostazioni</a>.
       </div>
       {% endif %}
+    </div>
+    <div class="card">
+      <h2>Esporta WorkNC (da database.js)</h2>
+      <p style="font-size:13px;color:#555;margin:0 0 .75rem">
+        Genera un CSV semicolonato con tutte le combinazioni
+        utensile &times; materiale &times; scopo (solo param_validi='ok'),
+        applicando i fattori S/F/ae/ap.
+      </p>
+      <a class="btn btn-p btn-lg" href="/export/worknc">&#8659; Esporta WorkNC CSV</a>
     </div>
     <div class="card">
       <h2>Esporta singolo formato</h2>

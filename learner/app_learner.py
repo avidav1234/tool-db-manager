@@ -649,6 +649,30 @@ def analizza():
                     _js_stripped = _re.sub(r'^\s*//.*$', '', _js_stripped, flags=_re.MULTILINE)
                     _js_stripped = _js_stripped.strip()
 
+                    # Tentativo 0: WorkNC database.js — CSV tra backticks
+                    # (index/rindex, non regex: robusto con caratteri speciali)
+                    _bt_content = None
+                    try:
+                        _s_bt = _js_content.index('`') + 1
+                        _e_bt = _js_content.rindex('`')
+                        if _e_bt > _s_bt:
+                            _bt_content = _js_content[_s_bt:_e_bt]
+                    except ValueError:
+                        pass
+                    if _bt_content and ';' in _bt_content and 'Numero' in _bt_content[:200]:
+                        try:
+                            import sys as _sys
+                            _imp_dir = os.path.join(os.path.dirname(__file__), '..', 'importers')
+                            if _imp_dir not in _sys.path:
+                                _sys.path.insert(0, _imp_dir)
+                            from import_from_database_js import import_file as _imp_js
+                            _stats = _imp_js(fp, DB_PATH)
+                            return redirect(url_for('home',
+                                msg=f'WorkNC database.js: {_stats.get("utensili",0)} utensili, {_stats.get("parametri",0)} set parametri importati.'))
+                        except Exception as _e:
+                            return redirect(url_for('home',
+                                msg=f'Errore import database.js: {str(_e)[:150]}'))
+
                     _js_data = None
 
                     # Tentativo 1: JSON puro
