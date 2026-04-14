@@ -82,69 +82,80 @@ from polyline_decoder import decode_polyline  # noqa
 def _decodifica_holder(polyline, holder_name=''):
     """
     Decodifica universale holder da polyline Hypermill.
-    Usa decode_polyline() dal modulo condiviso — zero logica type-specific.
 
-    Ritorna:
-      result: dict con campi derivati dal profilo esterno della polyline
-              (d3, d_hsk, nl, z_cono, a_lungh)
-              d1_serraggio_mm = D_ut dal nome SOLO se estratto con certezza;
-              il naso reale non è nella polyline e non viene inventato.
-      segmenti: lista di segmenti per portautensile_segmento
-                (solo dai punti della polyline, nessun segmento naso inventato)
+    Costruzione segmenti:
+      1. Seg 0 (cono slim/foro): da d1 (foro serraggio dal nome) al primo
+         punto polyline — solo se d1 < r0*2-0.5 (naso più stretto del corpo).
+      2. Segmenti intermedi: ogni coppia di punti consecutivi del profilo.
+      3. Seg finale: cilindro dell'ultimo punto fino a z_tot (terminatore).
+
+    Campi derivati:
+      d1 = D_utensile dal nome (foro di serraggio, non corpo slim esterno).
+      d3 = r0*2 (corpo slim esterno al punto di serraggio).
+      d_hsk = max(r)*2 (diametro flangia massimo).
+      nl = z0 (lunghezza zona serraggio).
     """
     if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return {}, []
 
-    # Decoder universale: profilo esterno + z_tot dal terminatore r=0
     profilo, z_tot = decode_polyline(polyline)
     if not profilo:
         return {}, []
 
-    # D_ut dal nome — salvato come d1_serraggio_mm solo se estraibile
-    m_dut = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
-    d_ut = float(m_dut.group(1)) if m_dut else 0
+    # d1 = diametro foro serraggio dal nome holder (non in polyline)
+    m = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
+    d1 = float(m.group(1)) if m else 0.0
 
-    r_slim, z_slim = profilo[0]
-    r_flangia, z_flangia = profilo[-1]
-
-    # Costruisci segmenti SOLO dai punti della polyline (nessun segmento naso inventato)
     segmenti = []
+    r0, z0 = profilo[0]
+
+    # Seg 0: cono/cilindro dal naso (d1) al primo punto — solo se coerente
+    if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2 - 0.5:
+        segmenti.append({
+            'numero_segmento': 1,
+            'diametro_inf_mm': round(d1, 2),
+            'diametro_sup_mm': round(r0 * 2, 2),
+            'lunghezza_mm': round(z0, 2),
+        })
+
+    # Segmenti intermedi dalla polyline
     for i in range(1, len(profilo)):
         r_prev, z_prev = profilo[i-1]
         r_curr, z_curr = profilo[i]
-        l_seg = round(z_curr - z_prev, 2)
-        if l_seg <= 0.01:
-            continue
-        segmenti.append({
-            'numero_segmento': len(segmenti) + 1,
-            'diametro_inf_mm': round(r_prev * 2, 2),
-            'diametro_sup_mm': round(r_curr * 2, 2),
-            'lunghezza_mm': l_seg,
-        })
-    # Se z_tot > z_flangia (cilindro finale esteso fino al terminatore), aggiungi segmento
-    if z_tot > z_flangia + 0.01:
-        segmenti.append({
-            'numero_segmento': len(segmenti) + 1,
-            'diametro_inf_mm': round(r_flangia * 2, 2),
-            'diametro_sup_mm': round(r_flangia * 2, 2),
-            'lunghezza_mm': round(z_tot - z_flangia, 2),
-        })
+        l = round(z_curr - z_prev, 2)
+        if l > 0.01:
+            segmenti.append({
+                'numero_segmento': len(segmenti) + 1,
+                'diametro_inf_mm': round(r_prev * 2, 2),
+                'diametro_sup_mm': round(r_curr * 2, 2),
+                'lunghezza_mm': l,
+            })
 
-    # Campi derivati dalla polyline:
-    # z_fine_cono = z del penultimo punto se esiste, altrimenti z_slim
-    z_cono = round(profilo[-2][1], 2) if len(profilo) > 1 else round(z_slim, 2)
-    a_lungh = z_tot if z_tot > 0 else z_flangia
+    # Seg finale: cilindro flangia fino a z_tot
+    if z_tot > 0 and profilo:
+        r_last, z_last = profilo[-1]
+        if z_tot > z_last + 0.1:
+            segmenti.append({
+                'numero_segmento': len(segmenti) + 1,
+                'diametro_inf_mm': round(r_last * 2, 2),
+                'diametro_sup_mm': round(r_last * 2, 2),
+                'lunghezza_mm': round(z_tot - z_last, 2),
+            })
+
+    # Campi derivati
+    r_max = max(r for r, _ in profilo)
+    a_lungh = z_tot if z_tot > 0 else profilo[-1][1]
 
     result = {
-        'd1_serraggio_mm':    d_ut if d_ut > 0 else None,  # solo se certo dal nome
-        'd3_corpo_mm':        round(r_slim * 2, 2),
-        'd_hsk_mm':           round(r_flangia * 2, 2),
-        'nl_serraggio_mm':    round(z_slim, 2),
-        'z_fine_cono_mm':     z_cono,
+        'd1_serraggio_mm':    round(d1, 2) if d1 > 0 else None,
+        'd3_corpo_mm':        round(r0 * 2, 2),
+        'd_hsk_mm':           round(r_max * 2, 2),
+        'nl_serraggio_mm':    round(z0, 2),
+        'z_fine_cono_mm':     round(profilo[-1][1], 2),
         'a_lungh_holder_mm':  round(a_lungh, 2),
-        # Compat con vecchi nomi
-        'd3_diam_corpo_mm':     round(r_slim * 2, 2),
-        'nl_lungh_serraggio_mm': round(z_slim, 2),
+        # Compat vecchi nomi
+        'd3_diam_corpo_mm':     round(r0 * 2, 2),
+        'nl_lungh_serraggio_mm': round(z0, 2),
         'a_lungh_totale_mm':    round(a_lungh, 2),
     }
     return result, segmenti

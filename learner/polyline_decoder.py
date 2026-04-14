@@ -34,13 +34,20 @@ def decode_polyline(raw_bytes):
 
     Ritorna:
         (profilo, z_tot) dove:
-        - profilo: lista di (r_mm, z_mm) del profilo esterno, dal primo punto
-          reale fino all'ultimo prima del terminatore. Punti interni HSK esclusi.
-        - z_tot: lunghezza fisica totale dell'holder in mm, dalla z del
-          terminatore r=0. Vale 0.0 se il terminatore non è trovato.
+        - profilo: lista di (r_mm, z_mm) del profilo esterno, dal primo
+          punto fino a quando un rientro > 2mm su r_max segnala l'ingresso
+          nella geometria interna HSK (terminazione del profilo esterno).
+        - z_tot: dal terminatore r=0, o z dell'ultimo punto valido.
 
-    Il profilo NON include il naso (z=0) — quella parte non è nella polyline
-    Hypermill. Va gestita separatamente dall'importer usando d1_serraggio_mm.
+    Regola profilo esterno:
+      - r <= 0 → scarta (dati anomali o terminatore)
+      - r > 0 e rientro < 2mm rispetto a r_max → aggiungi al profilo
+      - rientro >= 2mm dopo aver raggiunto r_max → STOP (geometria interna HSK)
+
+    Verificato su:
+      TSF D10 L090 (rientro 3mm → stop)
+      TSF D06 L120 (rientro 1.4mm → continua fino flangia)
+      A63 SLSA10 180 (monotono → tutto incluso)
     """
     if not raw_bytes or not isinstance(raw_bytes, (bytes, bytearray)) or len(raw_bytes) < 144:
         return [], 0.0
@@ -62,37 +69,40 @@ def decode_polyline(raw_bytes):
     if not raw_pts:
         return [], 0.0
 
-    # Estrai z_tot dal terminatore r=0 (l'ultimo punto con r=0 dà la lunghezza totale)
+    # Soglia: rientro oltre questo valore = geometria interna HSK
+    RIENTRO_LIMITE = 2.0  # mm
+
+    profilo = []
     z_tot = 0.0
-    profilo_pts = []
+    r_max = 0.0
+    inside_hsk = False  # flag: siamo entrati nella geometria interna HSK?
+
     for r, z in raw_pts:
-        if abs(r) < 1e-9:
-            # Terminatore — prendi la z, non aggiungerlo al profilo
+        if abs(r) < 1e-6:
+            # Terminatore — sempre aggiornato, anche dopo ingresso in HSK
             if z > z_tot:
                 z_tot = z
-        else:
-            profilo_pts.append((r, z))
+            continue
+        if r < 0:
+            # Dato anomalo
+            continue
+        # Se già dentro HSK, non aggiungere al profilo ma continua a scorrere
+        # per trovare il terminatore finale
+        if inside_hsk:
+            continue
+        # Se abbiamo raggiunto r_max e r scende > soglia → entriamo nell'HSK
+        if r_max > 0 and r < r_max - RIENTRO_LIMITE:
+            inside_hsk = True
+            continue
+        profilo.append((r, z))
+        if r > r_max:
+            r_max = r
 
-    if not profilo_pts:
-        return [], z_tot
+    # Se nessun terminatore, z_tot = z dell'ultimo punto valido
+    if z_tot <= 0 and profilo:
+        z_tot = profilo[-1][1]
 
-    # Filtro monotonia: mantieni solo r >= r_max (profilo esterno)
-    # Scarta i punti con r decrescente (geometria interna HSK)
-    exterior = []
-    r_max = 0.0
-    for r, z in profilo_pts:
-        if r >= r_max - 1e-6:
-            exterior.append((r, z))
-            if r > r_max:
-                r_max = r
-        # else: punto interno HSK, scartato
-
-    # Se non è stato trovato un terminatore r=0 esplicito, usa la z del
-    # punto più lontano come z_tot (fallback per polyline brevi senza terminatore)
-    if z_tot <= 0 and exterior:
-        z_tot = exterior[-1][1]
-
-    return exterior, z_tot
+    return profilo, z_tot
 
 
 def get_z_tot(raw_bytes):
