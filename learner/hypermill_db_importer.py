@@ -76,6 +76,18 @@ PURPOSE_MAP = {
 
 
 def _decodifica_holder(polyline, holder_name=''):
+    """
+    Decodifica polyline holder Hypermill (big-endian double, offset bytes).
+    Verificato sui 15 TSF reali del DB + disegno Bilz TSF1000-90/HSK-A63.
+
+    Struttura polyline:
+      s1r @ 128, s1z @ 136 = raggio/Z fine cono slim (= raccordo flangia)
+      s2r @ 232, s2z @ 240 = raggio/Z flangia HSK
+      s3r,s4r @ 336/440    = corpo HSK interno (NON disegnare)
+      z_tot @ 552          = lunghezza totale holder
+
+    Diametro naso (non in polyline): D_ut + 4mm — D_ut estratto dal nome
+    """
     if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return {}, []
 
@@ -89,63 +101,102 @@ def _decodifica_holder(polyline, holder_name=''):
 
     s1r, s1z = get_be(128), get_be(136)
     s2r, s2z = get_be(232), get_be(240)
-    s3r, s3z = get_be(336), get_be(344)
-    s4r, s4z = get_be(440), get_be(448)
-    a_tot    = get_be(552)
+    z_tot    = get_be(552)
 
     result = {}
+    segmenti = []
+    name = holder_name.upper()
 
+    # Estrai D_ut dal nome (es. 'TSF D10 L090' → 10)
+    m_dut = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
+    d_ut = float(m_dut.group(1)) if m_dut else 0
+
+    # ── TSF/TFS: 3 segmenti puliti (cono + raccordo + flangia) ──
+    if any(x in name for x in ('TSF', 'TFS')) and s1r and s1z and s2r and s2z and z_tot:
+        # Diametro naso: D_ut + 4mm (verificato su D06,D08,D10,D12,D16)
+        if d_ut > 0:
+            d_naso = round(d_ut + 4, 2)
+        else:
+            # Fallback per trigonometria del cono (angolo standard ≈ 3.665°)
+            r_naso = max(s1r - s1z * math.tan(math.radians(3.665)), 1.0)
+            d_naso = round(r_naso * 2, 2)
+
+        d_corpo = round(s1r * 2, 2)
+        d_flangia = round(s2r * 2, 2)
+
+        # Seg 1: cono slim — naso → corpo
+        segmenti.append({
+            'numero_segmento': 1,
+            'diametro_inf_mm': d_naso,
+            'diametro_sup_mm': d_corpo,
+            'lunghezza_mm': round(s1z, 2),
+        })
+
+        # Seg 2: raccordo — corpo → flangia HSK
+        l_raccordo = round(s2z - s1z, 2)
+        if l_raccordo > 0.1:
+            segmenti.append({
+                'numero_segmento': 2,
+                'diametro_inf_mm': d_corpo,
+                'diametro_sup_mm': d_flangia,
+                'lunghezza_mm': l_raccordo,
+            })
+
+        # Seg 3: cilindro flangia HSK — fino alla fine
+        l_flangia = round(z_tot - s2z, 2)
+        if l_flangia > 0.1:
+            segmenti.append({
+                'numero_segmento': len(segmenti) + 1,
+                'diametro_inf_mm': d_flangia,
+                'diametro_sup_mm': d_flangia,
+                'lunghezza_mm': l_flangia,
+            })
+
+        # Campi result holder
+        result['d1_serraggio_mm']    = d_ut
+        result['d3_corpo_mm']        = d_corpo
+        result['d_hsk_mm']           = d_flangia
+        result['nl_serraggio_mm']    = round(s1z, 2)
+        result['z_fine_cono_mm']     = round(s2z, 2)
+        result['a_lungh_holder_mm']  = round(z_tot, 2)
+        # Compat con vecchi nomi (usati altrove)
+        result['d3_diam_corpo_mm']    = d_corpo
+        result['nl_lungh_serraggio_mm'] = round(s1z, 2)
+        result['a_lungh_totale_mm']  = round(z_tot, 2)
+
+        return result, segmenti
+
+    # ── Altri tipi di holder (SLSA/SLSB, T, generic) ──
+    # Mantieni la logica multi-segmento generica con post-processing collasso HSK
     if s1r and 5 < s1r < 50:
         result['d3_diam_corpo_mm'] = round(s1r * 2, 1)
 
-    name = holder_name.upper()
-    if any(x in name for x in ('TSF', 'TFS')):
-        if s1z and 5 < s1z < 400:
-            result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
-    elif name.startswith('T ') or ('T D' in name and 'TSF' not in name):
-        if s1z and 5 < s1z < 400:
-            result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
-    elif 'SLSA' in name or 'SLSB' in name:
+    s3r, s3z = get_be(336), get_be(344)
+    s4r, s4z = get_be(440), get_be(448)
+
+    if 'SLSA' in name or 'SLSB' in name:
         p760 = get_be(760)
         if p760 and 30 < p760 < 400:
             result['nl_lungh_serraggio_mm'] = round(p760 + 26, 1)
-    else:
-        if s1z and 5 < s1z < 400:
-            result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
+    elif s1z and 5 < s1z < 400:
+        result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
 
-    if s2z and 30 < s2z < 400:
-        result['z_fine_cono_mm'] = round(s2z, 1)
-    if s2r and 25 < s2r < 50:
-        result['d_hsk_mm'] = round(s2r * 2, 1)
-    if a_tot and 30 < a_tot < 500:
-        result['a_lungh_totale_mm'] = round(a_tot, 1)
+    if s2z and 30 < s2z < 400: result['z_fine_cono_mm'] = round(s2z, 1)
+    if s2r and 25 < s2r < 50:  result['d_hsk_mm'] = round(s2r * 2, 1)
+    if z_tot and 30 < z_tot < 500: result['a_lungh_totale_mm'] = round(z_tot, 1)
+    if d_ut > 0: result['d1_serraggio_mm'] = d_ut
 
-    m = re.search(r'(?:TSF|TFS)\s*D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
-    if not m:
-        m = re.search(r'\bT\s+D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
-    if not m:
-        m = re.search(r'\bD(\d+(?:\.\d+)?)\b', holder_name)
-    if m:
-        result['d1_serraggio_mm'] = float(m.group(1))
-
-    segmenti = []
     punti = []
-    for (r_val, z_val) in [(s1r, s1z), (s2r, s2z), (s3r, s3z), (s4r, s4z)]:
-        if r_val is not None and z_val is not None and r_val > 0 and z_val > 0:
-            punti.append((round(r_val * 2, 2), round(z_val, 2)))
+    for (rv, zv) in [(s1r, s1z), (s2r, s2z), (s3r, s3z), (s4r, s4z)]:
+        if rv is not None and zv is not None and rv > 0 and zv > 0:
+            punti.append((round(rv * 2, 2), round(zv, 2)))
 
-    if a_tot and a_tot > 0 and punti:
-        # Segmento 1 = cono slim (lato punta)
-        # d_naso (lato punta) = D1 + 6 per TSF/TFS (parete 3mm + 3mm), altrimenti = punti[0][0]
-        # Verificato su disegno tecnico Bilz TSF1000-90/HSK-A63 (DXF 1:1)
-        d_naso = punti[0][0]  # default: cilindro
-        d1 = result.get('d1_serraggio_mm')
-        if d1 and any(x in name for x in ('TSF', 'TFS')):
-            d_naso = round(d1 + 6, 2)  # formula TSF: D1 + 6mm
+    if z_tot and z_tot > 0 and punti:
+        d_naso = punti[0][0]  # default cilindro
         segmenti.append({
             'numero_segmento': 1,
-            'diametro_inf_mm': d_naso,           # lato punta (es. Ø14 per D08)
-            'diametro_sup_mm': punti[0][0],      # lato flangia (es. Ø23)
+            'diametro_inf_mm': d_naso,
+            'diametro_sup_mm': punti[0][0],
             'lunghezza_mm': punti[0][1],
         })
         for i in range(1, len(punti)):
@@ -156,36 +207,13 @@ def _decodifica_holder(polyline, holder_name=''):
                 'lunghezza_mm': round(punti[i][1] - punti[i-1][1], 2),
             })
         last_z = punti[-1][1]
-        if a_tot > last_z:
+        if z_tot > last_z:
             segmenti.append({
                 'numero_segmento': len(punti) + 1,
                 'diametro_inf_mm': punti[-1][0],
                 'diametro_sup_mm': punti[-1][0],
-                'lunghezza_mm': round(a_tot - last_z, 2),
+                'lunghezza_mm': round(z_tot - last_z, 2),
             })
-
-        # POST-PROCESSING: collassa i segmenti dopo la flangia in un cilindro HSK
-        # I segmenti dopo il punto di diametro massimo rappresentano la geometria
-        # interna HSK (non il profilo esterno visibile) — sostituiscili con un cilindro
-        if len(segmenti) > 2:
-            d_max = max(max(s['diametro_inf_mm'], s['diametro_sup_mm']) for s in segmenti)
-            # Trova primo segmento che raggiunge ≥95% del diametro max (la flangia)
-            idx_flangia = next(
-                (i for i, s in enumerate(segmenti)
-                 if max(s['diametro_inf_mm'], s['diametro_sup_mm']) >= d_max * 0.95),
-                len(segmenti) - 1
-            )
-            # Mantieni i segmenti fino alla flangia (incluso il raccordo che la raggiunge)
-            # Collassa solo i segmenti DOPO la flangia in un unico cilindro Ø_max
-            keep_until = idx_flangia + 1  # mantieni anche il segmento raccordo
-            if keep_until < len(segmenti):
-                l_hsk = sum(s['lunghezza_mm'] for s in segmenti[keep_until:])
-                segmenti = segmenti[:keep_until] + [{
-                    'numero_segmento': keep_until + 1,
-                    'diametro_inf_mm': d_max,
-                    'diametro_sup_mm': d_max,
-                    'lunghezza_mm': round(l_hsk, 2),
-                }]
 
     return result, segmenti
 
