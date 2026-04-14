@@ -221,26 +221,53 @@ def _decodifica_holder(polyline, holder_name=''):
 def _leggi_profilo_polyline(polyline):
     """
     Estrae TUTTI i punti (r, z) da una polyline binaria Hypermill.
-    Struttura: ogni punto occupa 104 byte, primo punto a offset 128.
-      r = double big-endian all'offset base
-      z = double big-endian all'offset base+8
-    Ritorna lista di tuple (r, z) valide (no NaN/Inf, r>=0, 0<z<2000).
+    Struttura: ogni punto a offset base=128+k*104, r @ base, z @ base+8.
+    Lunghezza totale: offset 552 (z_tot).
+
+    Ritorna lista [(r, z), ...]:
+      - origine: (0,0) Tipo A se z_pt0<2mm, oppure (r_pt0, 0) Tipo B
+      - punti validi con r>=0.01
+      - estensione finale: (r_last, z_tot) se z_last < z_tot
+
+    Coerente con ui/svg_profilo.py._leggi_profilo_polyline.
     """
     if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return []
 
-    points = []
+    pts = []
     for base in range(128, len(polyline) - 15, 104):
         try:
             r = struct.unpack('>d', polyline[base:base+8])[0]
             z = struct.unpack('>d', polyline[base+8:base+16])[0]
             if (not math.isnan(r) and not math.isinf(r) and
                 not math.isnan(z) and not math.isinf(z) and
-                0.0 <= r < 500 and 0.0 < z < 2000):
-                points.append((round(r, 4), round(z, 4)))
+                r >= 0.01 and z > 0 and r < 500 and z < 2000):
+                pts.append((round(r, 4), round(z, 4)))
         except Exception:
             continue
-    return points
+
+    if not pts:
+        return []
+
+    # z_tot a offset 552 — estensione cilindro finale
+    z_tot = None
+    if len(polyline) >= 560:
+        try:
+            zt = struct.unpack('>d', polyline[552:560])[0]
+            if not math.isnan(zt) and not math.isinf(zt) and 0 < zt < 2000:
+                z_tot = round(zt, 4)
+        except Exception:
+            pass
+
+    r_last, z_last = pts[-1]
+    if z_tot and z_last < z_tot - 0.1:
+        pts.append((r_last, z_tot))
+
+    r0, z0 = pts[0]
+    if z0 < 2.0:
+        return [(0.0, 0.0)] + pts
+    else:
+        return [(r0, 0.0)] + pts
 
 
 def _leggi_profilo_fresa(tool_row, hm_conn):
