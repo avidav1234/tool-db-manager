@@ -420,6 +420,16 @@ def genera_svg_profilo(u, segmenti=None):
                 if l_seg > 0.01:
                     holder_segs.append((round(r_prev*2, 2), round(r_curr*2, 2), round(l_seg, 2)))
 
+        # Se la polyline non ha prodotto segmenti validi (pts_reali vuota
+        # o tutti scartati), fallback ai segmenti DB
+        if not holder_segs and segmenti:
+            for s in segmenti:
+                d_i = float(s.get('diametro_inf_mm') or 0)
+                d_s = float(s.get('diametro_sup_mm') or 0)
+                l = float(s.get('lunghezza_mm') or 0)
+                if l > 0.01:
+                    holder_segs.append((d_i, d_s, l))
+
     # Priorità 2: segmenti DB (fallback quando polyline assente)
     elif segmenti:
         for s in segmenti:
