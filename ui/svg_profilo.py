@@ -182,55 +182,125 @@ def genera_svg_profilo(u, segmenti=None):
                  f'stroke="#ddd" stroke-width="0.5" stroke-dasharray="4,4"/>')
 
     # ══════════════════════════════════════════════════════════════════
-    # ZONA 1: PUNTA FRESA
+    # ZONA 1: PUNTA FRESA — geometria specifica per tipo
     # ══════════════════════════════════════════════════════════════════
-    tip_h = 0.0
+    tip_h = L_tagl if L_tagl > 0 else min(D * 2, L_tot * 0.3)
+    y_bottom = y_at(0)
 
     if tipo == 'BALL':
+        # Semicerchio (sweep=0 = pancia verso il basso) + cilindro sopra
         r_px = (D / 2) * scale
         cy_ball = y_at(D / 2)
         parts.append(
             f'<path d="M {x_left(D)} {cy_ball} A {r_px} {r_px} 0 0 0 {x_right(D)} {cy_ball}" '
-            f'fill="{col}" fill-opacity="0.9" stroke="{col}" stroke-width="1.2"/>'
+            f'fill="{col}" fill-opacity="0.9" stroke="{col}" stroke-width="1.5"/>'
         )
         tip_h = max(L_tagl, D / 2)
         if tip_h > D / 2:
-            cil_h = (tip_h - D / 2) * scale
             parts.append(
-                f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" height="{cil_h}" '
-                f'fill="{col}" fill-opacity="0.9" stroke="{col}" stroke-width="1.2"/>'
+                f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+                f'height="{(tip_h - D/2)*scale}" '
+                f'fill="{col}" fill-opacity="0.9" stroke="{col}" stroke-width="1.5"/>'
             )
 
     elif tipo == 'BULL':
-        tip_h = L_tagl if L_tagl > 0 else D / 2
-        rx_corner = R * scale if R > 0 else 0
+        # Rettangolo con corner radius = R scalato
+        r_corner = R * scale if R > 0 else 0
         parts.append(
-            f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" height="{tip_h*scale}" '
-            f'rx="{rx_corner}" ry="{rx_corner}" '
-            f'fill="{col}" fill-opacity="0.9" stroke="{col}" stroke-width="1.2"/>'
+            f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+            f'height="{tip_h*scale}" rx="{r_corner}" ry="{r_corner}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
         )
 
     elif tipo == 'DRILL':
-        base_tip_h = L_tagl if L_tagl > 0 else D * 2
+        # Triangolo punta + cilindro sopra
         half_angle = angolo_punta / 2
         tip_depth = (D / 2) / math.tan(math.radians(half_angle)) if half_angle > 0 else D / 2
         parts.append(
-            f'<polygon points="{cx},{y_at(0)} {x_left(D)},{y_at(tip_depth)} {x_right(D)},{y_at(tip_depth)}" '
-            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.2"/>'
+            f'<polygon points="{cx},{y_bottom} '
+            f'{x_left(D)},{y_at(tip_depth)} {x_right(D)},{y_at(tip_depth)}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
         )
-        if base_tip_h > tip_depth:
-            cil_h = (base_tip_h - tip_depth) * scale
+        if tip_h > tip_depth:
             parts.append(
-                f'<rect x="{x_left(D)}" y="{y_at(base_tip_h)}" width="{D*scale}" height="{cil_h}" '
-                f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.2"/>'
+                f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+                f'height="{(tip_h - tip_depth)*scale}" '
+                f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
             )
-        tip_h = max(base_tip_h, tip_depth)
+        tip_h = max(tip_h, tip_depth)
 
-    else:  # FLAT, TAP, REAM, THREAD, LOLLIPOP, WOODRUFF, FORM
-        tip_h = L_tagl if L_tagl > 0 else min(D * 2, L_tot * 0.3)
+    elif tipo == 'THREAD':
+        # Fresa a filettare: trapezio leggermente assottigliato in basso
+        taper_angle = 15  # gradi per lato
+        taper = tip_h * math.tan(math.radians(taper_angle))
+        taper = min(taper, D * 0.2)
+        d_bottom = max(D - taper * 2, D * 0.6)
         parts.append(
-            f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" height="{tip_h*scale}" '
-            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.2"/>'
+            f'<polygon points='
+            f'"{x_left(d_bottom)},{y_bottom} {x_right(d_bottom)},{y_bottom} '
+            f'{x_right(D)},{y_at(tip_h)} {x_left(D)},{y_at(tip_h)}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
+        )
+
+    elif tipo == 'SPOT':
+        # Fresa a centrare: cono con angolo 90° default (45° per lato)
+        angle_spot = float(u.get('angolo_punta_gradi') or 90)
+        tip_depth = (D / 2) / math.tan(math.radians(angle_spot / 2)) if angle_spot > 0 else D / 2
+        tip_depth = min(tip_depth, tip_h)
+        parts.append(
+            f'<polygon points="{cx},{y_bottom} '
+            f'{x_left(D)},{y_at(tip_depth)} {x_right(D)},{y_at(tip_depth)}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
+        )
+        if tip_h > tip_depth:
+            parts.append(
+                f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+                f'height="{(tip_h - tip_depth)*scale}" '
+                f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
+            )
+        tip_h = max(tip_h, tip_depth)
+
+    elif tipo == 'FORM':
+        # Fresa di forma: corner radius grande (R se disponibile, altrimenti 30% D)
+        r_corner = min(R * scale, D * scale / 2) if R > 0 else D * scale * 0.3
+        parts.append(
+            f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+            f'height="{tip_h*scale}" rx="{r_corner}" ry="{r_corner}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
+        )
+
+    elif tipo == 'LOLLIPOP':
+        # Fresa a T / lollipop: collo sottile + disco allargato in punta
+        d_collo = D_stelo if D_stelo > 0 else D * 0.5
+        disco_h = min(D * 0.4, tip_h * 0.4)
+        # Disco allargato (in basso)
+        parts.append(
+            f'<rect x="{x_left(D)}" y="{y_at(disco_h)}" width="{D*scale}" '
+            f'height="{disco_h*scale}" rx="{R*scale if R > 0 else 0}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
+        )
+        # Collo (sopra il disco)
+        if tip_h > disco_h:
+            parts.append(
+                f'<rect x="{x_left(d_collo)}" y="{y_at(tip_h)}" width="{d_collo*scale}" '
+                f'height="{(tip_h - disco_h)*scale}" '
+                f'fill="{col}" fill-opacity="0.7" stroke="{col}" stroke-width="1.2"/>'
+            )
+
+    elif tipo == 'WOODRUFF':
+        # Fresa a disco: disco piatto con raggio esterno
+        r_corner = min(R * scale, D * scale / 4) if R > 0 else D * scale * 0.1
+        parts.append(
+            f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+            f'height="{tip_h*scale}" rx="{r_corner}" ry="{r_corner}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
+        )
+
+    else:  # FLAT, REAM, TAP, TAPER e altri: rettangolo a spigoli vivi
+        parts.append(
+            f'<rect x="{x_left(D)}" y="{y_at(tip_h)}" width="{D*scale}" '
+            f'height="{tip_h*scale}" '
+            f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
         )
 
     # ══════════════════════════════════════════════════════════════════
