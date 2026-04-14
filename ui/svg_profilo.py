@@ -382,20 +382,12 @@ def genera_svg_profilo(u, segmenti=None):
     y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
     holder_segs = []
 
-    # Priorità 1: punti reali dalla polyline (nessuna origine artificiale aggiunta)
+    # Priorità 1: punti reali dalla polyline.
+    # I segmenti vengono costruiti SOLO dai dati presenti nella polyline —
+    # nessuna ricostruzione basata su convenzioni type-specific.
+    # Se la polyline non contiene il naso (es. TSF), il profilo parte
+    # dal primo punto reale della polyline (fine cono slim).
     if holder_pts and len(holder_pts) >= 2:
-        # Seg 0: cono slim dal NASO ESTERNO al primo punto della polyline.
-        # d1_serraggio_mm = diametro FORO (accoglie utensile).
-        # Convenzione Bilz TSF: parete slim costante 3mm per lato
-        #   → d_naso_esterno = d_foro + 6
-        # Verificato CAD: D06→12, D08→14, D10→16, D12→18, D16→22
-        # Applicato solo se z_pt0 > 2mm (Tipo B, naso non nella polyline).
-        d_foro = float(u.get('d1_serraggio_mm') or 0)
-        r0, z0 = holder_pts[0]
-        if d_foro > 0.1 and z0 > 2.0:
-            d_naso = d_foro + 6.0
-            if d_naso < r0 * 2 - 0.5:
-                holder_segs.append((round(d_naso, 2), round(r0 * 2, 2), round(z0, 2)))
 
         # Segmenti successivi dalla polyline — regola universale pendenza:
         # |Δr/Δz| > 1.0 (45°) indica spigolo CAD (cilindro + spigolo implicito),

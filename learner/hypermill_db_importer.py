@@ -103,27 +103,14 @@ def _decodifica_holder(polyline, holder_name=''):
         return {}, []
 
     # d_foro = diametro foro serraggio dal nome holder (es. "TSF D06" → 6)
+    # Usato solo come dato informativo nel DB (campo d1_serraggio_mm).
+    # NON viene più usato per ricostruire il naso — i dati del profilo
+    # vengono letti esclusivamente dalla polyline.
     m = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
     d_foro = float(m.group(1)) if m else 0.0
 
-    # Diametro esterno del naso al z=0: convenzione Bilz TSF
-    # parete slim costante 3mm per lato → d_naso = d_foro + 6
-    # Verificato CAD su D06→12, D08→14, D10→16, D12→18, D16→22.
-    # Il naso non è nella polyline: ricostruito solo per Tipo B (z_pt0 > 2mm).
     segmenti = []
     r0, z0 = profilo[0]
-    d_naso_esterno = 0.0
-    if d_foro > 0.1 and z0 > 2.0:
-        d_naso_esterno = round(d_foro + 6.0, 2)
-
-    # Seg 0: cono dal naso esterno al primo punto (solo se d_naso < d_pt0)
-    if d_naso_esterno > 0 and d_naso_esterno < r0 * 2 - 0.5:
-        segmenti.append({
-            'numero_segmento': 1,
-            'diametro_inf_mm': d_naso_esterno,
-            'diametro_sup_mm': round(r0 * 2, 2),
-            'lunghezza_mm': round(z0, 2),
-        })
 
     # Segmenti intermedi dalla polyline
     # Regola universale: se pendenza |Δr/Δz| > 1.0 (45°) il CAD ha uno SPIGOLO
