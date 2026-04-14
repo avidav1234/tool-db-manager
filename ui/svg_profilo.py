@@ -124,15 +124,28 @@ def genera_svg_profilo(u, segmenti=None):
         shaft_pts = _parse_json_profilo(u.get('profilo_gambo_json'))
 
     # ── Calcolo scala e canvas ───────────────────────────────────────
-    d_max = D
-    for r, z in holder_pts:
-        if r * 2 > d_max:
-            d_max = r * 2
+    # Diametro max della fresa (tagliente + stelo + raccordi)
+    max_d_fresa = max(D, D_stelo if D_stelo > 0 else 0)
     for r, z in shaft_pts:
-        if r * 2 > d_max:
-            d_max = r * 2
-    if D_stelo > d_max:
-        d_max = D_stelo
+        if r * 2 > max_d_fresa:
+            max_d_fresa = r * 2
+
+    # Diametro max holder
+    max_d_holder = max_d_fresa
+    for r, z in holder_pts:
+        if r * 2 > max_d_holder:
+            max_d_holder = r * 2
+    for s in segmenti:
+        d_s = max(float(s.get('diametro_inf_mm') or 0), float(s.get('diametro_sup_mm') or 0))
+        if d_s > max_d_holder:
+            max_d_holder = d_s
+
+    # Se holder molto più largo della fresa (es. fresa D2 + holder D63),
+    # limita a 3× D_fresa per non schiacciare la fresa nel disegno.
+    if max_d_holder > max_d_fresa * 3 and max_d_fresa > 0:
+        d_max = max_d_fresa * 3
+    else:
+        d_max = max_d_holder
     if d_max <= 0:
         d_max = D
 
@@ -326,8 +339,16 @@ def genera_svg_profilo(u, segmenti=None):
         # Estendi ai bordi della zona stelo
         if gambo_converted and gambo_converted[0][1] > stelo_start:
             gambo_converted.insert(0, (gambo_converted[0][0], stelo_start))
+        # Se l'ultimo punto non arriva a stelo_end, aggiungi il cilindro del GAMBO.
+        # Il diametro del gambo (cilindro che entra nella pinza) è D_stelo, non r[-1]
+        # della polyline (che è il raccordo conico, più largo del gambo vero).
         if gambo_converted and gambo_converted[-1][1] < stelo_end:
-            gambo_converted.append((gambo_converted[-1][0], stelo_end))
+            z_raccordo_fine = gambo_converted[-1][1]
+            r_gambo = (D_stelo / 2) if D_stelo > 0 else gambo_converted[-1][0]
+            # Punto di arrivo del raccordo al diametro del gambo
+            gambo_converted.append((r_gambo, z_raccordo_fine))
+            # Cilindro gambo fino a stelo_end
+            gambo_converted.append((r_gambo, stelo_end))
 
         # Disegna segmenti con clip a [stelo_start, stelo_end]
         for i in range(1, len(gambo_converted)):
