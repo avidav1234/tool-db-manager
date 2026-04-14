@@ -433,43 +433,17 @@ def genera_svg_profilo(u, segmenti=None):
         )
 
     # ══════════════════════════════════════════════════════════════════
-    # ZONA 4: HOLDER — priorità:
-    # 1) Campi geometrici diretti (d3, d_hsk, nl, z_cono, a_lungh) → TSF 3 seg
-    # 2) Polyline raw / profilo_punti_json (SLSA e altri)
-    # 3) Segmenti DB portautensile_segmento
+    # ZONA 4: HOLDER — fonte di verità universale
+    # 1) Polyline raw (holder_polyline_raw / profilo_punti_json) — valida
+    #    per TUTTI i tipi di holder: TSF, SLSA, Weldon, BigKaiser, ecc.
+    # 2) Segmenti DB (portautensile_segmento) — fallback
+    # 3) Nessun fallback ad-hoc per tipo
     # ══════════════════════════════════════════════════════════════════
     y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
-
-    d1_f     = float(u.get('d1_serraggio_mm') or 0)
-    d3_f     = float(u.get('d3_corpo_mm') or 0)
-    d_hsk_f  = float(u.get('d_hsk_mm') or 0)
-    nl_f     = float(u.get('nl_serraggio_mm') or 0)
-    z_cono_f = float(u.get('z_fine_cono_mm') or 0)
-    a_lungh_f = float(u.get('a_lungh_holder_mm') or 0)
-
     holder_segs = []
 
-    # Priorità 1: campi geometrici diretti (TSF con HSK-A63)
-    if d3_f > 0 and nl_f > 0 and z_cono_f > 0 and a_lungh_f > 0:
-        # Flangia HSK-A63 sempre Ø63mm (d_hsk_mm nel DB contiene il raccordo, non la flangia)
-        D_HSK_REALE = 63.0
-
-        # Seg 1: CONO slim — da d1 (naso, lato fresa) a d3 (corpo slim), lunghezza = nl
-        d_naso = d1_f if d1_f > 0 else d3_f
-        holder_segs.append((d_naso, d3_f, nl_f))
-
-        # Seg 2: raccordo d3 → flangia HSK, lunghezza = z_fine_cono - nl
-        l_raccordo = z_cono_f - nl_f
-        if l_raccordo > 0.01:
-            holder_segs.append((d3_f, D_HSK_REALE, l_raccordo))
-
-        # Seg 3: flangia HSK cilindrica Ø63, lunghezza = a_lungh - z_fine_cono
-        l_flangia = a_lungh_f - z_cono_f
-        if l_flangia > 0.01:
-            holder_segs.append((D_HSK_REALE, D_HSK_REALE, l_flangia))
-
-    # Priorità 2: polyline raw (holder non-TSF con geometria complessa)
-    elif holder_pts and len(holder_pts) >= 2:
+    # Priorità 1: polyline raw (già caricata in holder_pts all'inizio)
+    if holder_pts and len(holder_pts) >= 2:
         for i in range(1, len(holder_pts)):
             r_prev, z_prev = holder_pts[i-1]
             r_curr, z_curr = holder_pts[i]
@@ -477,7 +451,7 @@ def genera_svg_profilo(u, segmenti=None):
             if l_seg > 0.01:
                 holder_segs.append((r_prev * 2, r_curr * 2, l_seg))
 
-    # Priorità 3: segmenti DB
+    # Priorità 2: segmenti DB (fallback quando polyline assente)
     elif segmenti:
         for s in segmenti:
             d_i = float(s.get('diametro_inf_mm') or 0)
@@ -485,6 +459,7 @@ def genera_svg_profilo(u, segmenti=None):
             l = float(s.get('lunghezza_mm') or 0)
             if l > 0.01:
                 holder_segs.append((d_i, d_s, l))
+    # Priorità 3 eliminata: nessuna ricostruzione da campi derivati
 
     # Rendering unificato dei segmenti
     y_cursor = y_holder_base
