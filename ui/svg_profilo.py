@@ -159,20 +159,38 @@ def genera_svg_profilo(u, segmenti=None):
             punti_gambo = []
 
     if punti_gambo and stelo_end > stelo_start:
-        # Usa punti raw freeShaft: ogni punto (r, z) — z cumulativo dalla punta
-        y_cursor_s = stelo_start
-        prev_z = stelo_start
-        for i, (r, z) in enumerate(punti_gambo):
-            # z nel freeShaft parte dalla fine del tagliente
-            z_abs = stelo_start + z if z < stelo_end else z
-            l_seg = z_abs - y_cursor_s
+        # freeShaft: ogni punto (r, z) ha z cumulativo dalla FINE del tagliente (z=0)
+        # Punto 0 = diametro del primo scalino gambo alla z0 dalla fine tagliente
+        # Semantica: da tip_h a tip_h+z0 → cilindro D=r0*2; poi da z0 a z1 → cono/cilindro
+        r0, z0 = punti_gambo[0]
+        d0 = r0 * 2
+        # Segmento iniziale: dal fine tagliente al primo punto (cilindro largo)
+        if z0 > 0.01:
+            y_top0 = y_at(stelo_start + z0)
+            parts.append(f'<rect x="{x_left(d0)}" y="{y_top0}" '
+                         f'width="{d0*scale}" height="{z0*scale}" '
+                         f'fill="#cbd5e1" fill-opacity="0.5" stroke="#64748b" stroke-width="1"/>')
+        # Segmenti successivi
+        y_cursor_s = stelo_start + z0
+        for i in range(1, len(punti_gambo)):
+            r_prev, z_prev = punti_gambo[i-1]
+            r_curr, z_curr = punti_gambo[i]
+            l_seg = z_curr - z_prev
             if l_seg <= 0.01:
                 continue
-            d_gambo = r * 2
+            d_inf = r_prev * 2
+            d_sup = r_curr * 2
             y_top = y_at(y_cursor_s + l_seg)
-            parts.append(f'<rect x="{x_left(d_gambo)}" y="{y_top}" '
-                         f'width="{d_gambo*scale}" height="{l_seg*scale}" '
-                         f'fill="#cbd5e1" fill-opacity="0.5" stroke="#64748b" stroke-width="1"/>')
+            y_bot = y_at(y_cursor_s)
+            if abs(d_inf - d_sup) < 0.1:
+                parts.append(f'<rect x="{x_left(d_inf)}" y="{y_top}" '
+                             f'width="{d_inf*scale}" height="{l_seg*scale}" '
+                             f'fill="#cbd5e1" fill-opacity="0.5" stroke="#64748b" stroke-width="1"/>')
+            else:
+                parts.append(f'<polygon points="{x_left(d_inf)},{y_bot} '
+                             f'{x_right(d_inf)},{y_bot} '
+                             f'{x_right(d_sup)},{y_top} {x_left(d_sup)},{y_top}" '
+                             f'fill="#cbd5e1" fill-opacity="0.5" stroke="#64748b" stroke-width="1"/>')
             y_cursor_s += l_seg
             if y_cursor_s >= stelo_end:
                 break

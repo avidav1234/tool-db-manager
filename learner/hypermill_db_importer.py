@@ -186,33 +186,33 @@ def _decodifica_holder(polyline, holder_name=''):
     if z_tot and 30 < z_tot < 500: result['a_lungh_totale_mm'] = round(z_tot, 1)
     if d_ut > 0: result['d1_serraggio_mm'] = d_ut
 
-    punti = []
-    for (rv, zv) in [(s1r, s1z), (s2r, s2z), (s3r, s3z), (s4r, s4z)]:
-        if rv is not None and zv is not None and rv > 0 and zv > 0:
-            punti.append((round(rv * 2, 2), round(zv, 2)))
+    # Per holder non-TSF: usa TUTTI i punti della polyline (non solo i primi 4)
+    # Questo dà segmenti precisi per SLSA (9 punti), SLSB, T, ecc.
+    punti_raw = _leggi_profilo_polyline(polyline)
+    # Filtra punti con r=0 (fine gambo tecnico)
+    punti_raw = [(r, z) for r, z in punti_raw if r > 0.01]
 
-    if z_tot and z_tot > 0 and punti:
-        d_naso = punti[0][0]  # default cilindro
+    if z_tot and z_tot > 0 and punti_raw:
+        # Punto 0: cilindro da Z=0 a Z=z0 con diametro r0*2
+        r0, z0 = punti_raw[0]
         segmenti.append({
             'numero_segmento': 1,
-            'diametro_inf_mm': d_naso,
-            'diametro_sup_mm': punti[0][0],
-            'lunghezza_mm': punti[0][1],
+            'diametro_inf_mm': round(r0 * 2, 2),
+            'diametro_sup_mm': round(r0 * 2, 2),
+            'lunghezza_mm': round(z0, 2),
         })
-        for i in range(1, len(punti)):
+        # Punti successivi: ogni coppia consecutiva = un segmento
+        for i in range(1, len(punti_raw)):
+            r_prev, z_prev = punti_raw[i-1]
+            r_curr, z_curr = punti_raw[i]
+            l_seg = round(z_curr - z_prev, 2)
+            if l_seg <= 0.01:
+                continue
             segmenti.append({
-                'numero_segmento': i + 1,
-                'diametro_inf_mm': punti[i-1][0],
-                'diametro_sup_mm': punti[i][0],
-                'lunghezza_mm': round(punti[i][1] - punti[i-1][1], 2),
-            })
-        last_z = punti[-1][1]
-        if z_tot > last_z:
-            segmenti.append({
-                'numero_segmento': len(punti) + 1,
-                'diametro_inf_mm': punti[-1][0],
-                'diametro_sup_mm': punti[-1][0],
-                'lunghezza_mm': round(z_tot - last_z, 2),
+                'numero_segmento': len(segmenti) + 1,
+                'diametro_inf_mm': round(r_prev * 2, 2),
+                'diametro_sup_mm': round(r_curr * 2, 2),
+                'lunghezza_mm': l_seg,
             })
 
     return result, segmenti
