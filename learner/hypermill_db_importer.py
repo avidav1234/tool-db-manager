@@ -218,6 +218,78 @@ def _decodifica_holder(polyline, holder_name=''):
     return result, segmenti
 
 
+def _leggi_profilo_polyline(polyline):
+    """
+    Estrae lista di punti (r, z) da una polyline binaria Hypermill.
+    Struttura: ogni punto a offset 128, 232, 336, 440, ... (passo 104 byte)
+    Ritorna lista di tuple (r, z) ordinate per Z crescente.
+    """
+    if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
+        return []
+
+    points = []
+    # Primi 4 punti a offset noti
+    offsets = [(128, 136), (232, 240), (336, 344), (440, 448)]
+    for ro, zo in offsets:
+        if zo + 8 > len(polyline):
+            break
+        try:
+            r = round(struct.unpack('>d', polyline[ro:ro+8])[0], 4)
+            z = round(struct.unpack('>d', polyline[zo:zo+8])[0], 4)
+            if r > 0 and z >= 0:
+                points.append((r, z))
+        except Exception:
+            continue
+
+    # Per polyline lunghe (es. TIP con curva raccordo) cerca punti aggiuntivi
+    # con passo 104 byte oltre l'offset 440
+    off = 544
+    while off + 8 < len(polyline):
+        if off + 16 > len(polyline):
+            break
+        try:
+            r = round(struct.unpack('>d', polyline[off:off+8])[0], 4)
+            z = round(struct.unpack('>d', polyline[off+8:off+16])[0], 4)
+            if r > 0 and 0 < z < 1000 and r < 500:
+                points.append((r, z))
+        except Exception:
+            pass
+        off += 104
+
+    return points
+
+
+def _leggi_profilo_fresa(tool_row, hm_conn):
+    """
+    Estrae profili gambo (free_shaft) e punta (free_tip) da Geometries.
+    Ritorna dict con shaft_points, tip_points, shaft_length.
+    """
+    result = {'shaft_points': [], 'tip_points': [], 'shaft_length': None}
+
+    shaft_id = tool_row['free_shaft_geom_id'] if 'free_shaft_geom_id' in tool_row.keys() else None
+    tip_id = tool_row['free_tip_geom_id'] if 'free_tip_geom_id' in tool_row.keys() else None
+
+    if shaft_id:
+        row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (shaft_id,)).fetchone()
+        if row and row['polyline']:
+            result['shaft_points'] = _leggi_profilo_polyline(row['polyline'])
+            # Lunghezza totale a offset 552
+            try:
+                if len(row['polyline']) >= 560:
+                    z_tot = struct.unpack('>d', row['polyline'][552:560])[0]
+                    if 0 < z_tot < 1000:
+                        result['shaft_length'] = round(z_tot, 2)
+            except Exception:
+                pass
+
+    if tip_id:
+        row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (tip_id,)).fetchone()
+        if row and row['polyline']:
+            result['tip_points'] = _leggi_profilo_polyline(row['polyline'])
+
+    return result
+
+
 def _is_hypermill_db(db_path):
     try:
         con = sqlite3.connect(db_path)
@@ -583,6 +655,7 @@ def _importa_utensili(hm, master):
             COALESCE(c.reach, 0) as ext_reach, e.name as ext_name,
             t.id as tool_id, t.name as tool_name, t.comment as tool_comment,
             t.tool_type_id, t.total_length, t.ordering_code, t.cutting_material_id, t.spindle_direction,
+            t.free_shaft_geom_id, t.free_tip_geom_id,
             t.dbl_param1, t.dbl_param2, t.dbl_param3, t.dbl_param4, t.dbl_param5, t.dbl_param6, t.dbl_param7, t.dbl_param8,
             t.dbl_param9, t.dbl_param10, t.dbl_param11, t.dbl_param12, t.dbl_param13, t.dbl_param14, t.dbl_param15, t.dbl_param16, t.dbl_param17,
             t.int_param1, t.int_param2, t.int_param3, t.int_param4, t.int_param5, t.int_param6,
@@ -661,6 +734,22 @@ def _importa_utensili(hm, master):
             'hm_tool_type_id': str(row['tool_type_id']),
             **geo,
         }
+
+        # Estrai profili polyline (gambo + punta) e salva come JSON
+        try:
+            import json as _json
+            profili = _leggi_profilo_fresa(row, hm)
+            if profili['shaft_points']:
+                utensile['profilo_gambo_json'] = _json.dumps({
+                    'punti': profili['shaft_points'],
+                    'lunghezza': profili['shaft_length'],
+                })
+            if profili['tip_points']:
+                utensile['profilo_punta_json'] = _json.dumps({
+                    'punti': profili['tip_points'],
+                })
+        except Exception:
+            pass
         utensile = {k: v for k, v in utensile.items() if v is not None and v != ''}
         insert_data = {k: v for k, v in utensile.items() if k in master_cols}
         codice = insert_data.get('codice_interno')

@@ -228,6 +228,10 @@ CREATE TABLE IF NOT EXISTS utensile (
     clearance_length_mm     REAL,
     preset_diameter_mm      REAL,
 
+    -- ── Profili polyline reali (estratti da Hypermill Geometries) ─────────
+    profilo_gambo_json      TEXT,       -- JSON: lista punti (r, z) profilo gambo/stelo
+    profilo_punta_json      TEXT,       -- JSON: lista punti (r, z) profilo punta/raccordo
+
     -- ── Parametri di taglio DEFAULT ────────────────────────────────────────
     -- Valori generici dell'utensile (non legati al materiale pezzo).
     -- I valori per materiale specifico sono in condizioni_taglio.
