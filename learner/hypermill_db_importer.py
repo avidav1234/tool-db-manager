@@ -75,151 +75,85 @@ PURPOSE_MAP = {
 }
 
 
+# Decoder universale (unico per importer + renderer) — nessuna logica type-specific
+from polyline_decoder import decode_polyline, decode_with_origin as _leggi_profilo_polyline  # noqa
+
+
 def _decodifica_holder(polyline, holder_name=''):
     """
-    Decodifica polyline holder Hypermill (big-endian double, offset bytes).
-    Verificato sui 15 TSF reali del DB + disegno Bilz TSF1000-90/HSK-A63.
+    Decodifica universale holder da polyline Hypermill.
+    Usa decode_polyline() dal modulo condiviso — zero logica type-specific.
 
-    Struttura polyline:
-      s1r @ 128, s1z @ 136 = raggio/Z fine cono slim (= raccordo flangia)
-      s2r @ 232, s2z @ 240 = raggio/Z flangia HSK
-      s3r,s4r @ 336/440    = corpo HSK interno (NON disegnare)
-      z_tot @ 552          = lunghezza totale holder
+    Ritorna:
+      result: dict con campi derivati (d1, d3, d_hsk, nl, z_cono, a_lungh)
+              calcolati dal primo/ultimo punto del profilo esterno
+      segmenti: lista di segmenti per portautensile_segmento
+                (primo segmento = cono dal naso al primo punto, poi punti consecutivi)
 
-    Diametro naso (non in polyline): D_ut + 4mm — D_ut estratto dal nome
+    Il naso (r, z=0) non è in polyline: dedotto da D_ut + 4 (convenzione TSF Bilz)
+    o proporzionale al primo punto se D_ut non estraibile dal nome.
     """
     if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return {}, []
 
-    def get_be(pos):
-        if pos + 8 > len(polyline):
-            return None
-        try:
-            return round(struct.unpack('>d', polyline[pos:pos+8])[0], 4)
-        except Exception:
-            return None
+    # Usa il decoder universale (filtro monotonia + estensione z_tot)
+    punti = decode_polyline(polyline)
+    if not punti:
+        return {}, []
 
-    s1r, s1z = get_be(128), get_be(136)
-    s2r, s2z = get_be(232), get_be(240)
-    z_tot    = get_be(552)
-
-    result = {}
-    segmenti = []
-    name = holder_name.upper()
-
-    # Estrai D_ut dal nome (es. 'TSF D10 L090' → 10)
+    # D_ut dal nome per il naso (non presente nella polyline)
     m_dut = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
     d_ut = float(m_dut.group(1)) if m_dut else 0
 
-    # ── TSF/TFS: 3 segmenti puliti (cono + raccordo + flangia) ──
-    if any(x in name for x in ('TSF', 'TFS')) and s1r and s1z and s2r and s2z and z_tot:
-        # Diametro naso: D_ut + 4mm (verificato su D06,D08,D10,D12,D16)
-        if d_ut > 0:
-            d_naso = round(d_ut + 4, 2)
-        else:
-            # Fallback per trigonometria del cono (angolo standard ≈ 3.665°)
-            r_naso = max(s1r - s1z * math.tan(math.radians(3.665)), 1.0)
-            d_naso = round(r_naso * 2, 2)
+    r_slim, z_slim = punti[0]
+    r_flangia, z_flangia = punti[-1]
 
-        d_corpo = round(s1r * 2, 2)
-        d_flangia = round(s2r * 2, 2)
+    # Naso: da D_ut estratto dal nome, oppure proporzionale al primo punto
+    if d_ut > 0:
+        d_naso = round(d_ut + 4, 2)
+    else:
+        d_naso = round(r_slim * 2 * 0.4, 2)
 
-        # Seg 1: cono slim — naso → corpo
+    # Costruisci segmenti
+    segmenti = []
+    # Seg 1: cono dal naso al primo punto (solo se z_slim > 0, es. TSF)
+    if z_slim > 0.01:
         segmenti.append({
             'numero_segmento': 1,
             'diametro_inf_mm': d_naso,
-            'diametro_sup_mm': d_corpo,
-            'lunghezza_mm': round(s1z, 2),
+            'diametro_sup_mm': round(r_slim * 2, 2),
+            'lunghezza_mm': round(z_slim, 2),
         })
-
-        # Seg 2: raccordo — corpo → flangia HSK
-        l_raccordo = round(s2z - s1z, 2)
-        if l_raccordo > 0.1:
-            segmenti.append({
-                'numero_segmento': 2,
-                'diametro_inf_mm': d_corpo,
-                'diametro_sup_mm': d_flangia,
-                'lunghezza_mm': l_raccordo,
-            })
-
-        # Seg 3: cilindro flangia HSK — fino alla fine
-        l_flangia = round(z_tot - s2z, 2)
-        if l_flangia > 0.1:
-            segmenti.append({
-                'numero_segmento': len(segmenti) + 1,
-                'diametro_inf_mm': d_flangia,
-                'diametro_sup_mm': d_flangia,
-                'lunghezza_mm': l_flangia,
-            })
-
-        # Campi result holder
-        result['d1_serraggio_mm']    = d_ut
-        result['d3_corpo_mm']        = d_corpo
-        result['d_hsk_mm']           = d_flangia
-        result['nl_serraggio_mm']    = round(s1z, 2)
-        result['z_fine_cono_mm']     = round(s2z, 2)
-        result['a_lungh_holder_mm']  = round(z_tot, 2)
-        # Compat con vecchi nomi (usati altrove)
-        result['d3_diam_corpo_mm']    = d_corpo
-        result['nl_lungh_serraggio_mm'] = round(s1z, 2)
-        result['a_lungh_totale_mm']  = round(z_tot, 2)
-
-        return result, segmenti
-
-    # ── Altri tipi di holder (SLSA/SLSB, T, generic) ──
-    # Mantieni la logica multi-segmento generica con post-processing collasso HSK
-    if s1r and 5 < s1r < 50:
-        result['d3_diam_corpo_mm'] = round(s1r * 2, 1)
-
-    s3r, s3z = get_be(336), get_be(344)
-    s4r, s4z = get_be(440), get_be(448)
-
-    if 'SLSA' in name or 'SLSB' in name:
-        p760 = get_be(760)
-        if p760 and 30 < p760 < 400:
-            result['nl_lungh_serraggio_mm'] = round(p760 + 26, 1)
-    elif s1z and 5 < s1z < 400:
-        result['nl_lungh_serraggio_mm'] = round(s1z / 0.954, 1)
-
-    if s2z and 30 < s2z < 400: result['z_fine_cono_mm'] = round(s2z, 1)
-    if s2r and 25 < s2r < 50:  result['d_hsk_mm'] = round(s2r * 2, 1)
-    if z_tot and 30 < z_tot < 500: result['a_lungh_totale_mm'] = round(z_tot, 1)
-    if d_ut > 0: result['d1_serraggio_mm'] = d_ut
-
-    # Per holder non-TSF: usa TUTTI i punti della polyline (non solo i primi 4)
-    # Questo dà segmenti precisi per SLSA (9 punti), SLSB, T, ecc.
-    punti_raw = _leggi_profilo_polyline(polyline)
-    # Filtra punti con r=0 (fine gambo tecnico)
-    punti_raw = [(r, z) for r, z in punti_raw if r > 0.01]
-
-    if z_tot and z_tot > 0 and punti_raw:
-        # Punto 0: cilindro da Z=0 a Z=z0 con diametro r0*2
-        r0, z0 = punti_raw[0]
+    # Segmenti intermedi: tra ogni coppia di punti consecutivi
+    for i in range(1, len(punti)):
+        r_prev, z_prev = punti[i-1]
+        r_curr, z_curr = punti[i]
+        l_seg = round(z_curr - z_prev, 2)
+        if l_seg <= 0.01:
+            continue
         segmenti.append({
-            'numero_segmento': 1,
-            'diametro_inf_mm': round(r0 * 2, 2),
-            'diametro_sup_mm': round(r0 * 2, 2),
-            'lunghezza_mm': round(z0, 2),
+            'numero_segmento': len(segmenti) + 1,
+            'diametro_inf_mm': round(r_prev * 2, 2),
+            'diametro_sup_mm': round(r_curr * 2, 2),
+            'lunghezza_mm': l_seg,
         })
-        # Punti successivi: ogni coppia consecutiva = un segmento
-        for i in range(1, len(punti_raw)):
-            r_prev, z_prev = punti_raw[i-1]
-            r_curr, z_curr = punti_raw[i]
-            l_seg = round(z_curr - z_prev, 2)
-            if l_seg <= 0.01:
-                continue
-            segmenti.append({
-                'numero_segmento': len(segmenti) + 1,
-                'diametro_inf_mm': round(r_prev * 2, 2),
-                'diametro_sup_mm': round(r_curr * 2, 2),
-                'lunghezza_mm': l_seg,
-            })
 
+    # Campi derivati (primo/ultimo punto del profilo esterno)
+    # z_fine_cono = z del penultimo punto (inizio flangia cilindrica finale)
+    z_cono = round(punti[-2][1], 2) if len(punti) > 1 else round(z_slim, 2)
+    result = {
+        'd1_serraggio_mm':    d_ut,
+        'd3_corpo_mm':        round(r_slim * 2, 2),
+        'd_hsk_mm':           round(r_flangia * 2, 2),
+        'nl_serraggio_mm':    round(z_slim, 2),
+        'z_fine_cono_mm':     z_cono,
+        'a_lungh_holder_mm':  round(z_flangia, 2),
+        # Compat con vecchi nomi usati altrove nel codice
+        'd3_diam_corpo_mm':     round(r_slim * 2, 2),
+        'nl_lungh_serraggio_mm': round(z_slim, 2),
+        'a_lungh_totale_mm':    round(z_flangia, 2),
+    }
     return result, segmenti
-
-
-# Decoder universale (unico per importer + renderer)
-from polyline_decoder import decode_with_origin as _leggi_profilo_polyline  # noqa
 
 
 def _leggi_profilo_fresa(tool_row, hm_conn):
