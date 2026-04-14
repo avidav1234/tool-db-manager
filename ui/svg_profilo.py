@@ -156,11 +156,16 @@ def genera_svg_profilo(u, segmenti=None):
         d_s = max(float(s.get('diametro_inf_mm') or 0), float(s.get('diametro_sup_mm') or 0))
         if d_s > max_d_holder:
             max_d_holder = d_s
+    # Considera anche d_hsk_mm se disponibile
+    d_hsk_val = float(u.get('d_hsk_mm') or 0)
+    if d_hsk_val > max_d_holder:
+        max_d_holder = d_hsk_val
 
-    # Se holder molto più largo della fresa (es. fresa D2 + holder D63),
-    # limita a 3× D_fresa per non schiacciare la fresa nel disegno.
-    if max_d_holder > max_d_fresa * 3 and max_d_fresa > 0:
-        d_max = max_d_fresa * 3
+    # Cap: se l'holder è molto più largo della fresa (es. D10 + HSK63),
+    # limita la scala a 2.5× D_fresa. L'holder eccedente verrà clippato
+    # sui bordi del canvas — comportamento accettabile come in molti CAM.
+    if max_d_fresa > 0 and max_d_holder > max_d_fresa * 2.5:
+        d_max = max_d_fresa * 2.5
     else:
         d_max = max_d_holder
     if d_max <= 0:
