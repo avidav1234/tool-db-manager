@@ -449,20 +449,24 @@ def genera_svg_profilo(u, segmenti=None):
 
     holder_segs = []
 
-    # Priorità 1: campi geometrici diretti (TSF)
-    if d3_f > 0 and nl_f > 0 and z_cono_f > 0 and a_lungh_f > 0 and d_hsk_f > 0:
-        # Seg 1: cilindro slim D3 dalla FP per nl mm
-        holder_segs.append((d3_f, d3_f, nl_f))
-        # Seg 2: cono D3→D_hsk (slim verso flangia)
-        # d_inf = D3 (bordo inferiore, lato fresa), d_sup = D_hsk (bordo superiore)
-        l_cono = z_cono_f - nl_f
-        if l_cono > 0.01:
-            holder_segs.append((d3_f, d_hsk_f, l_cono))
-        # Seg 3: cilindro corpo HSK
-        l_hsk = a_lungh_f - z_cono_f
-        if l_hsk > 0.01:
-            d_hsk_corpo = d_hsk_f * 0.9
-            holder_segs.append((d_hsk_corpo, d_hsk_corpo, l_hsk))
+    # Priorità 1: campi geometrici diretti (TSF con HSK-A63)
+    if d3_f > 0 and nl_f > 0 and z_cono_f > 0 and a_lungh_f > 0:
+        # Flangia HSK-A63 sempre Ø63mm (d_hsk_mm nel DB contiene il raccordo, non la flangia)
+        D_HSK_REALE = 63.0
+
+        # Seg 1: CONO slim — da d1 (naso, lato fresa) a d3 (corpo slim), lunghezza = nl
+        d_naso = d1_f if d1_f > 0 else d3_f
+        holder_segs.append((d_naso, d3_f, nl_f))
+
+        # Seg 2: raccordo d3 → flangia HSK, lunghezza = z_fine_cono - nl
+        l_raccordo = z_cono_f - nl_f
+        if l_raccordo > 0.01:
+            holder_segs.append((d3_f, D_HSK_REALE, l_raccordo))
+
+        # Seg 3: flangia HSK cilindrica Ø63, lunghezza = a_lungh - z_fine_cono
+        l_flangia = a_lungh_f - z_cono_f
+        if l_flangia > 0.01:
+            holder_segs.append((D_HSK_REALE, D_HSK_REALE, l_flangia))
 
     # Priorità 2: polyline raw (holder non-TSF con geometria complessa)
     elif holder_pts and len(holder_pts) >= 2:
