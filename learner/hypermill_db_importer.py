@@ -119,11 +119,29 @@ def _decodifica_holder(polyline, holder_name=''):
         })
 
     # Segmenti intermedi dalla polyline
+    # Regola universale: se pendenza |Δr/Δz| > 1.0 (45°) il CAD ha uno SPIGOLO
+    # verticale, non un cono. In quel caso emettiamo un cilindro del diametro
+    # precedente, e lo spigolo è implicito tra segmenti adiacenti (l'estensione
+    # al punto successivo con diametro maggiore forma la linea orizzontale).
+    PENDENZA_SPIGOLO = 1.0  # mm/mm (45°)
     for i in range(1, len(profilo)):
         r_prev, z_prev = profilo[i-1]
         r_curr, z_curr = profilo[i]
         l = round(z_curr - z_prev, 2)
-        if l > 0.01:
+        if l <= 0.01:
+            continue
+        pendenza = abs(r_curr - r_prev) / l
+        if pendenza > PENDENZA_SPIGOLO:
+            # Spigolo CAD: cilindro del diametro precedente per tutta la lunghezza,
+            # la transizione a r_curr è uno spigolo verticale (lunghezza 0, implicito)
+            segmenti.append({
+                'numero_segmento': len(segmenti) + 1,
+                'diametro_inf_mm': round(r_prev * 2, 2),
+                'diametro_sup_mm': round(r_prev * 2, 2),
+                'lunghezza_mm': l,
+            })
+        else:
+            # Transizione graduale: cono/trapezio
             segmenti.append({
                 'numero_segmento': len(segmenti) + 1,
                 'diametro_inf_mm': round(r_prev * 2, 2),

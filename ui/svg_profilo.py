@@ -393,12 +393,22 @@ def genera_svg_profilo(u, segmenti=None):
         if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2:
             holder_segs.append((d1, round(r0 * 2, 2), round(z0, 2)))
 
-        # Segmenti successivi dalla polyline (punti consecutivi del profilo esterno)
+        # Segmenti successivi dalla polyline — regola universale pendenza:
+        # |Δr/Δz| > 1.0 (45°) indica spigolo CAD (cilindro + spigolo implicito),
+        # ≤ 1.0 indica cono graduale (trapezio).
+        PENDENZA_SPIGOLO = 1.0
         for i in range(1, len(holder_pts)):
             r_prev, z_prev = holder_pts[i-1]
             r_curr, z_curr = holder_pts[i]
             l_seg = z_curr - z_prev
-            if l_seg > 0.01:
+            if l_seg <= 0.01:
+                continue
+            pendenza = abs(r_curr - r_prev) / l_seg
+            if pendenza > PENDENZA_SPIGOLO:
+                # Spigolo: cilindro Ø r_prev, transizione verticale implicita al segmento successivo
+                holder_segs.append((round(r_prev*2, 2), round(r_prev*2, 2), round(l_seg, 2)))
+            else:
+                # Cono graduale
                 holder_segs.append((round(r_prev*2, 2), round(r_curr*2, 2), round(l_seg, 2)))
 
         # Estensione fino a z_tot (cilindro finale se la polyline lo indica)
