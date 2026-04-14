@@ -1,96 +1,145 @@
 """
 polyline_decoder.py — Decoder universale polyline Hypermill
 
-Unica fonte di verità per leggere le polyline binarie degli holder/frese
-Hypermill. Usato sia dall'importer che dal renderer SVG.
+Unica fonte di verità. Nessuna logica type-specific.
 
-Struttura polyline (verified sui CAD):
-  big-endian double, step 104 byte da offset 128
-  r = bytes[base:base+8]
-  z = bytes[base+8:base+16]
+Struttura polyline (verified su ground truth CAD — TSF D10 L090 + SLSA06 180):
 
-Ogni punto è una transizione geometrica (r=raggio in mm, z=posizione dalla punta).
-L'ultimo punto valido della polyline rappresenta la fine fisica dell'holder.
+  Byte layout: big-endian double (8 byte) ogni campo
+    offset 128 + k*104:  r_k (raggio mm del punto k)
+    offset 128 + k*104 + 8: z_k (posizione assiale mm del punto k)
+    offset 552: z_tot (lunghezza totale holder, AFFIDABILE solo quando
+                       l'ultimo punto valido è un cilindro; per holder con
+                       profilo monotono crescente fino alla fine può essere
+                       un valore intermedio)
 
-NOTA IMPORTANTE: l'offset 552 NON è sempre z_tot. Per SLSA contiene un valore
-intermedio. Usare SEMPRE z_last del punto finale valido come riferimento.
+Ogni punto (r_k, z_k) è una transizione geometrica nel profilo di rivoluzione.
 
-NESSUNA logica type-specific — la polyline è l'unica fonte.
+REGOLA UNIVERSALE (verificata su CAD):
+  Il profilo esterno segue r monotonamente NON DECRESCENTE dal naso alla flangia.
+  Punti successivi dove r DIMINUISCE rispetto al max precedente rappresentano
+  la geometria INTERNA (cavità HSK) e NON fanno parte del profilo esterno.
+
+  Esempio TSF D10 L090 (polyline ha 4 punti):
+    k=0  (12.5,  85.87)  r_max=12.5          → MANTIENI (slim end)
+    k=1  (31.5,  94.00)  r_max=31.5          → MANTIENI (flangia start)
+    k=2  (28.5, 101.12)  r=28.5 < 31.5       → SCARTA   (interno HSK)
+    k=3  (28.5, 103.87)  r=28.5 < 31.5       → SCARTA   (interno HSK)
+    Estensione z_tot (552→120): ultimo punto è cilindro max → (31.5, 120)
+
+  Esempio SLSA06 180 (polyline ha 9 punti):
+    k=0..8  r monotonamente crescente da 4.5 a 31.5  → MANTIENI TUTTI
+    Nessuna estensione necessaria
+
+NESSUNA logica if 'TSF' in name o simili. La regola è geometrica e universale.
 """
 import struct
 import math
 
 
-def decode_hypermill_polyline(polyline):
+def decode_polyline(raw_bytes):
     """
-    Ritorna lista di punti (r, z) che descrivono il profilo esterno dell'holder.
+    Decode universale polyline Hypermill.
 
-    I punti sono nell'ordine che la polyline fornisce: tipicamente dal naso
-    (o prima transizione dopo il naso) verso la flangia. Non aggiunge origine
-    né estensioni — ritorna esattamente i punti letti.
+    Ritorna lista di punti (r_mm, z_mm) del profilo ESTERNO dal primo punto
+    della polyline alla fine fisica dell'holder.
+
+    Filtra automaticamente i punti della geometria interna HSK (quelli dove
+    r diminuisce rispetto al massimo raggiunto).
+
+    Estende l'ultimo punto fino a z_tot (offset 552) se:
+      - offset 552 è maggiore dell'ultimo z del profilo esterno
+      - l'ultimo punto è un cilindro (r == r_max)
 
     Args:
-        polyline: bytes della polyline Hypermill (da Geometries.polyline)
+        raw_bytes: bytes della polyline (da Geometries.polyline)
 
     Returns:
-        list di tuple (r_mm, z_mm) ordinate per z crescente.
-        Lista vuota se polyline invalida.
+        list di (r, z) del profilo esterno. Vuota se polyline non valida.
     """
-    if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
+    if not raw_bytes or not isinstance(raw_bytes, (bytes, bytearray)) or len(raw_bytes) < 144:
         return []
 
-    pts = []
-    for base in range(128, len(polyline) - 15, 104):
+    # Step 1: leggi tutti i punti grezzi a offset 128 + k*104
+    raw_pts = []
+    for base in range(128, len(raw_bytes) - 15, 104):
         try:
-            r = struct.unpack('>d', polyline[base:base+8])[0]
-            z = struct.unpack('>d', polyline[base+8:base+16])[0]
+            r = struct.unpack('>d', raw_bytes[base:base+8])[0]
+            z = struct.unpack('>d', raw_bytes[base+8:base+16])[0]
             if (not math.isnan(r) and not math.isinf(r) and
                 not math.isnan(z) and not math.isinf(z) and
                 r >= 0.01 and z > 0 and r < 500 and z < 2000):
-                pts.append((round(r, 4), round(z, 4)))
+                raw_pts.append((round(r, 4), round(z, 4)))
         except Exception:
             continue
 
-    return pts
+    if not raw_pts:
+        return []
+
+    # Step 2: filtro monotonia — mantieni solo punti dove r >= r_max_precedente
+    # Questo esclude la geometria interna HSK (r decrescente) dal profilo esterno
+    exterior = []
+    r_max = 0.0
+    for r, z in raw_pts:
+        if r >= r_max - 1e-6:
+            exterior.append((r, z))
+            if r > r_max:
+                r_max = r
+        # Else: punto interno (cavità HSK) — scartato
+
+    if not exterior:
+        return []
+
+    # Step 3: estensione fino a z_tot (offset 552) se l'ultimo punto è cilindro
+    if len(raw_bytes) >= 560:
+        try:
+            z_tot = struct.unpack('>d', raw_bytes[552:560])[0]
+            if (not math.isnan(z_tot) and not math.isinf(z_tot) and
+                0 < z_tot < 2000):
+                r_last, z_last = exterior[-1]
+                # Estendi solo se z_tot > z_last (altrimenti offset 552 non è z_tot reale)
+                if z_tot > z_last + 0.1:
+                    exterior.append((r_last, round(z_tot, 4)))
+        except Exception:
+            pass
+
+    return exterior
 
 
-def decode_with_origin(polyline):
+def decode_with_origin(raw_bytes):
     """
-    Come decode_hypermill_polyline ma aggiunge un punto di origine a z=0:
+    Come decode_polyline ma aggiunge un punto di origine a z=0 per il rendering.
 
-      - Tipo A (z_pt0 < 2mm): origine esplicita (0.0, 0.0) — il naso è già
-        presente nella polyline (es. SLSA).
+    - Tipo A (z_pt0 < 2mm): il naso è già nella polyline (es. SLSA) →
+      aggiunge (0.0, 0.0) per chiudere il profilo in punta.
 
-      - Tipo B (z_pt0 >= 2mm): estende il cilindro da z=0 con (r_pt0, 0) —
-        il naso NON è nella polyline (es. TSF). Questo è una convenzione
-        di rendering, NON una ricostruzione geometrica: il naso reale di
-        un TSF può essere più piccolo (cono slim), ma quella informazione
-        non è nella polyline Hypermill.
+    - Tipo B (z_pt0 >= 2mm): il naso NON è nella polyline (es. TSF) →
+      aggiunge (r_pt0, 0.0) estendendo il primo cilindro. Questo NON
+      ricostruisce il cono slim reale; per quello serve il campo esterno
+      d1_serraggio_mm (non presente nella polyline Hypermill).
 
-    Per avere la geometria reale del naso (es. TSF con cono Ø10→Ø25),
-    serve consultare i campi derivati d1_serraggio_mm in separata sede.
+    Questa è una CONVENZIONE DI RENDERING, non una decodifica.
+    Il decode_polyline() puro non aggiunge origine.
 
     Args:
-        polyline: bytes della polyline
+        raw_bytes: bytes della polyline
 
     Returns:
-        list di tuple (r, z) con origine aggiunta, vuota se polyline invalida.
+        list di (r, z) con origine aggiunta, vuota se polyline invalida.
     """
-    pts = decode_hypermill_polyline(polyline)
+    pts = decode_polyline(raw_bytes)
     if not pts:
         return []
 
     r0, z0 = pts[0]
     if z0 < 2.0:
-        # Tipo A: naso già presente
         return [(0.0, 0.0)] + pts
     else:
-        # Tipo B: estendi cilindro da z=0
         return [(r0, 0.0)] + pts
 
 
 def get_z_max(points):
-    """Ritorna la z massima della lista di punti (lunghezza totale holder/gambo)."""
+    """Ritorna la z massima (fine fisica del profilo)."""
     if not points:
         return 0.0
     return max(z for _, z in points)
