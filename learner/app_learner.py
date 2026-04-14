@@ -454,6 +454,121 @@ tr:hover td{background:#263344}
 """
 
 
+WORKNC_JS_PREVIEW = """<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Anteprima Import WorkNC database.js</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}
+h1{color:#6366f1;margin-bottom:4px}
+.sub{color:#64748b;margin-bottom:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px;margin-bottom:20px}
+h2{color:#94a3b8;font-size:.95rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 16px}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{background:#0f172a;color:#64748b;padding:8px 10px;text-align:left;font-weight:600}
+td{padding:6px 10px;border-bottom:1px solid #334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+tr:hover td{background:#263344}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:600;background:#0d2d1a;color:#86efac}
+.tag-warn{background:#2d1a0d;color:#fb923c}
+.btn{display:inline-block;padding:12px 28px;border-radius:8px;font-weight:600;cursor:pointer;border:none;font-size:1rem;text-decoration:none}
+.btn-ok{background:#6366f1;color:#fff;margin-right:12px}
+.btn-cancel{background:#334155;color:#94a3b8}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.s-box{background:#0f172a;border:1px solid #334155;border-radius:8px;padding:16px;text-align:center}
+.s-n{font-size:2rem;font-weight:700;color:#6366f1}
+.s-l{font-size:.78rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+code{background:#0f172a;padding:2px 6px;border-radius:3px;color:#a5b4fc;font-size:.82rem}
+</style>
+</head>
+<body>
+<h1>Anteprima Import WorkNC <code>database.js</code></h1>
+<p class="sub">Verifica il mapping prima di scrivere nel DB master</p>
+
+<div class="card">
+<h2>Riepilogo</h2>
+<div class="stats">
+  <div class="s-box"><div class="s-n">{{ n_righe }}</div><div class="s-l">Righe CSV</div></div>
+  <div class="s-box"><div class="s-n">{{ n_utensili }}</div><div class="s-l">Utensili (header)</div></div>
+  <div class="s-box"><div class="s-n">{{ n_condizioni }}</div><div class="s-l">Condizioni taglio</div></div>
+  <div class="s-box"><div class="s-n">{{ n_attivi }}</div><div class="s-l">Attivi (Param validi=ok)</div></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Mapping database.js &rarr; DB Master</h2>
+<table>
+<thead><tr><th>Sorgente CSV</th><th>Tabella</th><th>Campo DB Master</th><th>Note</th></tr></thead>
+<tbody>
+{% for src, tbl, dst, note in mapping %}
+<tr>
+<td style="color:#94a3b8;font-family:monospace">{{ src }}</td>
+<td><span class="tag">{{ tbl }}</span></td>
+<td style="color:#818cf8;font-weight:600">{{ dst }}</td>
+<td style="color:#64748b;font-size:.78rem">{{ note }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Anteprima primi utensili (header)</h2>
+<table>
+<thead><tr><th>#</th><th>Numero</th><th>Alias</th><th>Tipo</th><th>D</th><th>R</th><th>Z</th><th>Fatt S</th><th>Fatt F</th><th>Attivo</th><th>Componenti</th></tr></thead>
+<tbody>
+{% for u in utensili_preview %}
+<tr>
+<td style="color:#475569">{{ loop.index }}</td>
+<td>{{ u.numero }}</td>
+<td style="color:#94a3b8">{{ u.alias }}</td>
+<td><span class="tag">{{ u.tipo }}</span></td>
+<td>{{ u.diametro }}</td>
+<td>{{ u.raggio }}</td>
+<td>{{ u.denti }}</td>
+<td>{{ u.fatt_s }}</td>
+<td>{{ u.fatt_f }}</td>
+<td><span class="tag {{ '' if u.attivo else 'tag-warn' }}">{{ 'ok' if u.attivo else 'off' }}</span></td>
+<td style="color:#94a3b8;font-size:.78rem">{{ u.componenti[:40] }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<div class="card">
+<h2>Anteprima condizioni di taglio</h2>
+<table>
+<thead><tr><th>#</th><th>Numero</th><th>Materiale</th><th>Scopo</th><th>Vc</th><th>fz</th><th>S</th><th>F</th><th>F rid</th><th>ae</th><th>ap</th></tr></thead>
+<tbody>
+{% for c in condizioni_preview %}
+<tr>
+<td style="color:#475569">{{ loop.index }}</td>
+<td>{{ c.numero }}</td>
+<td style="color:#94a3b8">{{ c.materiale }}</td>
+<td style="color:#94a3b8">{{ c.scopo }}</td>
+<td>{{ c.vc }}</td>
+<td>{{ c.fz }}</td>
+<td>{{ c.s }}</td>
+<td>{{ c.f }}</td>
+<td>{{ c.f_rid }}</td>
+<td>{{ c.ae }}</td>
+<td>{{ c.ap }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<form method="POST" action="/conferma_import_database_js">
+<input type="hidden" name="filepath" value="{{ filepath }}">
+<button type="submit" class="btn btn-ok">&#10003; Importa {{ n_utensili }} utensili + {{ n_condizioni }} condizioni nel DB Master</button>
+<a href="/" class="btn btn-cancel">Annulla</a>
+</form>
+</body></html>
+"""
+
+
 @app.route('/analizza', methods=['POST'])
 
 def analizza():
@@ -665,14 +780,81 @@ def analizza():
                             _imp_dir = os.path.join(os.path.dirname(__file__), '..', 'importers')
                             if _imp_dir not in _sys.path:
                                 _sys.path.insert(0, _imp_dir)
-                            from import_from_database_js import import_file as _imp_js
-                            _master_db = os.path.join(os.path.dirname(__file__), '..', 'database', 'tool_master.db')
-                            _stats = _imp_js(fp, _master_db)
-                            return redirect(url_for('home',
-                                msg=f'WorkNC database.js: {_stats.get("utensili",0)} utensili, {_stats.get("parametri",0)} set parametri importati.'))
+                            from import_from_database_js import parse_csv as _wn_parse, TIPO_MAP as _WN_TIPO
+                            _rows_wn = _wn_parse(_bt_content)
+                            # Raggruppa e stata
+                            _n_uten = sum(1 for r in _rows_wn if not (r.get('materiale') or '').strip())
+                            _n_cond = sum(1 for r in _rows_wn if (r.get('materiale') or '').strip())
+                            _n_attivi = sum(1 for r in _rows_wn
+                                if not (r.get('materiale') or '').strip()
+                                and (r.get('param_validi') or '').strip().lower() == 'ok')
+                            _preview_u = []
+                            for r in _rows_wn:
+                                if (r.get('materiale') or '').strip(): continue
+                                if len(_preview_u) >= 8: break
+                                _tipo_it = (r.get('tipo') or '').strip()
+                                _preview_u.append({
+                                    'numero': r.get('numero','').strip(),
+                                    'alias':  r.get('alias','').strip(),
+                                    'tipo':   _WN_TIPO.get(_tipo_it, _tipo_it or '?'),
+                                    'diametro': r.get('diametro','').strip(),
+                                    'raggio':   r.get('raggio','').strip(),
+                                    'denti':    r.get('denti','').strip(),
+                                    'fatt_s':   (r.get('fattore_s','') or '').strip() or '1.0',
+                                    'fatt_f':   (r.get('fattore_f','') or '').strip() or '1.0',
+                                    'attivo':   (r.get('param_validi','').strip().lower() == 'ok'),
+                                    'componenti': (r.get('componenti','') or '').strip(),
+                                })
+                            _preview_c = []
+                            for r in _rows_wn:
+                                if not (r.get('materiale') or '').strip(): continue
+                                if len(_preview_c) >= 10: break
+                                _preview_c.append({
+                                    'numero':    r.get('numero','').strip(),
+                                    'materiale': r.get('materiale','').strip(),
+                                    'scopo':     r.get('scopo','').strip(),
+                                    'vc':        r.get('vc','').strip(),
+                                    'fz':        r.get('fz','').strip(),
+                                    's':         r.get('s','').strip(),
+                                    'f':         r.get('f','').strip(),
+                                    'f_rid':     r.get('f_ridotta','').strip(),
+                                    'ae':        r.get('ae','').strip(),
+                                    'ap':        r.get('ap','').strip(),
+                                })
+                            _mapping = [
+                                ('Numero',             'utensile',          'codice_interno',   'identificativo'),
+                                ('Alias Utensile',     'utensile',          'alias',            'codice officina'),
+                                ('Nome Utensile',      'utensile',          'descrizione',      ''),
+                                ('Tipo',               'utensile',          'id_tipo',          'via TIPO_MAP (Torico→BULL…)'),
+                                ('Diametro',           'utensile',          'diametro_mm',      ''),
+                                ('Raggio',             'utensile',          'raggio_punta_mm',  ''),
+                                ('Denti(Z)',           'utensile',          'num_taglienti',    ''),
+                                ('Fattore S/F/ae/ap',  'utensile',          'fattore_s/f/ae/ap','default 1.0'),
+                                ('Param validi',       'utensile',          'attivo',           '1 se "ok", 0 altrimenti'),
+                                ('Componenti',         'utensile',          'nome_pinza + note',''),
+                                ('Materiale',          'condizioni_taglio', 'materiale_pezzo',  ''),
+                                ('scopo',              'condizioni_taglio', 'applicazione',     ''),
+                                ('Vel di taglio (Vc)', 'condizioni_taglio', 'vc_m_min',         ''),
+                                ('F/dente (fz)',       'condizioni_taglio', 'fz_mm_z',          ''),
+                                ('F/foratura(f)',      'condizioni_taglio', 'f_foratura_mm_giro',''),
+                                ('S',                  'condizioni_taglio', 'rotazione_rpm',    ''),
+                                ('F',                  'condizioni_taglio', 'avanzamento_mm_min',''),
+                                ('F Ridotta',          'condizioni_taglio', 'f_ridotta_mm_min', ''),
+                                ('ae / ap',            'condizioni_taglio', 'ae_mm / ap_mm',    ''),
+                            ]
+                            return render_template_string(WORKNC_JS_PREVIEW,
+                                filepath=fp,
+                                n_righe=len(_rows_wn),
+                                n_utensili=_n_uten,
+                                n_condizioni=_n_cond,
+                                n_attivi=_n_attivi,
+                                mapping=_mapping,
+                                utensili_preview=_preview_u,
+                                condizioni_preview=_preview_c)
                         except Exception as _e:
+                            import traceback as _tb; _tb.print_exc()
                             return redirect(url_for('home',
-                                msg=f'Errore import database.js: {str(_e)[:150]}'))
+                                msg=f'Errore anteprima database.js: {str(_e)[:150]}'))
 
                     _js_data = None
 
@@ -1090,6 +1272,30 @@ def conferma_import_hypermill():
         return redirect(url_for('home', msg=msg))
     except Exception as e:
         return redirect(url_for('home', msg=f'Errore: {str(e)[:100]}'))
+
+@app.route('/conferma_import_database_js', methods=['POST'])
+def conferma_import_database_js():
+    """Conferma import WorkNC database.js dopo anteprima."""
+    import os as _os, sys as _sys
+    _ld = _os.path.dirname(_os.path.abspath(__file__))
+    _imp_dir = _os.path.join(_ld, '..', 'importers')
+    if _imp_dir not in _sys.path: _sys.path.insert(0, _imp_dir)
+    filepath = request.form.get('filepath', '')
+    if not filepath or not _os.path.exists(filepath):
+        return redirect(url_for('home', msg='File non trovato'))
+    try:
+        from import_from_database_js import import_file as _imp_js
+        master_db = _os.path.join(_ld, '..', 'database', 'tool_master.db')
+        stats = _imp_js(filepath, master_db)
+        msg = (f'WorkNC database.js: {stats.get("utensili", 0)} utensili '
+               f'({stats.get("utensili_nuovi", 0)} nuovi, '
+               f'{stats.get("utensili_upd", 0)} aggiornati), '
+               f'{stats.get("parametri", 0)} condizioni_taglio importate.')
+        return redirect(url_for('home', msg=msg))
+    except Exception as e:
+        import traceback as _tb; _tb.print_exc()
+        return redirect(url_for('home', msg=f'Errore import database.js: {str(e)[:150]}'))
+
 
 if __name__ == '__main__':
     app.jinja_env.filters['basename'] = os.path.basename
