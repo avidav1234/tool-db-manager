@@ -6,61 +6,14 @@ Usa polyline raw Hypermill per profili accurati (holder + freeShaft).
 import struct
 import math
 import json as _json
+import os
+import sys
 
-
-def _leggi_profilo_polyline(polyline_bytes):
-    """
-    Decodifica universale polyline binaria Hypermill.
-    Valida per: holder (tutti i tipi), freeShaft frese. NON per freeTip.
-
-    Struttura: big-endian double, step 104 bytes da offset 128.
-      r = polyline_bytes[base:base+8]
-      z = polyline_bytes[base+8:base+16]
-    Lunghezza totale: offset 552 (z_tot).
-
-    Ritorna lista [(r, z), ...]:
-      - origine: (0,0) Tipo A se z_pt0<2mm, oppure (r_pt0, 0) Tipo B
-      - punti validi dal loop
-      - estensione finale: se z_last < z_tot e r_last > 0.01, aggiunge (r_last, z_tot)
-    """
-    if not polyline_bytes or len(polyline_bytes) < 144:
-        return []
-
-    pts = []
-    for base in range(128, len(polyline_bytes) - 15, 104):
-        try:
-            r = struct.unpack('>d', polyline_bytes[base:base+8])[0]
-            z = struct.unpack('>d', polyline_bytes[base+8:base+16])[0]
-            if (not math.isnan(r) and not math.isinf(r) and
-                not math.isnan(z) and not math.isinf(z) and
-                r >= 0.01 and z > 0 and r < 500 and z < 2000):
-                pts.append((round(r, 4), round(z, 4)))
-        except Exception:
-            pass
-
-    if not pts:
-        return []
-
-    # Leggi z_tot a offset 552 (lunghezza totale holder)
-    z_tot = None
-    if len(polyline_bytes) >= 560:
-        try:
-            zt = struct.unpack('>d', polyline_bytes[552:560])[0]
-            if not math.isnan(zt) and not math.isinf(zt) and 0 < zt < 2000:
-                z_tot = round(zt, 4)
-        except Exception:
-            pass
-
-    # Estensione finale: se z_last < z_tot, estendi il cilindro finale
-    r_last, z_last = pts[-1]
-    if z_tot and z_last < z_tot - 0.1:
-        pts.append((r_last, z_tot))
-
-    r0, z0 = pts[0]
-    if z0 < 2.0:
-        return [(0.0, 0.0)] + pts
-    else:
-        return [(r0, 0.0)] + pts
+# Importa decoder universale (unico per importer + renderer)
+_learner_path = os.path.join(os.path.dirname(__file__), '..', 'learner')
+if _learner_path not in sys.path:
+    sys.path.insert(0, _learner_path)
+from polyline_decoder import decode_with_origin as _leggi_profilo_polyline  # noqa
 
 
 def _parse_json_profilo(js_str):
