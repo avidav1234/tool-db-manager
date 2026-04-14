@@ -423,51 +423,56 @@ def genera_svg_profilo(u, segmenti=None):
         )
 
     # ══════════════════════════════════════════════════════════════════
-    # ZONA 4: HOLDER — priorità: polyline raw → campi geometrici → segmenti
+    # ZONA 4: HOLDER — priorità:
+    # 1) Campi geometrici diretti (d3, d_hsk, nl, z_cono, a_lungh) → TSF 3 seg
+    # 2) Polyline raw / profilo_punti_json (SLSA e altri)
+    # 3) Segmenti DB portautensile_segmento
     # ══════════════════════════════════════════════════════════════════
     y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
 
-    # Lista finale di (d_inf, d_sup, lunghezza) per il rendering
+    d1_f     = float(u.get('d1_serraggio_mm') or 0)
+    d3_f     = float(u.get('d3_corpo_mm') or 0)
+    d_hsk_f  = float(u.get('d_hsk_mm') or 0)
+    nl_f     = float(u.get('nl_serraggio_mm') or 0)
+    z_cono_f = float(u.get('z_fine_cono_mm') or 0)
+    a_lungh_f = float(u.get('a_lungh_holder_mm') or 0)
+
     holder_segs = []
 
-    if holder_pts and len(holder_pts) >= 2:
-        # Usa polyline raw (più preciso) — già convertito in (r, z) cumulativa
+    # Priorità 1: campi geometrici diretti (TSF)
+    if d3_f > 0 and nl_f > 0 and z_cono_f > 0 and a_lungh_f > 0 and d_hsk_f > 0:
+        # Seg 1: cilindro slim D3 dalla FP per nl mm
+        holder_segs.append((d3_f, d3_f, nl_f))
+        # Seg 2: cono D3→D_hsk (slim verso flangia)
+        # d_inf = D3 (bordo inferiore, lato fresa), d_sup = D_hsk (bordo superiore)
+        l_cono = z_cono_f - nl_f
+        if l_cono > 0.01:
+            holder_segs.append((d3_f, d_hsk_f, l_cono))
+        # Seg 3: cilindro corpo HSK
+        l_hsk = a_lungh_f - z_cono_f
+        if l_hsk > 0.01:
+            d_hsk_corpo = d_hsk_f * 0.9
+            holder_segs.append((d_hsk_corpo, d_hsk_corpo, l_hsk))
+
+    # Priorità 2: polyline raw (holder non-TSF con geometria complessa)
+    elif holder_pts and len(holder_pts) >= 2:
         for i in range(1, len(holder_pts)):
             r_prev, z_prev = holder_pts[i-1]
             r_curr, z_curr = holder_pts[i]
             l_seg = z_curr - z_prev
-            if l_seg <= 0.01:
-                continue
-            holder_segs.append((r_prev * 2, r_curr * 2, l_seg))
-    else:
-        # Fallback 1: campi geometrici diretti (d1, d3, d_hsk, nl, z_cono, a_lungh)
-        d3_f = float(u.get('d3_corpo_mm') or 0)
-        d_hsk_f = float(u.get('d_hsk_mm') or 0)
-        nl_f = float(u.get('nl_serraggio_mm') or 0)
-        z_cono_f = float(u.get('z_fine_cono_mm') or 0)
-        a_lungh_f = float(u.get('a_lungh_holder_mm') or 0)
+            if l_seg > 0.01:
+                holder_segs.append((r_prev * 2, r_curr * 2, l_seg))
 
-        if d3_f > 0 and nl_f > 0 and z_cono_f > 0 and a_lungh_f > 0 and d_hsk_f > 0:
-            # Seg 1: cilindro slim D3 fino a nl
-            holder_segs.append((d3_f, d3_f, nl_f))
-            # Seg 2: cono D3 → D_hsk (slim verso flangia)
-            l_cono_f = z_cono_f - nl_f
-            if l_cono_f > 0.01:
-                holder_segs.append((d3_f, d_hsk_f, l_cono_f))
-            # Seg 3: cilindro flangia HSK fino a a_lungh
-            l_hsk_f = a_lungh_f - z_cono_f
-            if l_hsk_f > 0.01:
-                holder_segs.append((d_hsk_f, d_hsk_f, l_hsk_f))
-        elif segmenti:
-            # Fallback 2: segmenti DB
-            for s in segmenti:
-                d_i = float(s.get('diametro_inf_mm') or 0)
-                d_s = float(s.get('diametro_sup_mm') or 0)
-                l = float(s.get('lunghezza_mm') or 0)
-                if l > 0.01:
-                    holder_segs.append((d_i, d_s, l))
+    # Priorità 3: segmenti DB
+    elif segmenti:
+        for s in segmenti:
+            d_i = float(s.get('diametro_inf_mm') or 0)
+            d_s = float(s.get('diametro_sup_mm') or 0)
+            l = float(s.get('lunghezza_mm') or 0)
+            if l > 0.01:
+                holder_segs.append((d_i, d_s, l))
 
-    # Rendering segmenti (comune a tutte le sorgenti)
+    # Rendering unificato dei segmenti
     y_cursor = y_holder_base
     for d_inf, d_sup, h_seg in holder_segs:
         if h_seg <= 0 or d_inf <= 0:
