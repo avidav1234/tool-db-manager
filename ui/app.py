@@ -1016,8 +1016,9 @@ def utensile_dettaglio(uid):
         # Segmenti portautensile se presente
         holder_segs = []
         holder_punti_raw = None
+        holder_polyline_raw = None
         if dict(u).get('portautensile'):
-            ph = conn.execute("SELECT id, profilo_punti_json FROM portautensile WHERE codice_interno=?",
+            ph = conn.execute("SELECT id, profilo_punti_json, profilo_polyline_raw FROM portautensile WHERE codice_interno=?",
                               (u['portautensile'],)).fetchone()
             if ph:
                 holder_segs = conn.execute(
@@ -1025,9 +1026,10 @@ def utensile_dettaglio(uid):
                     (ph['id'],)
                 ).fetchall()
                 holder_punti_raw = ph['profilo_punti_json']
-        # Profili fresa (gambo e punta) — dalla tabella utensile, non dalla view
+                holder_polyline_raw = ph['profilo_polyline_raw']
+        # Profili fresa (gambo e punta) + raw BLOB dalla tabella utensile
         prof_fresa = conn.execute(
-            "SELECT profilo_gambo_json, profilo_punta_json FROM utensile WHERE id=?",
+            "SELECT profilo_gambo_json, profilo_punta_json, shaft_polyline_raw FROM utensile WHERE id=?",
             (uid,)
         ).fetchone()
     finally:
@@ -1038,11 +1040,15 @@ def utensile_dettaglio(uid):
         u_dict = dict(u)
         if holder_punti_raw:
             u_dict['profilo_punti_json'] = holder_punti_raw
+        if holder_polyline_raw:
+            u_dict['holder_polyline_raw'] = holder_polyline_raw
         if prof_fresa:
             if prof_fresa['profilo_gambo_json']:
                 u_dict['profilo_gambo_json'] = prof_fresa['profilo_gambo_json']
             if prof_fresa['profilo_punta_json']:
                 u_dict['profilo_punta_json'] = prof_fresa['profilo_punta_json']
+            if prof_fresa['shaft_polyline_raw']:
+                u_dict['shaft_polyline_raw'] = prof_fresa['shaft_polyline_raw']
         svg = genera_svg_profilo(u_dict, [dict(s) for s in holder_segs])
     except Exception:
         svg = ''

@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS portautensile (
     cam_sorgente            TEXT,
     id_originale_cam        TEXT,
     profilo_punti_json      TEXT,  -- JSON: lista punti [[r,z],...] dalla polyline raw Hypermill
+    profilo_polyline_raw    BLOB,  -- polyline binaria originale per rendering SVG
     attivo           INTEGER NOT NULL DEFAULT 1,
     data_inserimento TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -232,6 +233,7 @@ CREATE TABLE IF NOT EXISTS utensile (
     -- ── Profili polyline reali (estratti da Hypermill Geometries) ─────────
     profilo_gambo_json      TEXT,       -- JSON: lista punti (r, z) profilo gambo/stelo
     profilo_punta_json      TEXT,       -- JSON: lista punti (r, z) profilo punta/raccordo
+    shaft_polyline_raw      BLOB,       -- polyline binaria freeShaft per rendering SVG
 
     -- ── Parametri di taglio DEFAULT ────────────────────────────────────────
     -- Valori generici dell'utensile (non legati al materiale pezzo).

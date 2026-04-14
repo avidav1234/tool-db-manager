@@ -246,9 +246,9 @@ def _leggi_profilo_polyline(polyline):
 def _leggi_profilo_fresa(tool_row, hm_conn):
     """
     Estrae profili gambo (free_shaft) e punta (free_tip) da Geometries.
-    Ritorna dict con shaft_points, tip_points, shaft_length.
+    Ritorna dict con shaft_points, tip_points, shaft_length, shaft_raw.
     """
-    result = {'shaft_points': [], 'tip_points': [], 'shaft_length': None}
+    result = {'shaft_points': [], 'tip_points': [], 'shaft_length': None, 'shaft_raw': None}
 
     shaft_id = tool_row['free_shaft_geom_id'] if 'free_shaft_geom_id' in tool_row.keys() else None
     tip_id = tool_row['free_tip_geom_id'] if 'free_tip_geom_id' in tool_row.keys() else None
@@ -256,8 +256,8 @@ def _leggi_profilo_fresa(tool_row, hm_conn):
     if shaft_id:
         row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (shaft_id,)).fetchone()
         if row and row['polyline']:
+            result['shaft_raw'] = row['polyline']
             result['shaft_points'] = _leggi_profilo_polyline(row['polyline'])
-            # Lunghezza totale a offset 552
             try:
                 if len(row['polyline']) >= 560:
                     z_tot = struct.unpack('>d', row['polyline'][552:560])[0]
@@ -568,22 +568,22 @@ def _importa_portautensili(hm, master):
             master.execute("""UPDATE portautensile SET descrizione=?, tipo_attacco=?, num_segmenti=?,
                 spindle_speed_factor=?, feedrate_factor=?, infeed_width_factor=?, infeed_length_factor=?,
                 max_spindle_speed=?, max_feedrate=?, coolant_through=?, cam_sorgente='Hypermill',
-                id_originale_cam=?, profilo_punti_json=?
+                id_originale_cam=?, profilo_punti_json=?, profilo_polyline_raw=?
                 WHERE codice_interno=?""",
                 (r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
                  r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
              r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id']),
-             profilo_json, holder_name))
+             profilo_json, r['polyline'], holder_name))
         else:
             master.execute("""INSERT INTO portautensile
                 (codice_interno, descrizione, tipo_attacco, num_segmenti, spindle_speed_factor, feedrate_factor,
                  infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through,
-                 cam_sorgente, id_originale_cam, profilo_punti_json)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?,?)""",
+                 cam_sorgente, id_originale_cam, profilo_punti_json, profilo_polyline_raw)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?,?,?)""",
                 (holder_name, r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
                  r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
                  r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id']),
-                 profilo_json))
+                 profilo_json, r['polyline']))
         row_id = master.execute("SELECT id FROM portautensile WHERE codice_interno = ?", (holder_name,)).fetchone()
         if row_id:
             porta_id = row_id[0]
@@ -725,7 +725,7 @@ def _importa_utensili(hm, master):
             **geo,
         }
 
-        # Estrai profili polyline (gambo + punta) e salva come JSON
+        # Estrai profili polyline (gambo + punta) e salva come JSON + raw BLOB
         try:
             import json as _json
             profili = _leggi_profilo_fresa(row, hm)
@@ -734,6 +734,8 @@ def _importa_utensili(hm, master):
                     'punti': profili['shaft_points'],
                     'lunghezza': profili['shaft_length'],
                 })
+            if profili['shaft_raw']:
+                utensile['shaft_polyline_raw'] = profili['shaft_raw']
             if profili['tip_points']:
                 utensile['profilo_punta_json'] = _json.dumps({
                     'punti': profili['tip_points'],
