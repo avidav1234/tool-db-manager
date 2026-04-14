@@ -423,36 +423,76 @@ def genera_svg_profilo(u, segmenti=None):
         )
 
     # ══════════════════════════════════════════════════════════════════
-    # ZONA 4: HOLDER
+    # ZONA 4: HOLDER — priorità: polyline raw → campi geometrici → segmenti
     # ══════════════════════════════════════════════════════════════════
+    y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
+
+    # Lista finale di (d_inf, d_sup, lunghezza) per il rendering
+    holder_segs = []
+
     if holder_pts and len(holder_pts) >= 2:
-        y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
+        # Usa polyline raw (più preciso) — già convertito in (r, z) cumulativa
         for i in range(1, len(holder_pts)):
             r_prev, z_prev = holder_pts[i-1]
             r_curr, z_curr = holder_pts[i]
             l_seg = z_curr - z_prev
             if l_seg <= 0.01:
                 continue
-            z_abs_bot = y_holder_base + z_prev
-            z_abs_top = y_holder_base + z_curr
-            d_inf = r_prev * 2
-            d_sup = r_curr * 2
-            y_seg_bot = y_at(z_abs_bot)
-            y_seg_top = y_at(z_abs_top)
-            seg_h = l_seg * scale
-            if seg_h < 0.5:
-                continue
-            if abs(d_inf - d_sup) < 0.01:
-                parts.append(
-                    f'<rect x="{x_left(d_inf)}" y="{y_seg_top}" width="{d_inf*scale}" height="{seg_h}" '
-                    f'fill="{HOLDER_FILL}" fill-opacity="0.25" stroke="{HOLDER_STROKE}" stroke-width="1.2"/>'
-                )
-            else:
-                parts.append(
-                    f'<polygon points="{x_left(d_inf)},{y_seg_bot} {x_right(d_inf)},{y_seg_bot} '
-                    f'{x_right(d_sup)},{y_seg_top} {x_left(d_sup)},{y_seg_top}" '
-                    f'fill="{HOLDER_FILL}" fill-opacity="0.25" stroke="{HOLDER_STROKE}" stroke-width="1.2"/>'
-                )
+            holder_segs.append((r_prev * 2, r_curr * 2, l_seg))
+    else:
+        # Fallback 1: campi geometrici diretti (d1, d3, d_hsk, nl, z_cono, a_lungh)
+        d3_f = float(u.get('d3_corpo_mm') or 0)
+        d_hsk_f = float(u.get('d_hsk_mm') or 0)
+        nl_f = float(u.get('nl_serraggio_mm') or 0)
+        z_cono_f = float(u.get('z_fine_cono_mm') or 0)
+        a_lungh_f = float(u.get('a_lungh_holder_mm') or 0)
+
+        if d3_f > 0 and nl_f > 0 and z_cono_f > 0 and a_lungh_f > 0 and d_hsk_f > 0:
+            # Seg 1: cilindro slim D3 fino a nl
+            holder_segs.append((d3_f, d3_f, nl_f))
+            # Seg 2: cono D3 → D_hsk (slim verso flangia)
+            l_cono_f = z_cono_f - nl_f
+            if l_cono_f > 0.01:
+                holder_segs.append((d3_f, d_hsk_f, l_cono_f))
+            # Seg 3: cilindro flangia HSK fino a a_lungh
+            l_hsk_f = a_lungh_f - z_cono_f
+            if l_hsk_f > 0.01:
+                holder_segs.append((d_hsk_f, d_hsk_f, l_hsk_f))
+        elif segmenti:
+            # Fallback 2: segmenti DB
+            for s in segmenti:
+                d_i = float(s.get('diametro_inf_mm') or 0)
+                d_s = float(s.get('diametro_sup_mm') or 0)
+                l = float(s.get('lunghezza_mm') or 0)
+                if l > 0.01:
+                    holder_segs.append((d_i, d_s, l))
+
+    # Rendering segmenti (comune a tutte le sorgenti)
+    y_cursor = y_holder_base
+    for d_inf, d_sup, h_seg in holder_segs:
+        if h_seg <= 0 or d_inf <= 0:
+            y_cursor += h_seg
+            continue
+        z_abs_bot = y_cursor
+        z_abs_top = y_cursor + h_seg
+        y_seg_bot = y_at(z_abs_bot)
+        y_seg_top = y_at(z_abs_top)
+        seg_h_px = h_seg * scale
+        if seg_h_px < 0.5:
+            y_cursor += h_seg
+            continue
+        if abs(d_inf - d_sup) < 0.1:
+            parts.append(
+                f'<rect x="{x_left(d_inf)}" y="{y_seg_top}" width="{d_inf*scale}" height="{seg_h_px}" '
+                f'fill="{HOLDER_FILL}" fill-opacity="0.25" stroke="{HOLDER_STROKE}" stroke-width="1.2"/>'
+            )
+        else:
+            parts.append(
+                f'<polygon points="{x_left(d_inf)},{y_seg_bot} {x_right(d_inf)},{y_seg_bot} '
+                f'{x_right(d_sup)},{y_seg_top} {x_left(d_sup)},{y_seg_top}" '
+                f'fill="{HOLDER_FILL}" fill-opacity="0.25" stroke="{HOLDER_STROKE}" stroke-width="1.2"/>'
+            )
+        y_cursor += h_seg
 
     # ══════════════════════════════════════════════════════════════════
     # ZONA 5: QUOTE E NOME
