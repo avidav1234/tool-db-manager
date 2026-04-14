@@ -156,10 +156,12 @@ def genera_svg_profilo(u, segmenti=None):
         d_s = max(float(s.get('diametro_inf_mm') or 0), float(s.get('diametro_sup_mm') or 0))
         if d_s > max_d_holder:
             max_d_holder = d_s
-    # Considera anche d_hsk_mm se disponibile
+    # Considera anche d_hsk_mm e d3_corpo_mm se disponibili
     d_hsk_val = float(u.get('d_hsk_mm') or 0)
-    if d_hsk_val > max_d_holder:
-        max_d_holder = d_hsk_val
+    d3_val    = float(u.get('d3_corpo_mm') or 0)
+    for val in (d_hsk_val, d3_val):
+        if val > max_d_holder:
+            max_d_holder = val
 
     # Cap: se l'holder è molto più largo della fresa (es. D10 + HSK63),
     # limita la scala a 2.5× D_fresa. L'holder eccedente verrà clippato
@@ -182,8 +184,11 @@ def genera_svg_profilo(u, segmenti=None):
     draw_w = W - margin_left - margin_right
 
     scale_x = draw_w / (d_max * 1.2) if d_max > 0 else 1
-    scale_y = (500 - margin_top - margin_bottom) / draw_total_h if draw_total_h > 0 else 1
-    scale = min(scale_x, scale_y)
+    # Cap altezza canvas a 800px: se scale_x richiederebbe più di così,
+    # usa scale_y; altrimenti usa scale_x (fresa al giusto diametro) e cresce H
+    max_H = 800
+    scale_y_max = (max_H - margin_top - margin_bottom) / draw_total_h if draw_total_h > 0 else 1
+    scale = min(scale_x, scale_y_max)
 
     H = max(int(draw_total_h * scale + margin_top + margin_bottom), 200)
     cx = margin_left + draw_w / 2
