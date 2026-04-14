@@ -135,10 +135,17 @@ def _decodifica_holder(polyline, holder_name=''):
             punti.append((round(r_val * 2, 2), round(z_val, 2)))
 
     if a_tot and a_tot > 0 and punti:
+        # Segmento 1 = cono slim (lato punta)
+        # d_naso (lato punta) = D1 + 6 per TSF/TFS (parete 3mm + 3mm), altrimenti = punti[0][0]
+        # Verificato su disegno tecnico Bilz TSF1000-90/HSK-A63 (DXF 1:1)
+        d_naso = punti[0][0]  # default: cilindro
+        d1 = result.get('d1_serraggio_mm')
+        if d1 and any(x in name for x in ('TSF', 'TFS')):
+            d_naso = round(d1 + 6, 2)  # formula TSF: D1 + 6mm
         segmenti.append({
             'numero_segmento': 1,
-            'diametro_inf_mm': punti[0][0],
-            'diametro_sup_mm': punti[0][0],
+            'diametro_inf_mm': d_naso,           # lato punta (es. Ø14 per D08)
+            'diametro_sup_mm': punti[0][0],      # lato flangia (es. Ø23)
             'lunghezza_mm': punti[0][1],
         })
         for i in range(1, len(punti)):
