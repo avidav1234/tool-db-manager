@@ -465,11 +465,12 @@ def home():
     n_worknc=0; n_parametri=0
     try:
         _c3=get_conn()
-        tbls={r[0] for r in _c3.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        if 'utensile_worknc' in tbls:
-            n_worknc=_c3.execute("SELECT COUNT(*) FROM utensile_worknc").fetchone()[0]
-        if 'parametri_taglio' in tbls:
-            n_parametri=_c3.execute("SELECT COUNT(*) FROM parametri_taglio").fetchone()[0]
+        n_worknc=_c3.execute(
+            "SELECT COUNT(*) FROM utensile WHERE cam_sorgente='WorkNC'"
+        ).fetchone()[0]
+        n_parametri=_c3.execute(
+            "SELECT COUNT(*) FROM condizioni_taglio WHERE cam_sorgente='WorkNC'"
+        ).fetchone()[0]
         _c3.close()
     except Exception: pass
     return render_template_string(HOME_HTML,

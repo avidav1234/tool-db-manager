@@ -235,6 +235,12 @@ CREATE TABLE IF NOT EXISTS utensile (
     profilo_punta_json      TEXT,       -- JSON: lista punti (r, z) profilo punta/raccordo
     shaft_polyline_raw      BLOB,       -- polyline binaria freeShaft per rendering SVG
 
+    -- ── Fattori di correzione (WorkNC: database.js) ───────────────────────
+    fattore_s               REAL DEFAULT 1.0,   -- moltiplicatore RPM
+    fattore_f               REAL DEFAULT 1.0,   -- moltiplicatore avanzamento
+    fattore_ae              REAL DEFAULT 1.0,   -- moltiplicatore passo radiale
+    fattore_ap              REAL DEFAULT 1.0,   -- moltiplicatore profondità passata
+
     -- ── Parametri di taglio DEFAULT ────────────────────────────────────────
     -- Valori generici dell'utensile (non legati al materiale pezzo).
     -- I valori per materiale specifico sono in condizioni_taglio.
@@ -295,6 +301,8 @@ CREATE TABLE IF NOT EXISTS condizioni_taglio (
     avanzamento_mm_min  REAL,           -- avanzamento tavola [mm/min]  (Cimatron: 8101)
     ap_mm               REAL,           -- passo in Z [mm]              (Cimatron: 8201)
     ae_mm               REAL,           -- passo laterale [mm]          (Cimatron: 8202)
+    f_ridotta_mm_min    REAL,           -- avanzamento ridotto [mm/min] (WorkNC: F Ridotta)
+    f_foratura_mm_giro  REAL,           -- avanzamento foratura [mm/giro] (WorkNC: F/foratura)
     rompitruciolo       REAL,           -- parametro rompitruciolo      (Cimatron: 8301)
     decrementa          REAL,           -- decremento                   (Cimatron: 8302)
     refrigerante        TEXT,           -- tipo refrigerante             (Cimatron: 8401)
@@ -365,6 +373,17 @@ INSERT OR IGNORE INTO tipo_utensile(codice, descrizione) VALUES
     ('BORING',  'Barra di alesatura / Boring Bar'),
     ('TURN',    'Inserto tornitura / Turning Insert'),
     ('UNKNOWN', 'Tipo non definito');
+
+-- ── ALTER TABLE per DB esistenti (WorkNC database.js) ────────────────────
+-- SQLite 3.35+: ADD COLUMN IF NOT EXISTS. Per versioni più vecchie,
+-- l'importer/avvio gestisce via try/except Python.
+-- Nuovo install: le colonne sono già nelle CREATE TABLE qui sotto.
+
+-- Colonne aggiuntive in condizioni_taglio:
+--   f_ridotta_mm_min    — avanzamento ridotto [mm/min] (F Ridotta)
+--   f_foratura_mm_giro  — avanzamento foratura [mm/giro] (F/foratura)
+-- Colonne fattori di correzione in utensile:
+--   fattore_s, fattore_f, fattore_ae, fattore_ap — moltiplicatori (default 1.0)
 
 INSERT OR IGNORE INTO materiale_utensile(codice, descrizione) VALUES
     ('HM',       'Metallo duro / Carbide'),
