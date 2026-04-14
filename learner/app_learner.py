@@ -638,15 +638,70 @@ def analizza():
                 except Exception as _e:
                     return redirect(url_for('home', msg=f'Errore Mastercam: {str(_e)[:100]}'))
             elif ext == '.js':
-                # File .js: estrai JSON dal wrapper JavaScript, poi Fusion360
+                # File .js: molteplici formati possibili — provo vari parser
                 import json as _json, re as _re
                 try:
                     with open(fp, 'r', encoding='utf-8', errors='replace') as _jf:
                         _js_content = _jf.read()
-                    _js_clean = _re.sub(r'^(?:var|let|const|export\s+default|module\.exports)\s*(?:\w+\s*)?=\s*',
-                                        '', _js_content.strip())
-                    _js_clean = _js_clean.rstrip(';').strip()
-                    _js_data = _json.loads(_js_clean)
+
+                    # Rimuovi commenti /* ... */ e // fino a fine riga
+                    _js_stripped = _re.sub(r'/\*[\s\S]*?\*/', '', _js_content)
+                    _js_stripped = _re.sub(r'^\s*//.*$', '', _js_stripped, flags=_re.MULTILINE)
+                    _js_stripped = _js_stripped.strip()
+
+                    _js_data = None
+
+                    # Tentativo 1: JSON puro
+                    try:
+                        _js_data = _json.loads(_js_stripped)
+                    except Exception:
+                        pass
+
+                    # Tentativo 2: estrai il primo array/oggetto JSON dal contenuto
+                    if _js_data is None:
+                        # Cerca primo { o [ e relativa chiusura bilanciata
+                        for open_ch, close_ch in [('[', ']'), ('{', '}')]:
+                            idx = _js_stripped.find(open_ch)
+                            if idx < 0:
+                                continue
+                            depth = 0
+                            end = -1
+                            in_str = False
+                            esc = False
+                            for i in range(idx, len(_js_stripped)):
+                                c = _js_stripped[i]
+                                if esc:
+                                    esc = False
+                                    continue
+                                if c == '\\':
+                                    esc = True
+                                    continue
+                                if c == '"':
+                                    in_str = not in_str
+                                    continue
+                                if in_str:
+                                    continue
+                                if c == open_ch:
+                                    depth += 1
+                                elif c == close_ch:
+                                    depth -= 1
+                                    if depth == 0:
+                                        end = i + 1
+                                        break
+                            if end > idx:
+                                candidate = _js_stripped[idx:end]
+                                try:
+                                    _js_data = _json.loads(candidate)
+                                    break
+                                except Exception:
+                                    pass
+
+                    if _js_data is None:
+                        # Mostra i primi 300 char per debug
+                        preview = _js_content[:300].replace('\n', ' \\n ')
+                        return redirect(url_for('home',
+                            msg=f'Parsing .js fallito. Preview: {preview}'))
+
                     _tmp_json = fp + '.json'
                     with open(_tmp_json, 'w', encoding='utf-8') as _tjf:
                         _json.dump(_js_data if isinstance(_js_data, dict) else {'data': _js_data}, _tjf)
@@ -655,7 +710,7 @@ def analizza():
                     os.remove(_tmp_json)
                     return redirect(url_for('home', msg=f'JS tool library: {res_imp.get("utensili", 0)} utensili rilevati'))
                 except Exception as _e:
-                    return redirect(url_for('home', msg=f'Errore parsing .js: {str(_e)[:100]}'))
+                    return redirect(url_for('home', msg=f'Errore parsing .js: {str(_e)[:150]}'))
 
             if ext == '.csv':
                 for sep in [',', ';', '\t', '|']:
