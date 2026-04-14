@@ -397,12 +397,28 @@ def genera_svg_profilo(u, segmenti=None):
 
     # Priorità 1: polyline raw (già caricata in holder_pts all'inizio)
     if holder_pts and len(holder_pts) >= 2:
-        for i in range(1, len(holder_pts)):
-            r_prev, z_prev = holder_pts[i-1]
-            r_curr, z_curr = holder_pts[i]
-            l_seg = z_curr - z_prev
-            if l_seg > 0.01:
-                holder_segs.append((r_prev * 2, r_curr * 2, l_seg))
+        # Rimuove origini artificiali aggiunte da decode_with_origin:
+        # - Tipo A: (0.0, 0.0) — filtrato da r > 0.01
+        # - Tipo B: (r0, 0.0) — filtrato da z > 0.01
+        pts_reali = [(r, z) for r, z in holder_pts if r > 0.01 and z > 0.01]
+
+        if pts_reali:
+            # Seg 0: cono slim da d1 (naso) al primo punto della polyline.
+            # Il naso non è nella polyline Hypermill: viene da d1_serraggio_mm.
+            # Universale: per TSF è il foro serraggio, per SLSA/Weldon il foro interno.
+            # Aggiunto solo se d1 > 0 e < primo punto (naso più stretto del corpo).
+            d1 = float(u.get('d1_serraggio_mm') or 0)
+            r0, z0 = pts_reali[0]
+            if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2:
+                holder_segs.append((d1, round(r0 * 2, 2), round(z0, 2)))
+
+            # Segmenti successivi dalla polyline (punti reali consecutivi)
+            for i in range(1, len(pts_reali)):
+                r_prev, z_prev = pts_reali[i-1]
+                r_curr, z_curr = pts_reali[i]
+                l_seg = z_curr - z_prev
+                if l_seg > 0.01:
+                    holder_segs.append((round(r_prev*2, 2), round(r_curr*2, 2), round(l_seg, 2)))
 
     # Priorità 2: segmenti DB (fallback quando polyline assente)
     elif segmenti:
