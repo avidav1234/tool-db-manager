@@ -1015,20 +1015,25 @@ def utensile_dettaglio(uid):
         ).fetchall()
         # Segmenti portautensile se presente
         holder_segs = []
+        holder_punti_raw = None
         if dict(u).get('portautensile'):
-            ph = conn.execute("SELECT id FROM portautensile WHERE codice_interno=?",
+            ph = conn.execute("SELECT id, profilo_punti_json FROM portautensile WHERE codice_interno=?",
                               (u['portautensile'],)).fetchone()
             if ph:
                 holder_segs = conn.execute(
                     "SELECT * FROM portautensile_segmento WHERE id_portautensile=? AND lunghezza_mm>0 ORDER BY numero_segmento",
                     (ph['id'],)
                 ).fetchall()
+                holder_punti_raw = ph['profilo_punti_json']
     finally:
         conn.close()
     # Genera profilo SVG
     try:
         from svg_profilo import genera_svg_profilo
-        svg = genera_svg_profilo(dict(u), [dict(s) for s in holder_segs])
+        u_dict = dict(u)
+        if holder_punti_raw:
+            u_dict['profilo_punti_json'] = holder_punti_raw
+        svg = genera_svg_profilo(u_dict, [dict(s) for s in holder_segs])
     except Exception:
         svg = ''
 

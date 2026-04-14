@@ -220,42 +220,26 @@ def _decodifica_holder(polyline, holder_name=''):
 
 def _leggi_profilo_polyline(polyline):
     """
-    Estrae lista di punti (r, z) da una polyline binaria Hypermill.
-    Struttura: ogni punto a offset 128, 232, 336, 440, ... (passo 104 byte)
-    Ritorna lista di tuple (r, z) ordinate per Z crescente.
+    Estrae TUTTI i punti (r, z) da una polyline binaria Hypermill.
+    Struttura: ogni punto occupa 104 byte, primo punto a offset 128.
+      r = double big-endian all'offset base
+      z = double big-endian all'offset base+8
+    Ritorna lista di tuple (r, z) valide (no NaN/Inf, r>=0, 0<z<2000).
     """
     if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return []
 
     points = []
-    # Primi 4 punti a offset noti
-    offsets = [(128, 136), (232, 240), (336, 344), (440, 448)]
-    for ro, zo in offsets:
-        if zo + 8 > len(polyline):
-            break
+    for base in range(128, len(polyline) - 15, 104):
         try:
-            r = round(struct.unpack('>d', polyline[ro:ro+8])[0], 4)
-            z = round(struct.unpack('>d', polyline[zo:zo+8])[0], 4)
-            if r > 0 and z >= 0:
-                points.append((r, z))
+            r = struct.unpack('>d', polyline[base:base+8])[0]
+            z = struct.unpack('>d', polyline[base+8:base+16])[0]
+            if (not math.isnan(r) and not math.isinf(r) and
+                not math.isnan(z) and not math.isinf(z) and
+                0.0 <= r < 500 and 0.0 < z < 2000):
+                points.append((round(r, 4), round(z, 4)))
         except Exception:
             continue
-
-    # Per polyline lunghe (es. TIP con curva raccordo) cerca punti aggiuntivi
-    # con passo 104 byte oltre l'offset 440
-    off = 544
-    while off + 8 < len(polyline):
-        if off + 16 > len(polyline):
-            break
-        try:
-            r = round(struct.unpack('>d', polyline[off:off+8])[0], 4)
-            z = round(struct.unpack('>d', polyline[off+8:off+16])[0], 4)
-            if r > 0 and 0 < z < 1000 and r < 500:
-                points.append((r, z))
-        except Exception:
-            pass
-        off += 104
-
     return points
 
 
@@ -570,30 +554,36 @@ def _importa_portautensili(hm, master):
         FROM Holders h LEFT JOIN HolderGeometries hg ON hg.holder_id = h.id
         LEFT JOIN Geometries g ON g.id = hg.geometry_id ORDER BY h.id
     """).fetchall()
+    import json as _json
     count_h = count_s = 0
     for r in rows:
         holder_name = r['name']
         tipo_attacco = _detect_tipo_attacco(holder_name, r['comment'])
         holder_geo, segmenti = _decodifica_holder(r['polyline'], holder_name)
+        punti_raw = _leggi_profilo_polyline(r['polyline']) if r['polyline'] else []
+        profilo_json = _json.dumps([[p[0], p[1]] for p in punti_raw]) if punti_raw else None
+
         existing_h = master.execute("SELECT id FROM portautensile WHERE codice_interno=?", (holder_name,)).fetchone()
         if existing_h:
             master.execute("""UPDATE portautensile SET descrizione=?, tipo_attacco=?, num_segmenti=?,
                 spindle_speed_factor=?, feedrate_factor=?, infeed_width_factor=?, infeed_length_factor=?,
-                max_spindle_speed=?, max_feedrate=?, coolant_through=?, cam_sorgente='Hypermill', id_originale_cam=?
+                max_spindle_speed=?, max_feedrate=?, coolant_through=?, cam_sorgente='Hypermill',
+                id_originale_cam=?, profilo_punti_json=?
                 WHERE codice_interno=?""",
                 (r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
                  r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
              r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id']),
-             holder_name))
+             profilo_json, holder_name))
         else:
             master.execute("""INSERT INTO portautensile
                 (codice_interno, descrizione, tipo_attacco, num_segmenti, spindle_speed_factor, feedrate_factor,
                  infeed_width_factor, infeed_length_factor, max_spindle_speed, max_feedrate, coolant_through,
-                 cam_sorgente, id_originale_cam)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?)""",
+                 cam_sorgente, id_originale_cam, profilo_punti_json)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,'Hypermill',?,?)""",
                 (holder_name, r['comment'] or r['ordering_code'], tipo_attacco, len(segmenti),
                  r['spindle_speed_factor'], r['feedrate_factor'], r['infeed_width_factor'], r['infeed_length_factor'],
-                 r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id'])))
+                 r['max_spindle_speed'] or None, r['max_feedrate'] or None, r['coolant_through'], str(r['id']),
+                 profilo_json))
         row_id = master.execute("SELECT id FROM portautensile WHERE codice_interno = ?", (holder_name,)).fetchone()
         if row_id:
             porta_id = row_id[0]

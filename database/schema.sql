@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS portautensile (
     coolant_through         INTEGER DEFAULT 0,
     cam_sorgente            TEXT,
     id_originale_cam        TEXT,
+    profilo_punti_json      TEXT,  -- JSON: lista punti [[r,z],...] dalla polyline raw Hypermill
     attivo           INTEGER NOT NULL DEFAULT 1,
     data_inserimento TEXT NOT NULL DEFAULT (datetime('now'))
 );

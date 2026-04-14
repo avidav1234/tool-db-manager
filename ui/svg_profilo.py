@@ -163,10 +163,56 @@ def genera_svg_profilo(u, segmenti=None):
                          f'fill="#cbd5e1" fill-opacity="0.4" stroke="#94a3b8" stroke-width="1"/>')
 
     # ══════════════════════════════════════════════════════════════
-    # ZONA 3: HOLDER (segmenti, grigio scuro)
+    # ZONA 3: HOLDER — profilo reale da polyline raw, fallback a segmenti
     # ══════════════════════════════════════════════════════════════
-    if segmenti:
-        y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
+    punti_raw = []
+    raw_json = u.get('profilo_punti_json')
+    if raw_json:
+        try:
+            import json as _json
+            punti_raw = _json.loads(raw_json)
+        except Exception:
+            punti_raw = []
+
+    y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
+
+    if punti_raw and len(punti_raw) >= 2:
+        # Usa punti raw: ogni punto (r, z) è cumulativo dalla punta
+        y_cursor = y_holder_base
+        prev_r = None
+        prev_z = 0.0
+        for i, (r, z) in enumerate(punti_raw):
+            if i == 0:
+                # Primo punto: cilindro da naso a primo z (diametro=r*2)
+                d = r * 2
+                l_seg = z
+                y_seg_top = y_at(y_cursor + l_seg)
+                parts.append(f'<rect x="{x_left(d)}" y="{y_seg_top}" '
+                             f'width="{d*scale}" height="{l_seg*scale}" '
+                             f'fill="#475569" fill-opacity="0.25" stroke="#1e293b" stroke-width="1"/>')
+                y_cursor += l_seg
+            else:
+                l_seg = z - prev_z
+                if l_seg <= 0.01:
+                    prev_r, prev_z = r, z
+                    continue
+                d_inf = prev_r * 2
+                d_sup = r * 2
+                y_seg_bot = y_at(y_cursor)
+                y_seg_top = y_at(y_cursor + l_seg)
+                if abs(d_inf - d_sup) < 0.05:
+                    parts.append(f'<rect x="{x_left(d_inf)}" y="{y_seg_top}" '
+                                 f'width="{d_inf*scale}" height="{l_seg*scale}" '
+                                 f'fill="#475569" fill-opacity="0.25" stroke="#1e293b" stroke-width="1"/>')
+                else:
+                    parts.append(f'<polygon points='
+                                 f'"{x_left(d_inf)},{y_seg_bot} {x_right(d_inf)},{y_seg_bot} '
+                                 f'{x_right(d_sup)},{y_seg_top} {x_left(d_sup)},{y_seg_top}" '
+                                 f'fill="#475569" fill-opacity="0.25" stroke="#1e293b" stroke-width="1"/>')
+                y_cursor += l_seg
+            prev_r, prev_z = r, z
+    elif segmenti:
+        # Fallback: usa segmenti collassati
         y_cursor = y_holder_base
         for s in segmenti:
             d_inf = float(s.get('diametro_inf_mm') or 0)
@@ -177,12 +223,10 @@ def genera_svg_profilo(u, segmenti=None):
             y_seg_bot = y_at(y_cursor)
             y_seg_top = y_at(y_cursor + h_seg)
             if abs(d_inf - d_sup) < 0.1:
-                # Cilindro
                 parts.append(f'<rect x="{x_left(d_inf)}" y="{y_seg_top}" '
                              f'width="{d_inf*scale}" height="{h_seg*scale}" '
                              f'fill="#475569" fill-opacity="0.25" stroke="#475569" stroke-width="1.2"/>')
             else:
-                # Trapezio (conico)
                 parts.append(f'<polygon points='
                              f'"{x_left(d_inf)},{y_seg_bot} {x_right(d_inf)},{y_seg_bot} '
                              f'{x_right(d_sup)},{y_seg_top} {x_left(d_sup)},{y_seg_top}" '
