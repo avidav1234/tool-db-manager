@@ -1025,6 +1025,11 @@ def utensile_dettaglio(uid):
                     (ph['id'],)
                 ).fetchall()
                 holder_punti_raw = ph['profilo_punti_json']
+        # Profili fresa (gambo e punta) — dalla tabella utensile, non dalla view
+        prof_fresa = conn.execute(
+            "SELECT profilo_gambo_json, profilo_punta_json FROM utensile WHERE id=?",
+            (uid,)
+        ).fetchone()
     finally:
         conn.close()
     # Genera profilo SVG
@@ -1033,6 +1038,11 @@ def utensile_dettaglio(uid):
         u_dict = dict(u)
         if holder_punti_raw:
             u_dict['profilo_punti_json'] = holder_punti_raw
+        if prof_fresa:
+            if prof_fresa['profilo_gambo_json']:
+                u_dict['profilo_gambo_json'] = prof_fresa['profilo_gambo_json']
+            if prof_fresa['profilo_punta_json']:
+                u_dict['profilo_punta_json'] = prof_fresa['profilo_punta_json']
         svg = genera_svg_profilo(u_dict, [dict(s) for s in holder_segs])
     except Exception:
         svg = ''

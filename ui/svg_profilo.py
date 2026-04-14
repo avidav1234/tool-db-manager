@@ -140,11 +140,43 @@ def genera_svg_profilo(u, segmenti=None):
                      f'fill="{tip_color}" fill-opacity="0.15" stroke="{tip_color}" stroke-width="1.5"/>')
 
     # ══════════════════════════════════════════════════════════════
-    # ZONA 2: STELO (grigio chiaro)
+    # ZONA 2: STELO — profilo reale da polyline freeShaft, fallback a D_stelo
     # ══════════════════════════════════════════════════════════════
     stelo_start = tip_h
     stelo_end = fuori_pinza if fuori_pinza > 0 else L_tot
-    if stelo_end > stelo_start and D_stelo > 0:
+
+    punti_gambo = []
+    gambo_json = u.get('profilo_gambo_json')
+    if gambo_json:
+        try:
+            import json as _json
+            gambo_data = _json.loads(gambo_json)
+            # formato può essere {"punti":[[r,z],...]} o [[r,z],...]
+            if isinstance(gambo_data, dict):
+                gambo_data = gambo_data.get('punti', [])
+            punti_gambo = [(r, z) for r, z in gambo_data if r > 0.01]
+        except Exception:
+            punti_gambo = []
+
+    if punti_gambo and stelo_end > stelo_start:
+        # Usa punti raw freeShaft: ogni punto (r, z) — z cumulativo dalla punta
+        y_cursor_s = stelo_start
+        prev_z = stelo_start
+        for i, (r, z) in enumerate(punti_gambo):
+            # z nel freeShaft parte dalla fine del tagliente
+            z_abs = stelo_start + z if z < stelo_end else z
+            l_seg = z_abs - y_cursor_s
+            if l_seg <= 0.01:
+                continue
+            d_gambo = r * 2
+            y_top = y_at(y_cursor_s + l_seg)
+            parts.append(f'<rect x="{x_left(d_gambo)}" y="{y_top}" '
+                         f'width="{d_gambo*scale}" height="{l_seg*scale}" '
+                         f'fill="#cbd5e1" fill-opacity="0.5" stroke="#64748b" stroke-width="1"/>')
+            y_cursor_s += l_seg
+            if y_cursor_s >= stelo_end:
+                break
+    elif stelo_end > stelo_start and D_stelo > 0:
         y_s_top = y_at(stelo_end)
         y_s_bot = y_at(stelo_start)
         # Transizione conica da D a D_stelo
