@@ -473,8 +473,10 @@ def _importa_portautensili(hm, master):
         holder_name = r['name']
         tipo_attacco = _detect_tipo_attacco(holder_name, r['comment'])
         holder_geo, segmenti = _decodifica_holder(r['polyline'], holder_name)
-        punti_raw = _leggi_profilo_polyline(r['polyline']) if r['polyline'] else []
-        profilo_json = _json.dumps([[p[0], p[1]] for p in punti_raw]) if punti_raw else None
+        # Salva SOLO i punti reali del profilo esterno (senza origine artificiale)
+        # decode_polyline filtra i punti interni HSK via monotonia su r
+        punti_raw = decode_polyline(r['polyline']) if r['polyline'] else []
+        profilo_json = _json.dumps([[round(p[0], 4), round(p[1], 4)] for p in punti_raw]) if punti_raw else None
 
         existing_h = master.execute("SELECT id FROM portautensile WHERE codice_interno=?", (holder_name,)).fetchone()
         if existing_h:
