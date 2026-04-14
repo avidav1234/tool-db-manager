@@ -13,25 +13,19 @@ import sys
 _learner_path = os.path.join(os.path.dirname(__file__), '..', 'learner')
 if _learner_path not in sys.path:
     sys.path.insert(0, _learner_path)
-from polyline_decoder import decode_with_origin as _leggi_profilo_polyline  # noqa
+from polyline_decoder import decode_polyline as _decode_polyline_raw  # noqa
 
 
 def _parse_json_profilo(js_str):
-    """Parsa profilo_*_json e applica stessa logica di origine."""
+    """Parsa profilo_*_json. I punti JSON sono già solo quelli del profilo
+    esterno (salvati da decode_polyline) — nessuna origine da aggiungere."""
     if not js_str:
         return []
     try:
         raw = _json.loads(js_str)
         if isinstance(raw, dict):
             raw = raw.get('punti', [])
-        pts = [(float(r), float(z)) for r, z in raw if float(r) >= 0.01]
-        if not pts:
-            return []
-        r0, z0 = pts[0]
-        if z0 < 2.0:
-            return [(0.0, 0.0)] + pts
-        else:
-            return [(r0, 0.0)] + pts
+        return [(float(r), float(z)) for r, z in raw if float(r) >= 0.01]
     except Exception:
         return []
 
@@ -68,8 +62,9 @@ def genera_svg_profilo(u, segmenti=None):
     shaft_poly  = u.get('shaft_polyline_raw')
 
     holder_pts = []
+    holder_z_tot = 0.0
     if holder_poly:
-        holder_pts = _leggi_profilo_polyline(holder_poly)
+        holder_pts, holder_z_tot = _decode_polyline_raw(holder_poly)
     if not holder_pts:
         holder_pts = _parse_json_profilo(u.get('profilo_punti_json'))
     if not holder_pts and segmenti:
@@ -89,7 +84,7 @@ def genera_svg_profilo(u, segmenti=None):
 
     shaft_pts = []
     if shaft_poly:
-        shaft_pts = _leggi_profilo_polyline(shaft_poly)
+        shaft_pts, _ = _decode_polyline_raw(shaft_poly)
     if not shaft_pts:
         shaft_pts = _parse_json_profilo(u.get('profilo_gambo_json'))
 
@@ -395,33 +390,32 @@ def genera_svg_profilo(u, segmenti=None):
     y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
     holder_segs = []
 
-    # Priorità 1: polyline raw (già caricata in holder_pts all'inizio)
+    # Priorità 1: punti reali dalla polyline (nessuna origine artificiale aggiunta)
     if holder_pts and len(holder_pts) >= 2:
-        # Rimuove origini artificiali aggiunte da decode_with_origin:
-        # - Tipo A: (0.0, 0.0) — filtrato da r > 0.01
-        # - Tipo B: (r0, 0.0) — filtrato da z > 0.01
-        pts_reali = [(r, z) for r, z in holder_pts if r > 0.01 and z > 0.01]
+        # Seg 0: cono slim da d1 (naso) al primo punto della polyline.
+        # Il naso non è nella polyline Hypermill: viene da d1_serraggio_mm.
+        # Aggiunto SOLO se d1 è presente (dato verificato, non inventato) e
+        # geometricamente coerente (naso più stretto del primo punto).
+        d1 = float(u.get('d1_serraggio_mm') or 0)
+        r0, z0 = holder_pts[0]
+        if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2:
+            holder_segs.append((d1, round(r0 * 2, 2), round(z0, 2)))
 
-        if pts_reali:
-            # Seg 0: cono slim da d1 (naso) al primo punto della polyline.
-            # Il naso non è nella polyline Hypermill: viene da d1_serraggio_mm.
-            # Universale: per TSF è il foro serraggio, per SLSA/Weldon il foro interno.
-            # Aggiunto solo se d1 > 0 e < primo punto (naso più stretto del corpo).
-            d1 = float(u.get('d1_serraggio_mm') or 0)
-            r0, z0 = pts_reali[0]
-            if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2:
-                holder_segs.append((d1, round(r0 * 2, 2), round(z0, 2)))
+        # Segmenti successivi dalla polyline (punti consecutivi del profilo esterno)
+        for i in range(1, len(holder_pts)):
+            r_prev, z_prev = holder_pts[i-1]
+            r_curr, z_curr = holder_pts[i]
+            l_seg = z_curr - z_prev
+            if l_seg > 0.01:
+                holder_segs.append((round(r_prev*2, 2), round(r_curr*2, 2), round(l_seg, 2)))
 
-            # Segmenti successivi dalla polyline (punti reali consecutivi)
-            for i in range(1, len(pts_reali)):
-                r_prev, z_prev = pts_reali[i-1]
-                r_curr, z_curr = pts_reali[i]
-                l_seg = z_curr - z_prev
-                if l_seg > 0.01:
-                    holder_segs.append((round(r_prev*2, 2), round(r_curr*2, 2), round(l_seg, 2)))
+        # Estensione fino a z_tot (cilindro finale se la polyline lo indica)
+        if holder_z_tot > 0 and holder_pts:
+            r_last, z_last = holder_pts[-1]
+            if holder_z_tot > z_last + 0.01:
+                holder_segs.append((round(r_last*2, 2), round(r_last*2, 2), round(holder_z_tot - z_last, 2)))
 
-        # Se la polyline non ha prodotto segmenti validi (pts_reali vuota
-        # o tutti scartati), fallback ai segmenti DB
+        # Fallback ai segmenti DB se la polyline non ha prodotto segmenti
         if not holder_segs and segmenti:
             for s in segmenti:
                 d_i = float(s.get('diametro_inf_mm') or 0)

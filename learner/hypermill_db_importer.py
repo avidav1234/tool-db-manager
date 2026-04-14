@@ -76,7 +76,7 @@ PURPOSE_MAP = {
 
 
 # Decoder universale (unico per importer + renderer) — nessuna logica type-specific
-from polyline_decoder import decode_polyline, decode_with_origin as _leggi_profilo_polyline  # noqa
+from polyline_decoder import decode_polyline  # noqa
 
 
 def _decodifica_holder(polyline, holder_name=''):
@@ -85,49 +85,33 @@ def _decodifica_holder(polyline, holder_name=''):
     Usa decode_polyline() dal modulo condiviso — zero logica type-specific.
 
     Ritorna:
-      result: dict con campi derivati (d1, d3, d_hsk, nl, z_cono, a_lungh)
-              calcolati dal primo/ultimo punto del profilo esterno
+      result: dict con campi derivati dal profilo esterno della polyline
+              (d3, d_hsk, nl, z_cono, a_lungh)
+              d1_serraggio_mm = D_ut dal nome SOLO se estratto con certezza;
+              il naso reale non è nella polyline e non viene inventato.
       segmenti: lista di segmenti per portautensile_segmento
-                (primo segmento = cono dal naso al primo punto, poi punti consecutivi)
-
-    Il naso (r, z=0) non è in polyline: dedotto da D_ut + 4 (convenzione TSF Bilz)
-    o proporzionale al primo punto se D_ut non estraibile dal nome.
+                (solo dai punti della polyline, nessun segmento naso inventato)
     """
     if not polyline or not isinstance(polyline, (bytes, bytearray)) or len(polyline) < 144:
         return {}, []
 
-    # Usa il decoder universale (filtro monotonia + estensione z_tot)
-    punti = decode_polyline(polyline)
-    if not punti:
+    # Decoder universale: profilo esterno + z_tot dal terminatore r=0
+    profilo, z_tot = decode_polyline(polyline)
+    if not profilo:
         return {}, []
 
-    # D_ut dal nome per il naso (non presente nella polyline)
+    # D_ut dal nome — salvato come d1_serraggio_mm solo se estraibile
     m_dut = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
     d_ut = float(m_dut.group(1)) if m_dut else 0
 
-    r_slim, z_slim = punti[0]
-    r_flangia, z_flangia = punti[-1]
+    r_slim, z_slim = profilo[0]
+    r_flangia, z_flangia = profilo[-1]
 
-    # Naso: da D_ut estratto dal nome, oppure proporzionale al primo punto
-    if d_ut > 0:
-        d_naso = round(d_ut + 4, 2)
-    else:
-        d_naso = round(r_slim * 2 * 0.4, 2)
-
-    # Costruisci segmenti
+    # Costruisci segmenti SOLO dai punti della polyline (nessun segmento naso inventato)
     segmenti = []
-    # Seg 1: cono dal naso al primo punto (solo se z_slim > 0, es. TSF)
-    if z_slim > 0.01:
-        segmenti.append({
-            'numero_segmento': 1,
-            'diametro_inf_mm': d_naso,
-            'diametro_sup_mm': round(r_slim * 2, 2),
-            'lunghezza_mm': round(z_slim, 2),
-        })
-    # Segmenti intermedi: tra ogni coppia di punti consecutivi
-    for i in range(1, len(punti)):
-        r_prev, z_prev = punti[i-1]
-        r_curr, z_curr = punti[i]
+    for i in range(1, len(profilo)):
+        r_prev, z_prev = profilo[i-1]
+        r_curr, z_curr = profilo[i]
         l_seg = round(z_curr - z_prev, 2)
         if l_seg <= 0.01:
             continue
@@ -137,21 +121,31 @@ def _decodifica_holder(polyline, holder_name=''):
             'diametro_sup_mm': round(r_curr * 2, 2),
             'lunghezza_mm': l_seg,
         })
+    # Se z_tot > z_flangia (cilindro finale esteso fino al terminatore), aggiungi segmento
+    if z_tot > z_flangia + 0.01:
+        segmenti.append({
+            'numero_segmento': len(segmenti) + 1,
+            'diametro_inf_mm': round(r_flangia * 2, 2),
+            'diametro_sup_mm': round(r_flangia * 2, 2),
+            'lunghezza_mm': round(z_tot - z_flangia, 2),
+        })
 
-    # Campi derivati (primo/ultimo punto del profilo esterno)
-    # z_fine_cono = z del penultimo punto (inizio flangia cilindrica finale)
-    z_cono = round(punti[-2][1], 2) if len(punti) > 1 else round(z_slim, 2)
+    # Campi derivati dalla polyline:
+    # z_fine_cono = z del penultimo punto se esiste, altrimenti z_slim
+    z_cono = round(profilo[-2][1], 2) if len(profilo) > 1 else round(z_slim, 2)
+    a_lungh = z_tot if z_tot > 0 else z_flangia
+
     result = {
-        'd1_serraggio_mm':    d_ut,
+        'd1_serraggio_mm':    d_ut if d_ut > 0 else None,  # solo se certo dal nome
         'd3_corpo_mm':        round(r_slim * 2, 2),
         'd_hsk_mm':           round(r_flangia * 2, 2),
         'nl_serraggio_mm':    round(z_slim, 2),
         'z_fine_cono_mm':     z_cono,
-        'a_lungh_holder_mm':  round(z_flangia, 2),
-        # Compat con vecchi nomi usati altrove nel codice
+        'a_lungh_holder_mm':  round(a_lungh, 2),
+        # Compat con vecchi nomi
         'd3_diam_corpo_mm':     round(r_slim * 2, 2),
         'nl_lungh_serraggio_mm': round(z_slim, 2),
-        'a_lungh_totale_mm':    round(z_flangia, 2),
+        'a_lungh_totale_mm':    round(a_lungh, 2),
     }
     return result, segmenti
 
@@ -170,19 +164,16 @@ def _leggi_profilo_fresa(tool_row, hm_conn):
         row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (shaft_id,)).fetchone()
         if row and row['polyline']:
             result['shaft_raw'] = row['polyline']
-            result['shaft_points'] = _leggi_profilo_polyline(row['polyline'])
-            try:
-                if len(row['polyline']) >= 560:
-                    z_tot = struct.unpack('>d', row['polyline'][552:560])[0]
-                    if 0 < z_tot < 1000:
-                        result['shaft_length'] = round(z_tot, 2)
-            except Exception:
-                pass
+            profilo, z_tot_shaft = decode_polyline(row['polyline'])
+            result['shaft_points'] = profilo
+            if z_tot_shaft > 0:
+                result['shaft_length'] = round(z_tot_shaft, 2)
 
     if tip_id:
         row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (tip_id,)).fetchone()
         if row and row['polyline']:
-            result['tip_points'] = _leggi_profilo_polyline(row['polyline'])
+            profilo_tip, _ = decode_polyline(row['polyline'])
+            result['tip_points'] = profilo_tip
 
     return result
 
@@ -473,10 +464,12 @@ def _importa_portautensili(hm, master):
         holder_name = r['name']
         tipo_attacco = _detect_tipo_attacco(holder_name, r['comment'])
         holder_geo, segmenti = _decodifica_holder(r['polyline'], holder_name)
-        # Salva SOLO i punti reali del profilo esterno (senza origine artificiale)
-        # decode_polyline filtra i punti interni HSK via monotonia su r
-        punti_raw = decode_polyline(r['polyline']) if r['polyline'] else []
-        profilo_json = _json.dumps([[round(p[0], 4), round(p[1], 4)] for p in punti_raw]) if punti_raw else None
+        # Profilo esterno + z_tot dal terminatore r=0
+        if r['polyline']:
+            profilo, _z_tot = decode_polyline(r['polyline'])
+        else:
+            profilo = []
+        profilo_json = _json.dumps([[round(p[0], 4), round(p[1], 4)] for p in profilo]) if profilo else None
 
         existing_h = master.execute("SELECT id FROM portautensile WHERE codice_interno=?", (holder_name,)).fetchone()
         if existing_h:
