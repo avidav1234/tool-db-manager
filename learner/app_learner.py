@@ -614,6 +614,49 @@ def analizza():
             import pandas as pd
             ext = os.path.splitext(fp)[1].lower()
             df_tmp = None
+
+            # Formati CAM-specifici: delega agli importer dedicati
+            if ext in ('.tools', '.json'):
+                try:
+                    from fusion360_importer import importa_fusion360
+                    res_imp = importa_fusion360(fp, DB_PATH, dry_run=True)
+                    return redirect(url_for('home', msg=f'Fusion360: {res_imp.get("utensili", 0)} utensili rilevati (dry-run). Usa il caricatore principale per l\'import.'))
+                except Exception as _e:
+                    return redirect(url_for('home', msg=f'Errore Fusion360: {str(_e)[:100]}'))
+            elif ext == '.wkz':
+                try:
+                    from worknc_importer import importa_worknc
+                    res_imp = importa_worknc(fp, DB_PATH, dry_run=True)
+                    return redirect(url_for('home', msg=f'WorkNC: {res_imp.get("utensili", 0)} utensili rilevati'))
+                except Exception as _e:
+                    return redirect(url_for('home', msg=f'Errore WorkNC: {str(_e)[:100]}'))
+            elif ext == '.tooldb':
+                try:
+                    from mastercam_importer import importa_mastercam_tooldb
+                    res_imp = importa_mastercam_tooldb(fp, DB_PATH, dry_run=True)
+                    return redirect(url_for('home', msg=f'Mastercam: {res_imp.get("utensili", 0)} utensili rilevati'))
+                except Exception as _e:
+                    return redirect(url_for('home', msg=f'Errore Mastercam: {str(_e)[:100]}'))
+            elif ext == '.js':
+                # File .js: estrai JSON dal wrapper JavaScript, poi Fusion360
+                import json as _json, re as _re
+                try:
+                    with open(fp, 'r', encoding='utf-8', errors='replace') as _jf:
+                        _js_content = _jf.read()
+                    _js_clean = _re.sub(r'^(?:var|let|const|export\s+default|module\.exports)\s*(?:\w+\s*)?=\s*',
+                                        '', _js_content.strip())
+                    _js_clean = _js_clean.rstrip(';').strip()
+                    _js_data = _json.loads(_js_clean)
+                    _tmp_json = fp + '.json'
+                    with open(_tmp_json, 'w', encoding='utf-8') as _tjf:
+                        _json.dump(_js_data if isinstance(_js_data, dict) else {'data': _js_data}, _tjf)
+                    from fusion360_importer import importa_fusion360
+                    res_imp = importa_fusion360(_tmp_json, DB_PATH, dry_run=True)
+                    os.remove(_tmp_json)
+                    return redirect(url_for('home', msg=f'JS tool library: {res_imp.get("utensili", 0)} utensili rilevati'))
+                except Exception as _e:
+                    return redirect(url_for('home', msg=f'Errore parsing .js: {str(_e)[:100]}'))
+
             if ext == '.csv':
                 for sep in [',', ';', '\t', '|']:
                     try:
