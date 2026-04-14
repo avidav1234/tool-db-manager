@@ -106,17 +106,15 @@ def _decodifica_holder(polyline, holder_name=''):
     m = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
     d_foro = float(m.group(1)) if m else 0.0
 
-    # Diametro esterno del naso al z=0: convenzione Bilz TSF è
-    # "parete slim = raggio foro" → d_naso_esterno = 2 × d_foro
-    # (verificato su TSF D06: d_foro=6 → naso Ø12, confermato dal CAD)
-    # Il naso non è nella polyline: viene ricostruito da questa convenzione
-    # solo se z_pt0 > 2mm (Tipo B: naso mancante, es. TSF).
-    # Per holder Tipo A (SLSA: naso già in polyline) non serve ricostruzione.
+    # Diametro esterno del naso al z=0: convenzione Bilz TSF
+    # parete slim costante 3mm per lato → d_naso = d_foro + 6
+    # Verificato CAD su D06→12, D08→14, D10→16, D12→18, D16→22.
+    # Il naso non è nella polyline: ricostruito solo per Tipo B (z_pt0 > 2mm).
     segmenti = []
     r0, z0 = profilo[0]
     d_naso_esterno = 0.0
     if d_foro > 0.1 and z0 > 2.0:
-        d_naso_esterno = round(2 * d_foro, 2)
+        d_naso_esterno = round(d_foro + 6.0, 2)
 
     # Seg 0: cono dal naso esterno al primo punto (solo se d_naso < d_pt0)
     if d_naso_esterno > 0 and d_naso_esterno < r0 * 2 - 0.5:

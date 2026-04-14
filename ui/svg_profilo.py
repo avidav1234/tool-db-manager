@@ -386,14 +386,14 @@ def genera_svg_profilo(u, segmenti=None):
     if holder_pts and len(holder_pts) >= 2:
         # Seg 0: cono slim dal NASO ESTERNO al primo punto della polyline.
         # d1_serraggio_mm = diametro FORO (accoglie utensile).
-        # Il naso esterno del cono slim è più largo (parete spessa attorno al foro).
-        # Convenzione Bilz TSF: naso_esterno_Ø = 2 × d_foro
-        # (verificato CAD TSF D06: foro Ø6 → naso esterno Ø12)
+        # Convenzione Bilz TSF: parete slim costante 3mm per lato
+        #   → d_naso_esterno = d_foro + 6
+        # Verificato CAD: D06→12, D08→14, D10→16, D12→18, D16→22
         # Applicato solo se z_pt0 > 2mm (Tipo B, naso non nella polyline).
         d_foro = float(u.get('d1_serraggio_mm') or 0)
         r0, z0 = holder_pts[0]
         if d_foro > 0.1 and z0 > 2.0:
-            d_naso = 2 * d_foro  # naso esterno, non foro
+            d_naso = d_foro + 6.0
             if d_naso < r0 * 2 - 0.5:
                 holder_segs.append((round(d_naso, 2), round(r0 * 2, 2), round(z0, 2)))
 
