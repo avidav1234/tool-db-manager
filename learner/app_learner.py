@@ -666,7 +666,8 @@ def analizza():
                             if _imp_dir not in _sys.path:
                                 _sys.path.insert(0, _imp_dir)
                             from import_from_database_js import import_file as _imp_js
-                            _stats = _imp_js(fp, DB_PATH)
+                            _master_db = os.path.join(os.path.dirname(__file__), '..', 'database', 'tool_master.db')
+                            _stats = _imp_js(fp, _master_db)
                             return redirect(url_for('home',
                                 msg=f'WorkNC database.js: {_stats.get("utensili",0)} utensili, {_stats.get("parametri",0)} set parametri importati.'))
                         except Exception as _e:
