@@ -297,78 +297,66 @@ def genera_svg_profilo(u, segmenti=None):
 
     # ══════════════════════════════════════════════════════════════════
     # ZONA 2: GAMBO FRESA
-    # Nota: la z nella freeShaft è dal FONDO gambo, conversione necessaria
+    # Costruisce i segmenti del gambo da dati scalari verificati.
+    # Struttura reale: [tagliente] → [clearance Ø D] → [raccordo] → [gambo Ø D_stelo]
     # ══════════════════════════════════════════════════════════════════
     stelo_start = tip_h
-    stelo_end = fuori_pinza if fuori_pinza > 0 else L_tot
+    stelo_end   = fuori_pinza if fuori_pinza > 0 else L_tot
+    d_stelo     = D_stelo if D_stelo > 0 else D
+    clearance   = float(u.get('clearance_length_mm') or 0)
 
-    d_stelo_eff = D_stelo if D_stelo > 0 else (
-        shaft_pts[1][0] * 2 if len(shaft_pts) > 1 else D
-    )
+    gambo_segs = []  # lista di (d_inf, d_sup, z_bot, z_top)
+    neck = d_stelo > D + 0.5  # gambo più largo del tagliente → c'è un neck
 
-    # Estrai solo i punti reali del gambo (salta origine artificiale)
-    gambo_pts_reali = [(r, z) for r, z in shaft_pts if z > 0.01]
+    if stelo_end > stelo_start:
+        if not neck:
+            # Caso 1: gambo cilindrico uniforme
+            if d_stelo > 0:
+                gambo_segs.append((d_stelo, d_stelo, stelo_start, stelo_end))
+        else:
+            # Caso 2/3: neck tool — zona ridotta Ø D + raccordo + gambo Ø D_stelo
+            z_clearance_top = stelo_start + clearance if clearance > 0 else stelo_end
+            z_clearance_top = min(z_clearance_top, stelo_end)
 
-    if gambo_pts_reali and stelo_end > stelo_start:
-        # Converti z: z_from_tip = total_length - z_dal_fondo
-        gambo_converted = sorted(
-            [(r, total_length - z) for r, z in gambo_pts_reali],
-            key=lambda p: p[1]
-        )
-        # Estendi ai bordi della zona stelo
-        if gambo_converted and gambo_converted[0][1] > stelo_start:
-            gambo_converted.insert(0, (gambo_converted[0][0], stelo_start))
-        # Se l'ultimo punto non arriva a stelo_end, aggiungi il cilindro del GAMBO.
-        # Il diametro del gambo (cilindro che entra nella pinza) è D_stelo, non r[-1]
-        # della polyline (che è il raccordo conico, più largo del gambo vero).
-        if gambo_converted and gambo_converted[-1][1] < stelo_end:
-            z_raccordo_fine = gambo_converted[-1][1]
-            r_gambo = (D_stelo / 2) if D_stelo > 0 else gambo_converted[-1][0]
-            # Punto di arrivo del raccordo al diametro del gambo
-            gambo_converted.append((r_gambo, z_raccordo_fine))
-            # Cilindro gambo fino a stelo_end
-            gambo_converted.append((r_gambo, stelo_end))
+            if clearance > 0 and z_clearance_top > stelo_start:
+                # Cilindro ridotto Ø D (neck)
+                gambo_segs.append((D, D, stelo_start, z_clearance_top))
 
-        # Disegna segmenti con clip a [stelo_start, stelo_end]
-        for i in range(1, len(gambo_converted)):
-            r_prev, z_prev = gambo_converted[i-1]
-            r_curr, z_curr = gambo_converted[i]
-            z_a = max(z_prev, stelo_start)
-            z_b = min(z_curr, stelo_end)
-            if z_b <= z_a:
-                continue
-            if abs(z_curr - z_prev) > 0.001:
-                t_a = (z_a - z_prev) / (z_curr - z_prev)
-                t_b = (z_b - z_prev) / (z_curr - z_prev)
-            else:
-                t_a, t_b = 0.0, 1.0
-            ra = r_prev + t_a * (r_curr - r_prev)
-            rb = r_prev + t_b * (r_curr - r_prev)
-            d_inf = ra * 2
-            d_sup = rb * 2
-            l_seg = z_b - z_a
-            y_bot = y_at(z_a)
-            y_top_seg = y_at(z_b)
-            if abs(d_inf - d_sup) < 0.1:
-                parts.append(
-                    f'<rect x="{x_left(d_inf)}" y="{y_top_seg}" '
-                    f'width="{d_inf*scale}" height="{l_seg*scale}" '
-                    f'fill="{STELO_FILL}" fill-opacity="0.5" stroke="{STELO_STROKE}" stroke-width="1"/>'
-                )
-            else:
-                parts.append(
-                    f'<polygon points="{x_left(d_inf)},{y_bot} {x_right(d_inf)},{y_bot} '
-                    f'{x_right(d_sup)},{y_top_seg} {x_left(d_sup)},{y_top_seg}" '
-                    f'fill="{STELO_FILL}" fill-opacity="0.5" stroke="{STELO_STROKE}" stroke-width="1"/>'
-                )
-    else:
-        # Fallback: cilindro semplice con D_stelo
-        stelo_h_px = (stelo_end - stelo_start) * scale
-        if stelo_h_px > 0 and d_stelo_eff > 0:
+            if z_clearance_top < stelo_end:
+                # Raccordo conico D → d_stelo (lungo 3mm o 5% del gambo)
+                l_raccordo = max(3.0, (stelo_end - z_clearance_top) * 0.05)
+                l_raccordo = min(l_raccordo, stelo_end - z_clearance_top)
+                z_raccordo_top = z_clearance_top + l_raccordo
+
+                gambo_segs.append((D, d_stelo, z_clearance_top, z_raccordo_top))
+
+                # Cilindro gambo fino alla pinza
+                if z_raccordo_top < stelo_end:
+                    gambo_segs.append((d_stelo, d_stelo, z_raccordo_top, stelo_end))
+
+    # Rendering segmenti gambo
+    for d_inf, d_sup, z_bot, z_top in gambo_segs:
+        if z_top <= z_bot or d_inf <= 0:
+            continue
+        y_bot_px = y_at(z_bot)
+        y_top_px = y_at(z_top)
+        h_px = (z_top - z_bot) * scale
+        if h_px < 0.3:
+            continue
+        if abs(d_inf - d_sup) < 0.1:
             parts.append(
-                f'<rect x="{x_left(d_stelo_eff)}" y="{y_at(stelo_end)}" '
-                f'width="{d_stelo_eff*scale}" height="{stelo_h_px}" '
-                f'fill="{STELO_FILL}" fill-opacity="0.4" stroke="{STELO_STROKE}" stroke-width="1"/>'
+                f'<rect x="{x_left(d_inf)}" y="{y_top_px}" '
+                f'width="{d_inf*scale}" height="{h_px}" '
+                f'fill="{STELO_FILL}" fill-opacity="0.5" '
+                f'stroke="{STELO_STROKE}" stroke-width="1"/>'
+            )
+        else:
+            parts.append(
+                f'<polygon points="'
+                f'{x_left(d_inf)},{y_bot_px} {x_right(d_inf)},{y_bot_px} '
+                f'{x_right(d_sup)},{y_top_px} {x_left(d_sup)},{y_top_px}" '
+                f'fill="{STELO_FILL}" fill-opacity="0.5" '
+                f'stroke="{STELO_STROKE}" stroke-width="1"/>'
             )
 
     # ══════════════════════════════════════════════════════════════════
