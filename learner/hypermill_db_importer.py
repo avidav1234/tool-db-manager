@@ -102,18 +102,27 @@ def _decodifica_holder(polyline, holder_name=''):
     if not profilo:
         return {}, []
 
-    # d1 = diametro foro serraggio dal nome holder (non in polyline)
+    # d_foro = diametro foro serraggio dal nome holder (es. "TSF D06" → 6)
     m = re.search(r'D(\d+(?:\.\d+)?)', holder_name, re.IGNORECASE)
-    d1 = float(m.group(1)) if m else 0.0
+    d_foro = float(m.group(1)) if m else 0.0
 
+    # Diametro esterno del naso al z=0: convenzione Bilz TSF è
+    # "parete slim = raggio foro" → d_naso_esterno = 2 × d_foro
+    # (verificato su TSF D06: d_foro=6 → naso Ø12, confermato dal CAD)
+    # Il naso non è nella polyline: viene ricostruito da questa convenzione
+    # solo se z_pt0 > 2mm (Tipo B: naso mancante, es. TSF).
+    # Per holder Tipo A (SLSA: naso già in polyline) non serve ricostruzione.
     segmenti = []
     r0, z0 = profilo[0]
+    d_naso_esterno = 0.0
+    if d_foro > 0.1 and z0 > 2.0:
+        d_naso_esterno = round(2 * d_foro, 2)
 
-    # Seg 0: cono/cilindro dal naso (d1) al primo punto — solo se coerente
-    if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2 - 0.5:
+    # Seg 0: cono dal naso esterno al primo punto (solo se d_naso < d_pt0)
+    if d_naso_esterno > 0 and d_naso_esterno < r0 * 2 - 0.5:
         segmenti.append({
             'numero_segmento': 1,
-            'diametro_inf_mm': round(d1, 2),
+            'diametro_inf_mm': d_naso_esterno,
             'diametro_sup_mm': round(r0 * 2, 2),
             'lunghezza_mm': round(z0, 2),
         })
@@ -165,7 +174,8 @@ def _decodifica_holder(polyline, holder_name=''):
     a_lungh = z_tot if z_tot > 0 else profilo[-1][1]
 
     result = {
-        'd1_serraggio_mm':    round(d1, 2) if d1 > 0 else None,
+        # d1_serraggio_mm = diametro del FORO di serraggio (accoglie utensile)
+        'd1_serraggio_mm':    round(d_foro, 2) if d_foro > 0 else None,
         'd3_corpo_mm':        round(r0 * 2, 2),
         'd_hsk_mm':           round(r_max * 2, 2),
         'nl_serraggio_mm':    round(z0, 2),

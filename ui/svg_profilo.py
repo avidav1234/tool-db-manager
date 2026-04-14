@@ -384,14 +384,18 @@ def genera_svg_profilo(u, segmenti=None):
 
     # Priorità 1: punti reali dalla polyline (nessuna origine artificiale aggiunta)
     if holder_pts and len(holder_pts) >= 2:
-        # Seg 0: cono slim da d1 (naso) al primo punto della polyline.
-        # Il naso non è nella polyline Hypermill: viene da d1_serraggio_mm.
-        # Aggiunto SOLO se d1 è presente (dato verificato, non inventato) e
-        # geometricamente coerente (naso più stretto del primo punto).
-        d1 = float(u.get('d1_serraggio_mm') or 0)
+        # Seg 0: cono slim dal NASO ESTERNO al primo punto della polyline.
+        # d1_serraggio_mm = diametro FORO (accoglie utensile).
+        # Il naso esterno del cono slim è più largo (parete spessa attorno al foro).
+        # Convenzione Bilz TSF: naso_esterno_Ø = 2 × d_foro
+        # (verificato CAD TSF D06: foro Ø6 → naso esterno Ø12)
+        # Applicato solo se z_pt0 > 2mm (Tipo B, naso non nella polyline).
+        d_foro = float(u.get('d1_serraggio_mm') or 0)
         r0, z0 = holder_pts[0]
-        if d1 > 0.1 and z0 > 0.1 and d1 < r0 * 2:
-            holder_segs.append((d1, round(r0 * 2, 2), round(z0, 2)))
+        if d_foro > 0.1 and z0 > 2.0:
+            d_naso = 2 * d_foro  # naso esterno, non foro
+            if d_naso < r0 * 2 - 0.5:
+                holder_segs.append((round(d_naso, 2), round(r0 * 2, 2), round(z0, 2)))
 
         # Segmenti successivi dalla polyline — regola universale pendenza:
         # |Δr/Δz| > 1.0 (45°) indica spigolo CAD (cilindro + spigolo implicito),
