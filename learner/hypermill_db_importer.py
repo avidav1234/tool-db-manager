@@ -153,19 +153,35 @@ def _decodifica_holder(polyline, holder_name=''):
 def _leggi_profilo_fresa(tool_row, hm_conn):
     """
     Estrae profili gambo (free_shaft) e punta (free_tip) da Geometries.
-    Ritorna dict con shaft_points, tip_points, shaft_length, shaft_raw.
+
+    Nota: la z nella free_shaft è misurata dal FONDO gambo (lato pinza),
+    non dalla punta. Viene convertita in z_dalla_punta = total_length - z.
+    I punti sono ordinati z crescente dalla punta alla pinza.
+
+    Ritorna dict con shaft_points (z già convertita), tip_points, shaft_length, shaft_raw.
     """
     result = {'shaft_points': [], 'tip_points': [], 'shaft_length': None, 'shaft_raw': None}
 
     shaft_id = tool_row['free_shaft_geom_id'] if 'free_shaft_geom_id' in tool_row.keys() else None
     tip_id = tool_row['free_tip_geom_id'] if 'free_tip_geom_id' in tool_row.keys() else None
+    total_length = float(tool_row['total_length'] or 0) if 'total_length' in tool_row.keys() else 0
 
     if shaft_id:
         row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (shaft_id,)).fetchone()
         if row and row['polyline']:
-            result['shaft_raw'] = row['polyline']
+            result['shaft_raw'] = bytes(row['polyline'])  # forza tipo bytes per salvataggio BLOB
             profilo, z_tot_shaft = decode_polyline(row['polyline'])
-            result['shaft_points'] = profilo
+            # Converti z dal fondo → dalla punta, scarta r<=0 (negativi o terminatori)
+            if total_length > 0 and profilo:
+                converted = [
+                    (r, round(total_length - z, 4))
+                    for r, z in profilo
+                    if r > 0.01 and z < total_length + 0.01
+                ]
+                converted.sort(key=lambda p: p[1])  # z crescente = dalla punta alla pinza
+                result['shaft_points'] = converted
+            else:
+                result['shaft_points'] = [(r, z) for r, z in profilo if r > 0.01]
             if z_tot_shaft > 0:
                 result['shaft_length'] = round(z_tot_shaft, 2)
 
@@ -173,7 +189,7 @@ def _leggi_profilo_fresa(tool_row, hm_conn):
         row = hm_conn.execute("SELECT polyline FROM Geometries WHERE id=?", (tip_id,)).fetchone()
         if row and row['polyline']:
             profilo_tip, _ = decode_polyline(row['polyline'])
-            result['tip_points'] = profilo_tip
+            result['tip_points'] = [(r, z) for r, z in profilo_tip if r > 0.01]
 
     return result
 
@@ -224,7 +240,8 @@ def _estrai_geometria(row, tool_type_id):
     geo = {
         'lunghezza_totale_mm':  row['total_length'],
         'num_taglienti':        ip(1) or None,
-        'diam_stelo_mm':        p(2) or None,  # diametro pinza/attacco
+        # diam_stelo_mm calcolato dalla free_shaft polyline in _importa_utensili
+        # (dbl_param2 è il diametro della pinza di attacco, non del gambo fisico)
     }
 
     if tool_type_id in (1, 5):
@@ -634,6 +651,7 @@ def _importa_utensili(hm, master):
         }
 
         # Estrai profili polyline (gambo + punta) e salva come JSON + raw BLOB
+        shaft_raw_bytes = None
         try:
             import json as _json
             profili = _leggi_profilo_fresa(row, hm)
@@ -642,8 +660,14 @@ def _importa_utensili(hm, master):
                     'punti': profili['shaft_points'],
                     'lunghezza': profili['shaft_length'],
                 })
+                # diam_stelo_mm dal punto con z massima (più vicino alla pinza)
+                # = diametro fisico del gambo, non quello della pinza (dbl_param2)
+                pts_reali = [(r, z) for r, z in profili['shaft_points'] if r > 0.01]
+                if pts_reali:
+                    r_stelo = max(pts_reali, key=lambda p: p[1])[0]
+                    utensile['diam_stelo_mm'] = round(r_stelo * 2, 3)
             if profili['shaft_raw']:
-                utensile['shaft_polyline_raw'] = profili['shaft_raw']
+                shaft_raw_bytes = profili['shaft_raw']
             if profili['tip_points']:
                 utensile['profilo_punta_json'] = _json.dumps({
                     'punti': profili['tip_points'],
@@ -651,6 +675,9 @@ def _importa_utensili(hm, master):
         except Exception:
             pass
         utensile = {k: v for k, v in utensile.items() if v is not None and v != ''}
+        # I bytes raw non passano il filtro "v != ''" con test bytes, aggiunti a posteriori
+        if shaft_raw_bytes:
+            utensile['shaft_polyline_raw'] = shaft_raw_bytes
         insert_data = {k: v for k, v in utensile.items() if k in master_cols}
         codice = insert_data.get('codice_interno')
         try:
