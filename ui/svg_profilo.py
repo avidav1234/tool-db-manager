@@ -383,11 +383,16 @@ def genera_svg_profilo(u, segmenti=None):
     holder_segs = []
 
     # Priorità 1: punti reali dalla polyline.
-    # I segmenti vengono costruiti SOLO dai dati presenti nella polyline —
-    # nessuna ricostruzione basata su convenzioni type-specific.
-    # Se la polyline non contiene il naso (es. TSF), il profilo parte
-    # dal primo punto reale della polyline (fine cono slim).
+    # I segmenti vengono costruiti dai dati presenti nella polyline.
+    # Se il primo punto ha z > 0 (Tipo B, es. TSF), il rendering estende
+    # un cilindro del diametro r_pt0 dalla base holder fino a z_pt0 —
+    # non inventa un nuovo diametro, estende solo ciò che la polyline dice.
     if holder_pts and len(holder_pts) >= 2:
+        r0_poly, z0_poly = holder_pts[0]
+        if z0_poly > 2.0:
+            # Estensione cilindrica della prima zona (non coperta da polyline)
+            d0 = round(r0_poly * 2, 2)
+            holder_segs.append((d0, d0, round(z0_poly, 2)))
 
         # Segmenti successivi dalla polyline — regola universale pendenza:
         # |Δr/Δz| > 1.0 (45°) indica spigolo CAD (cilindro + spigolo implicito),
