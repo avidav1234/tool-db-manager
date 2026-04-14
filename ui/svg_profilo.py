@@ -104,14 +104,14 @@ def genera_svg_profilo(u, segmenti=None):
         # Semicerchio + cilindro
         r_px = (D / 2) * scale
         cy_ball = y_at(D / 2)
-        # Semicerchio (punta)
-        parts.append(f'<path d="M {x_left(D)} {cy_ball} A {r_px} {r_px} 0 0 1 {x_right(D)} {cy_ball}" '
-                     f'fill="{tip_color}" fill-opacity="0.15" stroke="{tip_color}" stroke-width="1.5"/>')
+        # Semicerchio (punta) — sweep=0: arco verso il basso (punta della sfera in basso)
+        parts.append(f'<path d="M {x_left(D)} {cy_ball} A {r_px} {r_px} 0 0 0 {x_right(D)} {cy_ball}" '
+                     f'fill="{tip_color}" fill-opacity="0.9" stroke="{tip_color}" stroke-width="1.5"/>')
         # Corpo cilindrico sopra il semicerchio
         if tip_h > D / 2:
             y_top_tagl = y_at(tip_h)
             parts.append(f'<rect x="{x_left(D)}" y="{y_top_tagl}" width="{D*scale}" height="{(tip_h - D/2)*scale}" '
-                         f'fill="{tip_color}" fill-opacity="0.15" stroke="{tip_color}" stroke-width="1.5"/>')
+                         f'fill="{tip_color}" fill-opacity="0.9" stroke="{tip_color}" stroke-width="1.5"/>')
 
     elif tipo == 'DRILL':
         # Triangolo punta + cilindro
