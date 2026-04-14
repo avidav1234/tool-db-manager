@@ -16,10 +16,12 @@ def _leggi_profilo_polyline(polyline_bytes):
     Struttura: big-endian double, step 104 bytes da offset 128.
       r = polyline_bytes[base:base+8]
       z = polyline_bytes[base+8:base+16]
+    Lunghezza totale: offset 552 (z_tot).
 
-    Ritorna lista [(r, z), ...] con punto di origine aggiunto:
-      - Tipo A (z_pt0 < 2mm): [(0.0, 0.0)] + punti  (naso esplicito)
-      - Tipo B (z_pt0 >= 2mm): [(r_pt0, 0.0)] + punti  (estendi cilindro da z=0)
+    Ritorna lista [(r, z), ...]:
+      - origine: (0,0) Tipo A se z_pt0<2mm, oppure (r_pt0, 0) Tipo B
+      - punti validi dal loop
+      - estensione finale: se z_last < z_tot e r_last > 0.01, aggiunge (r_last, z_tot)
     """
     if not polyline_bytes or len(polyline_bytes) < 144:
         return []
@@ -38,6 +40,21 @@ def _leggi_profilo_polyline(polyline_bytes):
 
     if not pts:
         return []
+
+    # Leggi z_tot a offset 552 (lunghezza totale holder)
+    z_tot = None
+    if len(polyline_bytes) >= 560:
+        try:
+            zt = struct.unpack('>d', polyline_bytes[552:560])[0]
+            if not math.isnan(zt) and not math.isinf(zt) and 0 < zt < 2000:
+                z_tot = round(zt, 4)
+        except Exception:
+            pass
+
+    # Estensione finale: se z_last < z_tot, estendi il cilindro finale
+    r_last, z_last = pts[-1]
+    if z_tot and z_last < z_tot - 0.1:
+        pts.append((r_last, z_tot))
 
     r0, z0 = pts[0]
     if z0 < 2.0:
