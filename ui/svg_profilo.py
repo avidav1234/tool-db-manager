@@ -86,6 +86,9 @@ def genera_svg_profilo(u, segmenti=None):
     tipo         = u.get('tipo') or 'FLAT'
     gage_length  = float(u.get('gage_length_mm') or 0)
     angolo_punta = float(u.get('angolo_punta_gradi') or 118)
+    # Lunghezza fisica totale fresa — necessaria per convertire coordinate
+    # della freeShaft polyline (z misurata dal FONDO gambo, non dalla punta)
+    total_length = float(u.get('lunghezza_totale_mm') or L_tot)
 
     if D <= 0 or L_tot <= 0:
         return '<svg width="200" height="100"><text x="10" y="50" fill="#999" font-size="12">Dati geometrici insufficienti</text></svg>'
@@ -232,41 +235,65 @@ def genera_svg_profilo(u, segmenti=None):
 
     # ══════════════════════════════════════════════════════════════════
     # ZONA 2: GAMBO FRESA
+    # Nota: la z nella freeShaft è dal FONDO gambo, conversione necessaria
     # ══════════════════════════════════════════════════════════════════
+    stelo_start = tip_h
+    stelo_end = fuori_pinza if fuori_pinza > 0 else L_tot
+
     d_stelo_eff = D_stelo if D_stelo > 0 else (
         shaft_pts[1][0] * 2 if len(shaft_pts) > 1 else D
     )
 
-    if shaft_pts and len(shaft_pts) >= 2:
-        # shaft_pts[0] = origine (0,0) o (r0,0) aggiunto dal reader
-        # z nei shaft_pts è cumulativo dalla punta dell'utensile
-        for i in range(1, len(shaft_pts)):
-            r_prev, z_prev = shaft_pts[i-1]
-            r_curr, z_curr = shaft_pts[i]
-            l_seg = z_curr - z_prev
-            if l_seg <= 0.01:
+    # Estrai solo i punti reali del gambo (salta origine artificiale)
+    gambo_pts_reali = [(r, z) for r, z in shaft_pts if z > 0.01]
+
+    if gambo_pts_reali and stelo_end > stelo_start:
+        # Converti z: z_from_tip = total_length - z_dal_fondo
+        gambo_converted = sorted(
+            [(r, total_length - z) for r, z in gambo_pts_reali],
+            key=lambda p: p[1]
+        )
+        # Estendi ai bordi della zona stelo
+        if gambo_converted and gambo_converted[0][1] > stelo_start:
+            gambo_converted.insert(0, (gambo_converted[0][0], stelo_start))
+        if gambo_converted and gambo_converted[-1][1] < stelo_end:
+            gambo_converted.append((gambo_converted[-1][0], stelo_end))
+
+        # Disegna segmenti con clip a [stelo_start, stelo_end]
+        for i in range(1, len(gambo_converted)):
+            r_prev, z_prev = gambo_converted[i-1]
+            r_curr, z_curr = gambo_converted[i]
+            z_a = max(z_prev, stelo_start)
+            z_b = min(z_curr, stelo_end)
+            if z_b <= z_a:
                 continue
-            d_inf = r_prev * 2
-            d_sup = r_curr * 2
-            y_seg_bot = y_at(z_prev)
-            y_seg_top = y_at(z_curr)
-            seg_h = l_seg * scale
-            if seg_h < 0.5:
-                continue
+            if abs(z_curr - z_prev) > 0.001:
+                t_a = (z_a - z_prev) / (z_curr - z_prev)
+                t_b = (z_b - z_prev) / (z_curr - z_prev)
+            else:
+                t_a, t_b = 0.0, 1.0
+            ra = r_prev + t_a * (r_curr - r_prev)
+            rb = r_prev + t_b * (r_curr - r_prev)
+            d_inf = ra * 2
+            d_sup = rb * 2
+            l_seg = z_b - z_a
+            y_bot = y_at(z_a)
+            y_top_seg = y_at(z_b)
             if abs(d_inf - d_sup) < 0.1:
                 parts.append(
-                    f'<rect x="{x_left(d_inf)}" y="{y_seg_top}" width="{d_inf*scale}" height="{seg_h}" '
+                    f'<rect x="{x_left(d_inf)}" y="{y_top_seg}" '
+                    f'width="{d_inf*scale}" height="{l_seg*scale}" '
                     f'fill="{STELO_FILL}" fill-opacity="0.5" stroke="{STELO_STROKE}" stroke-width="1"/>'
                 )
             else:
                 parts.append(
-                    f'<polygon points="{x_left(d_inf)},{y_seg_bot} {x_right(d_inf)},{y_seg_bot} '
-                    f'{x_right(d_sup)},{y_seg_top} {x_left(d_sup)},{y_seg_top}" '
+                    f'<polygon points="{x_left(d_inf)},{y_bot} {x_right(d_inf)},{y_bot} '
+                    f'{x_right(d_sup)},{y_top_seg} {x_left(d_sup)},{y_top_seg}" '
                     f'fill="{STELO_FILL}" fill-opacity="0.5" stroke="{STELO_STROKE}" stroke-width="1"/>'
                 )
     else:
-        stelo_end = fuori_pinza if fuori_pinza > 0 else L_tot
-        stelo_h_px = (stelo_end - tip_h) * scale
+        # Fallback: cilindro semplice con D_stelo
+        stelo_h_px = (stelo_end - stelo_start) * scale
         if stelo_h_px > 0 and d_stelo_eff > 0:
             parts.append(
                 f'<rect x="{x_left(d_stelo_eff)}" y="{y_at(stelo_end)}" '
