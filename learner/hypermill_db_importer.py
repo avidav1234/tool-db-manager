@@ -164,6 +164,29 @@ def _decodifica_holder(polyline, holder_name=''):
                 'lunghezza_mm': round(a_tot - last_z, 2),
             })
 
+        # POST-PROCESSING: collassa i segmenti dopo la flangia in un cilindro HSK
+        # I segmenti dopo il punto di diametro massimo rappresentano la geometria
+        # interna HSK (non il profilo esterno visibile) — sostituiscili con un cilindro
+        if len(segmenti) > 2:
+            d_max = max(max(s['diametro_inf_mm'], s['diametro_sup_mm']) for s in segmenti)
+            # Trova primo segmento che raggiunge ≥95% del diametro max (la flangia)
+            idx_flangia = next(
+                (i for i, s in enumerate(segmenti)
+                 if max(s['diametro_inf_mm'], s['diametro_sup_mm']) >= d_max * 0.95),
+                len(segmenti) - 1
+            )
+            # Mantieni i segmenti fino alla flangia (incluso il raccordo che la raggiunge)
+            # Collassa solo i segmenti DOPO la flangia in un unico cilindro Ø_max
+            keep_until = idx_flangia + 1  # mantieni anche il segmento raccordo
+            if keep_until < len(segmenti):
+                l_hsk = sum(s['lunghezza_mm'] for s in segmenti[keep_until:])
+                segmenti = segmenti[:keep_until] + [{
+                    'numero_segmento': keep_until + 1,
+                    'diametro_inf_mm': d_max,
+                    'diametro_sup_mm': d_max,
+                    'lunghezza_mm': round(l_hsk, 2),
+                }]
+
     return result, segmenti
 
 
@@ -474,8 +497,10 @@ def _importa_portautensili(hm, master):
         row_id = master.execute("SELECT id FROM portautensile WHERE codice_interno = ?", (holder_name,)).fetchone()
         if row_id:
             porta_id = row_id[0]
+            # Cancella tutti i segmenti vecchi prima di inserire i nuovi
+            master.execute("DELETE FROM portautensile_segmento WHERE id_portautensile=?", (porta_id,))
             for seg in segmenti:
-                master.execute("INSERT OR REPLACE INTO portautensile_segmento (id_portautensile, numero_segmento, diametro_inf_mm, diametro_sup_mm, lunghezza_mm) VALUES (?,?,?,?,?)",
+                master.execute("INSERT INTO portautensile_segmento (id_portautensile, numero_segmento, diametro_inf_mm, diametro_sup_mm, lunghezza_mm) VALUES (?,?,?,?,?)",
                     (porta_id, seg['numero_segmento'], seg['diametro_inf_mm'], seg['diametro_sup_mm'], seg['lunghezza_mm']))
                 count_s += 1
         count_h += 1
