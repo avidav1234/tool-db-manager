@@ -89,56 +89,60 @@ def genera_svg_profilo(u, segmenti=None):
         shaft_pts = _parse_json_profilo(u.get('profilo_gambo_json'))
 
     # ── Calcolo scala e canvas ───────────────────────────────────────
-    # Diametro max della fresa (tagliente + stelo + raccordi)
-    max_d_fresa = max(D, D_stelo if D_stelo > 0 else 0)
+    # Scala uniforme sul diametro massimo effettivo di TUTTO il contenuto
+    # (fresa + holder): niente cap ad-hoc, niente overflow.
+
+    # 1. Diametro massimo fresa (tagliente + stelo + raccordi)
+    d_fresa = max(D, D_stelo if D_stelo > 0 else 0)
     for r, z in shaft_pts:
-        if r * 2 > max_d_fresa:
-            max_d_fresa = r * 2
+        d_fresa = max(d_fresa, r * 2)
 
-    # Diametro max holder
-    max_d_holder = max_d_fresa
+    # 2. Diametro massimo holder (polyline + segmenti DB + campi derivati)
+    d_holder = 0.0
     for r, z in holder_pts:
-        if r * 2 > max_d_holder:
-            max_d_holder = r * 2
+        d_holder = max(d_holder, r * 2)
     for s in segmenti:
-        d_s = max(float(s.get('diametro_inf_mm') or 0), float(s.get('diametro_sup_mm') or 0))
-        if d_s > max_d_holder:
-            max_d_holder = d_s
-    # Considera anche d_hsk_mm e d3_corpo_mm se disponibili
-    d_hsk_val = float(u.get('d_hsk_mm') or 0)
-    d3_val    = float(u.get('d3_corpo_mm') or 0)
-    for val in (d_hsk_val, d3_val):
-        if val > max_d_holder:
-            max_d_holder = val
+        d_holder = max(
+            d_holder,
+            float(s.get('diametro_inf_mm') or 0),
+            float(s.get('diametro_sup_mm') or 0),
+        )
+    d_holder = max(d_holder, float(u.get('d_hsk_mm') or 0))
 
-    # Cap: se l'holder è molto più largo della fresa (es. D10 + HSK63),
-    # limita la scala a 2.5× D_fresa. L'holder eccedente verrà clippato
-    # sui bordi del canvas — comportamento accettabile come in molti CAM.
-    if max_d_fresa > 0 and max_d_holder > max_d_fresa * 2.5:
-        d_max = max_d_fresa * 2.5
-    else:
-        d_max = max_d_holder
-    if d_max <= 0:
-        d_max = D
+    # 3. Diametro totale del disegno
+    d_totale = max(d_fresa, d_holder)
+    if d_totale <= 0:
+        d_totale = D
 
+    # 4. Altezza totale: fresa (fuori_pinza) + holder (da polyline o segmenti)
     fresa_h = fuori_pinza if fuori_pinza > 0 else L_tot
-    holder_h = holder_pts[-1][1] if holder_pts else 0
-    draw_total_h = fresa_h + holder_h if holder_pts else fresa_h
+    holder_h = 0.0
+    if holder_pts:
+        holder_h = holder_pts[-1][1]
+        if holder_z_tot > holder_h:
+            holder_h = holder_z_tot
+    elif segmenti:
+        holder_h = sum(float(s.get('lunghezza_mm') or 0) for s in segmenti)
+    draw_total_h = fresa_h + holder_h if holder_h > 0 else fresa_h
     if draw_total_h <= 0:
         draw_total_h = L_tot
 
+    # 5. Canvas W fisso, H adattivo
     W, margin_left, margin_right = 340, 50, 100
     margin_top, margin_bottom = 30, 30
     draw_w = W - margin_left - margin_right
 
-    scale_x = draw_w / (d_max * 1.2) if d_max > 0 else 1
-    # Cap altezza canvas a 800px: se scale_x richiederebbe più di così,
-    # usa scale_y; altrimenti usa scale_x (fresa al giusto diametro) e cresce H
-    max_H = 800
-    scale_y_max = (max_H - margin_top - margin_bottom) / draw_total_h if draw_total_h > 0 else 1
+    # 6. Scala uniforme (garantisce tutto nel canvas, fattore 1.2 = 10% respiro per lato)
+    scale_x = draw_w / (d_totale * 1.2) if d_totale > 0 else 1.0
+
+    # 7. Cap altezza: max 900px
+    max_H = 900
+    scale_y_max = (max_H - margin_top - margin_bottom) / draw_total_h if draw_total_h > 0 else 1.0
     scale = min(scale_x, scale_y_max)
 
     H = max(int(draw_total_h * scale + margin_top + margin_bottom), 200)
+
+    # 8. Centro orizzontale — draw_w centrato nel canvas
     cx = margin_left + draw_w / 2
 
     def y_at(z_mm):
