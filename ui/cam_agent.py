@@ -813,6 +813,7 @@ def tool_affida_a_jules(task, branch='main1', titolo=None):
         session_id = resp.get('name', '').split('/')[-1]
         return {
             'ok': True,
+            'eseguito_da': 'jules',
             'session_id': session_id,
             'url': f'https://jules.google.com/tasks/{session_id}',
             'messaggio': f'Task affidato a Jules. Controlla su: https://jules.google.com/tasks/{session_id}',
@@ -1088,6 +1089,7 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
     messages = list(history or [])
     messages.append({'role':'user','content':messaggio_utente})
     tool_calls_log = []
+    jules_info = None  # popolato se l'agente invoca affida_a_jules
 
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -1141,8 +1143,12 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
         texts = [b['text'] for b in resp['content'] if b.get('type')=='text']
 
         if not tool_uses:
-            return {'risposta': '\n'.join(texts), 'tool_calls': tool_calls_log,
-                    'history': messages, 'stop_reason': resp.get('stop_reason')}
+            out = {'risposta': '\n'.join(texts), 'tool_calls': tool_calls_log,
+                   'history': messages, 'stop_reason': resp.get('stop_reason'),
+                   'eseguito_da': 'claude', 'modello': modello}
+            if jules_info:
+                out['jules'] = jules_info
+            return out
 
         results = []
         for tu in tool_uses:
@@ -1151,6 +1157,11 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
                 res = fn(tu.get('input',{})) if fn else {'errore':f'Tool sconosciuto: {tu["name"]}'}
             except Exception as e:
                 res = {'errore': str(e), 'traceback': traceback.format_exc()}
+            if tu['name'] == 'affida_a_jules' and isinstance(res, dict) and res.get('ok'):
+                jules_info = {
+                    'session_id': res.get('session_id'),
+                    'url':        res.get('url'),
+                }
             tool_calls_log.append({'tool':tu['name'],'input':tu.get('input',{}),
                                     'result_summary':str(res)[:200]})
             res_str=json.dumps(res,ensure_ascii=False,default=str)
@@ -1158,4 +1169,6 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
             results.append({'type':'tool_result','tool_use_id':tu['id'],'content':res_str})
         messages.append({'role':'user','content':results})
 
-    return {'risposta': f'Limite {max_turns} turni. Progresso salvato nei checkpoint. Scrivi "continua [task_id]" per riprendere.','tool_calls':tool_calls_log,'history':messages}
+    return {'risposta': f'Limite {max_turns} turni. Progresso salvato nei checkpoint. Scrivi "continua [task_id]" per riprendere.',
+            'tool_calls': tool_calls_log, 'history': messages,
+            'eseguito_da': 'claude', 'modello': modello}

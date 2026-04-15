@@ -2661,8 +2661,12 @@ CAM_AGENT_HTML = """<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
 .chat-messages{flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:1rem}
 .msg{max-width:90%;padding:.75rem 1rem;border-radius:12px;font-size:.875rem;line-height:1.6;white-space:pre-wrap}
 .msg.user{background:#1d4ed8;color:#fff;align-self:flex-end;border-radius:12px 12px 2px 12px}
-.msg.agent{background:#1e293b;color:#e2e8f0;align-self:flex-start;border-radius:12px 12px 12px 2px}
+.msg.agent{background:#1e293b;color:#e2e8f0;align-self:flex-start;border-radius:12px 12px 12px 2px;position:relative;padding-top:1.5rem}
 .msg.agent strong{color:#a5b4fc}.msg.agent code{background:#0f172a;padding:.1rem .3rem;border-radius:3px;font-size:.8rem;font-family:monospace}
+.msg-badge{position:absolute;top:.35rem;right:.6rem;font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:10px;letter-spacing:.02em;text-decoration:none;display:inline-flex;align-items:center;gap:.25rem}
+.msg-badge.claude{background:#4c1d95;color:#ddd6fe}
+.msg-badge.jules{background:#1e40af;color:#bfdbfe}
+.msg-badge.jules:hover{background:#1d4ed8;color:#fff}
 .msg.system{background:#0d2d1a;color:#86efac;align-self:center;font-size:.78rem;padding:.35rem .75rem;border-radius:20px}
 .msg.error{background:#450a0a;color:#fca5a5}
 .msg.thinking{background:#1e293b;color:#64748b;font-style:italic;align-self:flex-start}
@@ -2807,7 +2811,7 @@ async function send(){
       if(pj.status==='error'||d.errore){
         addMsg('error','&#10060; '+(d.errore||'Errore sconosciuto'));
       } else {
-        addMsg('agent',d.risposta||'(nessuna risposta)');
+        addAgentMsg(d.risposta||'(nessuna risposta)', d);
         _hist=d.history||_hist;
         if(d.tool_calls&&d.tool_calls.length){
           document.getElementById('tool-log').innerHTML=
@@ -2830,6 +2834,29 @@ function addMsg(t,txt){
   const el=document.createElement('div');
   el.id=id;el.className='msg '+t;
   el.innerHTML=txt.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  document.getElementById('msgs').appendChild(el);
+  el.scrollIntoView({behavior:'smooth',block:'end'});
+  return id;
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function addAgentMsg(txt, meta){
+  const id='m'+(++_mid);
+  const el=document.createElement('div');
+  el.id=id; el.className='msg agent';
+  let badges='';
+  const m = meta || {};
+  if(m.eseguito_da === 'claude'){
+    const mod = m.modello || '';
+    const modShort = mod.includes('sonnet') ? 'Sonnet' : (mod.includes('haiku') ? 'Haiku' : (mod.includes('opus') ? 'Opus' : mod));
+    badges += '<span class="msg-badge claude" title="'+esc(mod)+'">&#129302; Claude'+(modShort?' '+esc(modShort):'')+'</span>';
+  }
+  if(m.jules && m.jules.url){
+    badges += ' <a class="msg-badge jules" href="'+esc(m.jules.url)+'" target="_blank" rel="noopener">&#128309; Jules (Google)</a>';
+  } else if(m.eseguito_da === 'jules' && m.url){
+    badges += ' <a class="msg-badge jules" href="'+esc(m.url)+'" target="_blank" rel="noopener">&#128309; Jules (Google)</a>';
+  }
+  const body = (txt||'').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  el.innerHTML = badges + body;
   document.getElementById('msgs').appendChild(el);
   el.scrollIntoView({behavior:'smooth',block:'end'});
   return id;
