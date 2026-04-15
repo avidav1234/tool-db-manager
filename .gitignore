@@ -18,6 +18,7 @@ logs/
 # File di ambiente con secrets - MAI nel repo
 .env
 *.env
+config.json
 config.local.json
 
 # File temporanei

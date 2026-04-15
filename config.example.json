@@ -1,0 +1,15 @@
+{
+    "export_ora": "22:00",
+    "output_dir": "output/auto",
+    "output_rete": "",
+    "formati_attivi": [
+        "cimatron_v26"
+    ],
+    "notify_on_change": true,
+    "keep_last_n": 7,
+    "anthropic_api_key": "",
+    "_note_api_key": "Inserisci qui la tua API key Anthropic (sk-ant-...) per abilitare il mapping automatico AI. Oppure usa: export ANTHROPIC_API_KEY=sk-ant-...",
+    "jules_api_key": "",
+    "_note_jules_key": "API key di Jules (Google) per il tool affida_a_jules. Ottienila da https://jules.google.com",
+    "_note": "Aggiungi profili in formati_attivi dopo averli creati con il Format Learner. Copia questo file in config.json e inserisci le tue chiavi reali."
+}
