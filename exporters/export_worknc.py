@@ -21,7 +21,7 @@ OUTPUT_DIR = os.path.join(_BASE, 'exports')
 HEADER = [
     'Numero', 'AliasUtensile', 'NomeUtensile', 'Tipo', 'Diametro', 'Raggio',
     'NumDenti', 'Materiale', 'Scopo', 'Vc', 'fz', 'f', 'S', 'F', 'FRidotta',
-    'ae', 'ap', 'Componenti',
+    'ae', 'ap', 'HolderRef', 'Gauge', 'Componenti',
 ]
 
 # Inverso di TIPO_MAP dell'importer (codice EN → nome italiano WorkNC)
@@ -56,6 +56,8 @@ SELECT
     ROUND(ct.f_ridotta_mm_min   * COALESCE(u.fattore_f, 1.0))       AS f_rid_eff,
     ROUND(ct.ae_mm              * COALESCE(u.fattore_ae, 1.0), 3)   AS ae_eff,
     ROUND(ct.ap_mm              * COALESCE(u.fattore_ap, 1.0), 3)   AS ap_eff,
+    u.nome_pinza                                             AS holder_ref,
+    u.fuori_pinza_mm                                         AS gauge,
     u.note                                                   AS componenti
 FROM condizioni_taglio ct
 JOIN utensile u       ON ct.id_utensile = u.id
@@ -116,6 +118,8 @@ def export_worknc(output_path=None, db_path=None):
                 _fmt(r['vc']), _fmt(r['fz']), _fmt(r['f_foratura']),
                 _fmt(r['s_eff']), _fmt(r['f_eff']), _fmt(r['f_rid_eff']),
                 _fmt(r['ae_eff']), _fmt(r['ap_eff']),
+                r['holder_ref'] or '',   # HolderRef → nome_pinza
+                _fmt(r['gauge']),         # Gauge     → fuori_pinza_mm
                 _fmt(r['componenti']),
             ])
 
