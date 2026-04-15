@@ -341,7 +341,7 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <b style="color:#1a6e35;font-family:monospace">{{ u.fuori_pinza_mm }}</b>
     <span style="font-size:11px;color:#888"> mm</span>
     {% else %}
-    <span style="color:#ddd">—</span>
+    <span style="color:#ddd">â</span>
     {% endif %}
   </td>
   </tr>
@@ -359,7 +359,7 @@ HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </tr>
   {% endif %}
   <td style="font-size:12px;color:#666;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-      title="{{ u.nome_pinza or '' }}">{{ u.nome_pinza or '—' }}</td>
+      title="{{ u.nome_pinza or '' }}">{{ u.nome_pinza or 'â' }}</td>
   <td style="text-align:center;font-size:13px;font-weight:600">{{ u.num_taglienti }}</td>
   <td style="white-space:nowrap;text-align:right">
 <div id="pg-bar" style="display:flex;align-items:center;gap:6px;padding:.75rem 0;flex-wrap:wrap;margin-top:.5rem"></div>
@@ -519,7 +519,7 @@ def _get_lookup():
 FORM_HTML = """
 <!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ titolo }} — Tool DB Manager</title>
+<title>{{ titolo }} â Tool DB Manager</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#f8fafc;color:#1e293b}
 .nav{background:#1e293b;padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
@@ -573,11 +573,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#6366f1;box-sh
       <div class="grid">
         <div class="field"><label>Diametro [mm] *</label><input name="diametro_mm" type="number" step="any" value="{{ (u.get('diametro_mm') or '') | replace('None','') }}"></div>
         <div class="field"><label>Raggio punta [mm]</label><input name="raggio_punta_mm" type="number" step="any" value="{{ (u.get('raggio_punta_mm') or '') | replace('None','') }}"></div>
-        <div class="field"><label>Angolo punta [°]</label><input name="angolo_punta_gradi" type="number" step="any" value="{{ (u.get('angolo_punta_gradi') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Angolo punta [Â°]</label><input name="angolo_punta_gradi" type="number" step="any" value="{{ (u.get('angolo_punta_gradi') or '') | replace('None','') }}"></div>
         <div class="field"><label>Lunghezza totale [mm]</label><input name="lunghezza_totale_mm" type="number" step="any" value="{{ (u.get('lunghezza_totale_mm') or '') | replace('None','') }}"></div>
         <div class="field"><label>Lunghezza tagliente [mm]</label><input name="lunghezza_tagl_mm" type="number" step="any" value="{{ (u.get('lunghezza_tagl_mm') or '') | replace('None','') }}"></div>
         <div class="field"><label>Numero taglienti</label><input name="num_taglienti" type="number" value="{{ (u.get('num_taglienti') or '') | replace('None','') }}"></div>
-        <div class="field"><label>Angolo elica [°]</label><input name="angolo_elica_gradi" type="number" step="any" value="{{ (u.get('angolo_elica_gradi') or '') | replace('None','') }}"></div>
+        <div class="field"><label>Angolo elica [Â°]</label><input name="angolo_elica_gradi" type="number" step="any" value="{{ (u.get('angolo_elica_gradi') or '') | replace('None','') }}"></div>
         <div class="field"><label>Passo filetto [mm]</label><input name="passo_mm" type="number" step="any" value="{{ (u.get('passo_mm') or '') | replace('None','') }}"></div>
       </div>
     </div>
@@ -649,7 +649,7 @@ def utensile_modifica(uid):
     u = {k: ('' if v is None else v) for k, v in dict(row).items()}
     u = {k: (round(v, 4) if isinstance(v, float) else v) for k, v in u.items()}
     return render_template_string(FORM_HTML,
-        titolo='Modifica — ' + row['codice_interno'], action=f'/utensile/{uid}/modifica',
+        titolo='Modifica â ' + row['codice_interno'], action=f'/utensile/{uid}/modifica',
         u=u, tipi=tipi, materiali=materiali, fornitori=fornitori,
         modifica=True, active='home', msg='', mtype='')
 
@@ -740,7 +740,7 @@ def utensile_elimina(uid):
         conn.close()
 
 # ---------------------------------------------------------------
-# IMPORTA — upload Excel/CSV con anteprima
+# IMPORTA â upload Excel/CSV con anteprima
 # ---------------------------------------------------------------
 IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
@@ -756,7 +756,7 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
         <label class="drop-zone" for="file_input" id="dz">
           <div style="font-size:2.5rem;margin-bottom:.5rem">&#128196;</div>
           <div id="dz-label">Trascina qui il file o clicca per sceglierlo</div>
-          <div style="font-size:12px;color:#aaa;margin-top:.4rem">Cimatron (.csv .zip .xls) · Hypermill (.db) · Mastercam (.tooldb) · Fusion 360 (.tools .json) · WorkNC (.wkz .js) · CSV/Excel generico</div>
+          <div style="font-size:12px;color:#aaa;margin-top:.4rem">Cimatron (.csv .zip .xls) Â· Hypermill (.db) Â· Mastercam (.tooldb) Â· Fusion 360 (.tools .json) Â· WorkNC (.wkz .js) Â· CSV/Excel generico</div>
           <input type="file" id="file_input" name="file"
                  accept=".xlsx,.xls,.csv,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml" style="display:none"
                  onchange="document.getElementById('dz-label').textContent=this.files[0].name">
@@ -815,15 +815,15 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
       {% endif %}
       {% if risultato.software %}
       <div class="flash info" style="background:#e0f2fe;border-color:#0284c7;color:#0c4a6e;margin-bottom:.5rem">
-        🤖 <b>Formato rilevato:</b> {{ risultato.software }}
+        ð¤ <b>Formato rilevato:</b> {{ risultato.software }}
         {% if risultato.confidence %} &nbsp;|&nbsp; <b>Confidenza:</b> {{ "%.0f"|format(risultato.confidence*100) }}%{% endif %}
-        {% if risultato.ai_usato %} &nbsp;|&nbsp; &#9889; AI mapping attivo{% else %} &nbsp;|&nbsp; 🔸 Mapping euristico (nessuna API key){% endif %}
+        {% if risultato.ai_usato %} &nbsp;|&nbsp; &#9889; AI mapping attivo{% else %} &nbsp;|&nbsp; ð¸ Mapping euristico (nessuna API key){% endif %}
         {% if risultato.righe_totali %} &nbsp;|&nbsp; {{ risultato.righe_totali }} righe analizzate{% endif %}
       </div>
       {% endif %}
       {% if risultato.dry_run %}
       <div class="flash warn">
-        Simulazione completata — nessun dato scritto nel database.
+        Simulazione completata â nessun dato scritto nel database.
       </div>
       {% endif %}
     </div>
@@ -917,7 +917,7 @@ IMPORTA_HTML = BASE.replace('{% block content %}{% endblock %}', """
     const fi=document.getElementById('hm_file');
     if(!fi.files[0]){alert('Scegli prima un file .db');return;}
     const st=document.getElementById('hm-status'),res=document.getElementById('hm-result'),btn=document.getElementById('hm-btn');
-    btn.disabled=true; st.textContent='Importazione in corso…'; res.style.display='none';
+    btn.disabled=true; st.textContent='Importazione in corsoâ¦'; res.style.display='none';
     const fd=new FormData(); fd.append('file',fi.files[0]);
     try{
       const r=await fetch('/importa/hypermill',{method:'POST',body:fd});
@@ -1027,7 +1027,7 @@ IMPORTA_LOCALE_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </div>
   {% endif %}
   {% if risultato.dry_run %}
-  <div class="flash warn" style="margin-top:1rem">Simulazione — nessun dato scritto.</div>
+  <div class="flash warn" style="margin-top:1rem">Simulazione â nessun dato scritto.</div>
   {% else %}
   <div class="flash" style="margin-top:1rem">Import completato nel database master.</div>
   {% endif %}
@@ -1240,8 +1240,8 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
         <tr><td style="color:#888">Materiale tagliente</td><td>{{ u.materiale }}</td></tr>
         <tr style="background:#f8f8f6"><td style="color:#555;font-weight:600">Diametro</td><td><b>{{ u.diametro_mm }} mm</b></td></tr>
         <tr><td style="color:#888">Raggio punta</td><td>{{ u.raggio_punta_mm }} mm</td></tr>
-        {% if u.angolo_punta_gradi %}<tr><td style="color:#888">Angolo punta</td><td>{{ u.angolo_punta_gradi }}°</td></tr>{% endif %}
-        {% if u.angolo_conico_gradi and u.conico %}<tr><td style="color:#888">Angolo conico</td><td>{{ u.angolo_conico_gradi }}°</td></tr>{% endif %}
+        {% if u.angolo_punta_gradi %}<tr><td style="color:#888">Angolo punta</td><td>{{ u.angolo_punta_gradi }}Â°</td></tr>{% endif %}
+        {% if u.angolo_conico_gradi and u.conico %}<tr><td style="color:#888">Angolo conico</td><td>{{ u.angolo_conico_gradi }}Â°</td></tr>{% endif %}
         <tr style="background:#f8f8f6"><td style="color:#555;font-weight:600">Lunghezza totale</td><td><b>{{ u.lunghezza_totale_mm }} mm</b></td></tr>
         <tr><td style="color:#888">Lunghezza utile</td><td>{{ u.lunghezza_tagl_mm }} mm</td></tr>
         {% if u.lunghezza_tagl2_mm %}<tr><td style="color:#888">Lunghezza tagliente</td><td>{{ u.lunghezza_tagl2_mm }} mm</td></tr>{% endif %}
@@ -1259,7 +1259,7 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
         {% if u.lungh_libera_stelo_mm %}<tr><td style="color:#888">Lungh. libera stelo</td><td>{{ u.lungh_libera_stelo_mm }} mm</td></tr>{% endif %}
         {% if u.lungh_cono_stelo_mm %}<tr><td style="color:#888">Lungh. cono stelo</td><td>{{ u.lungh_cono_stelo_mm }} mm</td></tr>{% endif %}
         {% if u.diam_stelo2_sup_mm %}
-        <tr><td colspan="2" style="font-size:11px;color:#888;padding-top:.5rem">— Stelo secondario —</td></tr>
+        <tr><td colspan="2" style="font-size:11px;color:#888;padding-top:.5rem">â Stelo secondario â</td></tr>
         <tr><td style="color:#888">Diam. sup. stelo 2</td><td>{{ u.diam_stelo2_sup_mm }} mm</td></tr>
         <tr><td style="color:#888">Diam. inf. stelo 2</td><td>{{ u.diam_stelo2_inf_mm }} mm</td></tr>
         {% if u.lungh_libera_stelo2_mm %}<tr><td style="color:#888">Lungh. libera stelo 2</td><td>{{ u.lungh_libera_stelo2_mm }} mm</td></tr>{% endif %}
@@ -1308,7 +1308,7 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
       {% if holder_segs %}
       <p style="font-size:12px;font-weight:600;margin:1rem 0 .5rem;color:#555">Geometria portautensile ({{ holder_segs|length }} segmenti)</p>
       <table style="font-size:12px">
-      <thead><tr><th>Seg.</th><th>Ø inf (mm)</th><th>Ø sup (mm)</th><th>Lungh. (mm)</th></tr></thead>
+      <thead><tr><th>Seg.</th><th>Ã inf (mm)</th><th>Ã sup (mm)</th><th>Lungh. (mm)</th></tr></thead>
       <tbody>
       {% for s in holder_segs %}
       <tr>
@@ -1414,7 +1414,7 @@ def debug_test_cimatron():
 @app.route('/api/salva-apikey', methods=['POST'])
 def salva_apikey():
     key = request.form.get('api_key', '').strip()
-    if key and '•' not in key:
+    if key and 'â¢' not in key:
         cfg = carica_config()
         cfg['anthropic_api_key'] = key
         salva_config(cfg)
@@ -1483,7 +1483,7 @@ def importa():
                 _ext = os.path.splitext(import_path)[1].lower()
                 _detected = None
 
-                # ── Auto-detect formato ──────────────────────────────
+                # ââ Auto-detect formato ââââââââââââââââââââââââââââââ
                 # 1. Hypermill .db (SQLite con tabelle NCTools/Tools)
                 if _ext == '.db':
                     try:
@@ -1538,7 +1538,7 @@ def importa():
                 if not _detected:
                     _detected = 'csv_generico'
 
-                # ── Esegui import per formato rilevato ────────────────
+                # ââ Esegui import per formato rilevato ââââââââââââââââ
                 if _detected == 'hypermill':
                     from hypermill_db_importer import importa_hypermill_db
                     r = importa_hypermill_db(import_path, DB_PATH, dry_run=dry_run)
@@ -1623,7 +1623,7 @@ def importa():
                             'taglio_inserite': r.get('condizioni_taglio', 0),
                         }
                     except (_json.JSONDecodeError, Exception):
-                        # Non è JSON — prova come CSV generico (tab/comma separated dentro .js)
+                        # Non Ã¨ JSON â prova come CSV generico (tab/comma separated dentro .js)
                         r = importa_csv_generico(import_path, DB_PATH, dry_run=dry_run)
                         risultato = {
                             'inseriti': r.get('inseriti', 0),
@@ -1746,7 +1746,7 @@ EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <ol style="font-size:13px;color:#555;line-height:2;padding-left:1.25rem;margin:0">
         <li>Esporta un file campione dal CAM</li>
         <li>Apri <a href="http://localhost:5001" target="_blank">Format Learner (porta 5001)</a></li>
-        <li>Carica il file — mappatura automatica</li>
+        <li>Carica il file â mappatura automatica</li>
         <li>Salva il profilo</li>
         <li>Attivalo in <a href="/impostazioni">Impostazioni</a></li>
       </ol>
@@ -1870,7 +1870,7 @@ IMPOSTAZIONI_HTML = BASE.replace('{% block content %}{% endblock %}', """
       </form>
     </div>
     <div class="card">
-      <h2>🤖 AI Parser universale</h2>
+      <h2>ð¤ AI Parser universale</h2>
       <p style="font-size:.85rem;color:#555;margin:0 0 .75rem">
         Chiave API Anthropic per <code>universal_parser</code>: analisi automatica di qualsiasi file CAM
         (hyperMILL, WorkNC, Mastercam, CSV generico). Senza chiave viene usato il mapping euristico.
@@ -1898,13 +1898,13 @@ IMPOSTAZIONI_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <h2>Comandi terminale</h2>
       <div style="font-size:12px;color:#555;display:flex;flex-direction:column;gap:.4rem">
         <div style="background:#f4f4f2;border-radius:5px;padding:.5rem .75rem">
-          <code>bash start.sh</code> — Avvia tutto</div>
+          <code>bash start.sh</code> â Avvia tutto</div>
         <div style="background:#f4f4f2;border-radius:5px;padding:.5rem .75rem">
-          <code>python scheduler.py --now</code> — Export immediato</div>
+          <code>python scheduler.py --now</code> â Export immediato</div>
         <div style="background:#f4f4f2;border-radius:5px;padding:.5rem .75rem">
-          <code>python scheduler.py --watch</code> — Export on-change</div>
+          <code>python scheduler.py --watch</code> â Export on-change</div>
         <div style="background:#f4f4f2;border-radius:5px;padding:.5rem .75rem">
-          <code>python scheduler.py --daemon</code> — Export notturno</div>
+          <code>python scheduler.py --daemon</code> â Export notturno</div>
       </div>
     </div>
   </div>
@@ -1968,7 +1968,7 @@ def log_page():
 
 
 # ---------------------------------------------------------------
-# PAGINA CAM — stato decoder/generator per ogni CAM
+# PAGINA CAM â stato decoder/generator per ogni CAM
 # ---------------------------------------------------------------
 CAM_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
@@ -2055,8 +2055,8 @@ CAM_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div class="card" style="margin-top:1rem;background:#f8f8f6">
   <p style="font-size:13px;color:#666;margin:0">
     <b>Come aggiungere un CAM non in lista:</b>
-    Esporta un file campione dal software CAM → caricalo nel
-    <a href="http://localhost:5001" target="_blank">Format Learner</a> →
+    Esporta un file campione dal software CAM â caricalo nel
+    <a href="http://localhost:5001" target="_blank">Format Learner</a> â
     il sistema impara il formato e lo aggiunge automaticamente alla lista.
     Una volta che il decoder e il generator sono attivi, il CAM appare qui completo.
   </p>
@@ -2361,7 +2361,7 @@ def test_agente():
             elif azione == 'test_completo':
                 r = orchestra_learning(df, key, 'worknc_tools_sample.csv', log_cb)
                 risultato = {
-                    'livello': 'Test Completo L1→L4',
+                    'livello': 'Test Completo L1âL4',
                     'verificato': r.get('verificato'),
                     'score': r.get('score'),
                     'n_mappati': len(r.get('profilo', {})),
@@ -2406,25 +2406,25 @@ TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;font-size:12px;text-align:center">
     <div style="background:#1d4ed8;border-radius:8px;padding:.75rem">
       <div style="font-size:1.5rem">&#127757;</div>
-      <div style="font-weight:700;margin:.3rem 0">L1 — Orchestratore</div>
+      <div style="font-weight:700;margin:.3rem 0">L1 â Orchestratore</div>
       <div style="color:#93c5fd">Sonnet</div>
       <div style="color:#bfdbfe;margin-top:.3rem">Strategia + verifica finale</div>
     </div>
     <div style="background:#166534;border-radius:8px;padding:.75rem">
       <div style="font-size:1.5rem">&#128300;</div>
-      <div style="font-weight:700;margin:.3rem 0">L2a — Struttura</div>
+      <div style="font-weight:700;margin:.3rem 0">L2a â Struttura</div>
       <div style="color:#86efac">Haiku &#128176;</div>
       <div style="color:#bbf7d0;margin-top:.3rem">Software CAM + gruppi colonne</div>
     </div>
     <div style="background:#166534;border-radius:8px;padding:.75rem">
       <div style="font-size:1.5rem">&#128202;</div>
-      <div style="font-weight:700;margin:.3rem 0">L2b — Valori</div>
+      <div style="font-weight:700;margin:.3rem 0">L2b â Valori</div>
       <div style="color:#86efac">Haiku &#128176;&#128176;</div>
       <div style="color:#bbf7d0;margin-top:.3rem">Analisi colonna per colonna</div>
     </div>
     <div style="background:#7c3aed;border-radius:8px;padding:.75rem">
       <div style="font-size:1.5rem">&#128270;</div>
-      <div style="font-weight:700;margin:.3rem 0">L4 — Verificatore</div>
+      <div style="font-weight:700;margin:.3rem 0">L4 â Verificatore</div>
       <div style="color:#c4b5fd">Sonnet</div>
       <div style="color:#ddd6fe;margin-top:.3rem">Controllo logico + correzioni</div>
     </div>
@@ -2436,7 +2436,7 @@ TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
   <form method="post">
     <div class="card" style="height:100%">
-      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9312; Test L2a — Analisi Struttura</h3>
+      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9312; Test L2a â Analisi Struttura</h3>
       <p style="font-size:12px;color:#666;margin:0 0 1rem">
         Haiku analizza il file WorkNC e identifica: software CAM, lingua,
         gruppi di colonne (geometria, taglio, assemblaggio).
@@ -2450,7 +2450,7 @@ TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
   <form method="post">
     <div class="card" style="height:100%">
-      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9313; Test L2b — Analisi Colonna</h3>
+      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9313; Test L2b â Analisi Colonna</h3>
       <p style="font-size:12px;color:#666;margin:0 0 .75rem">
         Haiku analizza una singola colonna. Scegli una colonna "difficile" come
         <code>Radius</code> o <code>Fz</code> per vedere se capisce il significato.
@@ -2471,10 +2471,10 @@ TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 
   <form method="post">
     <div class="card" style="height:100%">
-      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9314; Test L3 — Mapping</h3>
+      <h3 style="margin:0 0 .5rem;font-size:.95rem">&#9314; Test L3 â Mapping</h3>
       <p style="font-size:12px;color:#666;margin:0 0 1rem">
         Haiku produce il mapping completo dopo aver analizzato tutte le colonne.
-        Verifica se <code>Radius→diametro_mm</code>, <code>Gauge→fuori_pinza_mm</code>, ecc.
+        Verifica se <code>Radiusâdiametro_mm</code>, <code>Gaugeâfuori_pinza_mm</code>, ecc.
         <br><b>Costo stimato: ~4500 + 1500 token</b>
       </p>
       <button class="btn btn-p" type="submit" name="azione" value="test_l3">
@@ -2486,7 +2486,7 @@ TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <form method="post">
     <div class="card" style="border:2px solid #1d4ed8;height:100%">
       <h3 style="margin:0 0 .5rem;font-size:.95rem;color:#1d4ed8">
-        &#9315; Test Completo L1→L4
+        &#9315; Test Completo L1âL4
       </h3>
       <p style="font-size:12px;color:#666;margin:0 0 1rem">
         L'orchestratore esegue tutti i livelli in sequenza e produce il profilo
@@ -2516,11 +2516,11 @@ TEST_AGENTE_HTML = BASE.replace('{% block content %}{% endblock %}', """
     {% if risultato.get('verificato') is not none %}
       {% if risultato.verificato %}
         <span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600">
-          &#10003; APPROVATO — Score: {{ risultato.score }}%
+          &#10003; APPROVATO â Score: {{ risultato.score }}%
         </span>
       {% else %}
         <span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600">
-          &#10060; NON APPROVATO — Score: {{ risultato.score }}%
+          &#10060; NON APPROVATO â Score: {{ risultato.score }}%
         </span>
       {% endif %}
     {% endif %}
@@ -2610,13 +2610,13 @@ def debug_magic():
 
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# CAM AGENT — Agente AI per import universale CAM
-# ═══════════════════════════════════════════════════════════════════════
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# CAM AGENT â Agente AI per import universale CAM
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 CAM_AGENT_HTML = """<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agente CAM — Tool DB Manager</title>
+<title>Agente CAM â Tool DB Manager</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
 .nav{background:#1e293b;padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem;border-bottom:1px solid #334155}
@@ -2664,7 +2664,7 @@ CAM_AGENT_HTML = """<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
 <div class="container">
   <div class="chat-area">
     <div class="chat-messages" id="msgs">
-      <div class="msg system">&#129302; Agente CAM pronto — carica un file o fai una domanda</div>
+      <div class="msg system">&#129302; Agente CAM pronto â carica un file o fai una domanda</div>
       <div class="msg agent">Ciao! Sono l&#39;agente CAM integrato.
 
 Posso aiutarti a:
@@ -2703,7 +2703,7 @@ Carica un file CAM in alto e scrivi cosa vuoi fare, oppure usa i pulsanti rapidi
     </div>
     <div class="pane">
       <div class="pane-title">&#9881; Tool calls</div>
-      <div id="tool-log"><span style="color:#475569;font-size:.75rem">—</span></div>
+      <div id="tool-log"><span style="color:#475569;font-size:.75rem">â</span></div>
     </div>
   </div>
 </div>
@@ -2771,7 +2771,7 @@ function addMsg(t,txt){
   const id='m'+(++_mid);
   const el=document.createElement('div');
   el.id=id;el.className='msg '+t;
-  el.innerHTML=txt.replace(/**([^*]+)**/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+  el.innerHTML=txt.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
   document.getElementById('msgs').appendChild(el);
   el.scrollIntoView({behavior:'smooth',block:'end'});
   return id;
@@ -2819,7 +2819,7 @@ def cam_agent_db_stats():
 
 
 
-# ── Job asincrono per l'agente CAM ──────────────────────────────────────
+# ââ Job asincrono per l'agente CAM ââââââââââââââââââââââââââââââââââââââ
 import threading as _threading, uuid as _uuid, time as _time
 
 _JOBS = {}  # job_id -> {status, result, created_at}
@@ -2935,7 +2935,7 @@ def version():
 # ---------------------------------------------------------------
 
 # =======================================================================
-# CHAT WIDGET FLOTTANTE — iniettato in ogni pagina HTML
+# CHAT WIDGET FLOTTANTE â iniettato in ogni pagina HTML
 # =======================================================================
 
 _WIDGET = (
@@ -3089,7 +3089,7 @@ def _inject_widget(resp):
 
 
 # =======================================================================
-# CHAT WIDGET — iniettato via file statico in ogni pagina HTML
+# CHAT WIDGET â iniettato via file statico in ogni pagina HTML
 # =======================================================================
 
 _WIDGET_MARKUP = (
@@ -3142,7 +3142,7 @@ def widget_js():
 
 @app.after_request
 def _inject_widget(resp):
-    """Inietta markup widget in ogni pagina HTML — il JS viene da /static/widget.js."""
+    """Inietta markup widget in ogni pagina HTML â il JS viene da /static/widget.js."""
     if resp.content_type and 'text/html' in resp.content_type:
         html = resp.get_data(as_text=True)
         if '</body>' in html and 'ai-fab' not in html:
