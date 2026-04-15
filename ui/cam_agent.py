@@ -24,7 +24,7 @@ def _conn():
     con.row_factory = sqlite3.Row
     return con
 
-# Ã¢ÂÂÃ¢ÂÂ TOOL IMPLEMENTATIONS Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ TOOL IMPLEMENTATIONS ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
 
 def tool_leggi_schema_db():
     con = _conn()
@@ -246,7 +246,7 @@ def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
         if count == 0:
             return {'errore': f'Testo non trovato nel file. Verifica con leggi_file prima.'}
         if count > 1:
-            return {'errore': f'Testo trovato {count} volte Ã¢ÂÂ troppo ambiguo. Aggiungi piÃÂ¹ contesto.'}
+            return {'errore': f'Testo trovato {count} volte ÃÂ¢ÃÂÃÂ troppo ambiguo. Aggiungi piÃÂÃÂ¹ contesto.'}
         nuovo_contenuto = contenuto.replace(vecchio_testo, nuovo_testo, 1)
         with open(full, 'w', encoding='utf-8') as f:
             f.write(nuovo_contenuto)
@@ -467,17 +467,17 @@ def tool_cancella_checkpoint(task_id):
     except Exception as e:
         return {'errore': str(e)}
 
-# Ã¢ÂÂÃ¢ÂÂ TOOL REGISTRY Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ TOOL REGISTRY ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
 
 
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-# TOOL: cerca_web â ricerca documentazione tecnica via Anthropic
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# TOOL: cerca_web Ã¢ÂÂ ricerca documentazione tecnica via Anthropic
+# Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 def tool_cerca_web(query: str, max_results: int = 5) -> str:
     """
     Cerca documentazione tecnica su formati CAM, parametri DB, schemi proprietari.
-    Usa l'API Anthropic con web_search tool â stessa chiave API del progetto.
+    Usa l'API Anthropic con web_search tool Ã¢ÂÂ stessa chiave API del progetto.
     Ritorna un riassunto dei risultati trovati.
     """
     import requests as _req
@@ -517,9 +517,9 @@ def tool_cerca_web(query: str, max_results: int = 5) -> str:
         return f"Errore ricerca web: {e}"
 
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-# TOOL: formato_noto â knowledge base mappature CAM verificate
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# TOOL: formato_noto Ã¢ÂÂ knowledge base mappature CAM verificate
+# Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 def _ensure_formato_noto_table():
     """Crea la tabella formato_noto se non esiste."""
     conn = _conn()
@@ -548,10 +548,10 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
     """
     Gestisce la knowledge base dei formati CAM gia decodificati.
     azioni:
-      'cerca'  â cerca se il software e gia noto (ritorna mappatura JSON o None)
-      'salva'  â salva una nuova mappatura (richiede software + mappatura dict)
-      'lista'  â elenca tutti i formati noti
-      'aggiorna_count' â incrementa il contatore import per un software
+      'cerca'  Ã¢ÂÂ cerca se il software e gia noto (ritorna mappatura JSON o None)
+      'salva'  Ã¢ÂÂ salva una nuova mappatura (richiede software + mappatura dict)
+      'lista'  Ã¢ÂÂ elenca tutti i formati noti
+      'aggiorna_count' Ã¢ÂÂ incrementa il contatore import per un software
     """
     _ensure_formato_noto_table()
     conn = _conn()
@@ -579,7 +579,7 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
         elif azione == 'salva':
             if not software or not mappatura:
                 return "ERRORE: specificare software e mappatura."
-            # Controlla se esiste giÃ 
+            # Controlla se esiste giÃÂ 
             existing = conn.execute(
                 "SELECT id FROM formato_noto WHERE software=? AND versione=?",
                 (software, versione)
@@ -605,14 +605,14 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
                 "SELECT software, versione, confidenza, verificato, n_import, data_creazione FROM formato_noto ORDER BY data_creazione DESC"
             ).fetchall()
             if not rows:
-                return "Knowledge base vuota â nessun formato ancora imparato."
+                return "Knowledge base vuota Ã¢ÂÂ nessun formato ancora imparato."
             lines = ["=== FORMATI NOTI ==="]
             for r in rows:
                 d = dict(r)
                 lines.append(
                     f"  {d['software']} {d['versione']} | "
                     f"conf={d['confidenza']:.0%} | "
-                    f"{'â verificato' if d['verificato'] else '? ipotesi'} | "
+                    f"{'Ã¢ÂÂ verificato' if d['verificato'] else '? ipotesi'} | "
                     f"{d['n_import']} import | {d['data_creazione'][:10]}"
                 )
             return "\n".join(lines)
@@ -631,9 +631,9 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
         conn.close()
 
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-# TOOL: decodifica_db â analisi statistica autonoma DB sconosciuti
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# TOOL: decodifica_db Ã¢ÂÂ analisi statistica autonoma DB sconosciuti
+# Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 def tool_decodifica_db(filepath: str) -> str:
     """
     Analisi statistica + pattern matching per decodificare un DB CAM sconosciuto.
@@ -642,7 +642,7 @@ def tool_decodifica_db(filepath: str) -> str:
     2. Schema discovery: lista tabelle, colonne, tipi
     3. Statistica: min/max/media/nonzero per ogni colonna numerica
     4. Pattern matching: confronta con range attesi (diametri 0.1-300, angoli 0-180, ecc.)
-    5. Cross-check: se c'Ã¨ una colonna nome/descrizione, cerca pattern tipo D10R0.5
+    5. Cross-check: se c'ÃÂ¨ una colonna nome/descrizione, cerca pattern tipo D10R0.5
     6. Consulta formato_noto per software simili gia noti
     """
     import re as _re
@@ -761,7 +761,7 @@ def tool_decodifica_db(filepath: str) -> str:
 
                             report.append(
                                 f"    {col}: min={mn} max={mx} avg={avg} nonzero={nonzero}"
-                                + (f" â IPOTESI: {', '.join(guesses)}" if guesses else "")
+                                + (f" Ã¢ÂÂ IPOTESI: {', '.join(guesses)}" if guesses else "")
                             )
                         except Exception:
                             pass
@@ -882,42 +882,42 @@ TOOL_FN = {
     'esegui_comando':       lambda i: tool_esegui_comando(i['comando'], i.get('timeout',30), i.get('cwd')),
 }
 
-# Ã¢ÂÂÃ¢ÂÂ AGENT LOOP Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ AGENT LOOP ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
 
 SYSTEM_PROMPT = """Sei l'agente tecnico di Tool DB Manager. Gestisci import CAM e fai debug/fix del codice.
 
 MODALITA' DEBUG (quando vedi un log con errore):
-1. Leggi il log Ã¢ÂÂ identifica il file e la riga dell'errore
-2. USA SUBITO leggi_file sul file incriminato Ã¢ÂÂ non spiegare prima, agisci
+1. Leggi il log ÃÂ¢ÃÂÃÂ identifica il file e la riga dell'errore
+2. USA SUBITO leggi_file sul file incriminato ÃÂ¢ÃÂÃÂ non spiegare prima, agisci
 3. Trova il bug esatto nel codice
-4. USA modifica_file per applicare il fix Ã¢ÂÂ non descrivere il fix, APPLICALO
+4. USA modifica_file per applicare il fix ÃÂ¢ÃÂÃÂ non descrivere il fix, APPLICALO
 5. Conferma: "Fix applicato. Riavvia il server con: lsof -ti:PORT | xargs kill -9 && python3 FILE &"
 
 MODALITA' IMPORT (quando vedi un file CAM):
-1. formato_noto cerca â controlla knowledge base per formati gia noti
-2. lista_plugin â controlla plugin esistenti
-3. analizza_file_cam â studia la struttura del file
-4. Se e un .db SQLite sconosciuto: decodifica_db â analisi statistica autonoma
-5. Se hai dubbi su parametri: cerca_web â cerca documentazione online
-6. proponi_mapping â usa knowledge base + euristica
-7. importa_file dry_run=true â simula l'import
+1. formato_noto cerca Ã¢ÂÂ controlla knowledge base per formati gia noti
+2. lista_plugin Ã¢ÂÂ controlla plugin esistenti
+3. analizza_file_cam Ã¢ÂÂ studia la struttura del file
+4. Se e un .db SQLite sconosciuto: decodifica_db Ã¢ÂÂ analisi statistica autonoma
+5. Se hai dubbi su parametri: cerca_web Ã¢ÂÂ cerca documentazione online
+6. proponi_mapping Ã¢ÂÂ usa knowledge base + euristica
+7. importa_file dry_run=true Ã¢ÂÂ simula l'import
 8. Se import OK (10+ utensili): formato_noto salva con verificato=true
 9. Chiedi conferma, poi importa_file dry_run=false
 
 MODALITA' RICERCA AUTONOMA (formato sconosciuto):
-1. decodifica_db â analisi statistica del file
+1. decodifica_db Ã¢ÂÂ analisi statistica del file
 2. cerca_web query specifica (es: 'hypermill NCTools dbl_param fields')
 3. cerca_web release notes, documentazione vendor, forum CNC machining
 4. Incrocia risultati web con analisi statistica
 5. Proponi mappatura con confidenza esplicita (es: confidenza 85%)
 6. formato_noto salva con confidenza appropriata
-7. NON fermarti a 'non so' â cambia query e itera fino alla soluzione
-1. lista_plugin Ã¢ÂÂ controlla se esiste gia un plugin per questa versione
-2. analizza_file_cam Ã¢ÂÂ studia la struttura
-3. proponi_mapping Ã¢ÂÂ fast path Cimatron (0 token) o euristico
-4. importa_file dry_run=true Ã¢ÂÂ simula
+7. NON fermarti a 'non so' Ã¢ÂÂ cambia query e itera fino alla soluzione
+1. lista_plugin ÃÂ¢ÃÂÃÂ controlla se esiste gia un plugin per questa versione
+2. analizza_file_cam ÃÂ¢ÃÂÃÂ studia la struttura
+3. proponi_mapping ÃÂ¢ÃÂÃÂ fast path Cimatron (0 token) o euristico
+4. importa_file dry_run=true ÃÂ¢ÃÂÃÂ simula
 5. Chiedi conferma, poi importa_file dry_run=false
-6. leggi_utensili Ã¢ÂÂ verifica alias e fuori_pinza_mm
+6. leggi_utensili ÃÂ¢ÃÂÃÂ verifica alias e fuori_pinza_mm
 
 
 MODALITA' DEV AUTONOMO (quando ricevi un task di sviluppo):
@@ -943,7 +943,7 @@ REGOLE ASSOLUTE:
 - Se vedi "errore: name X is not defined" -> leggi_file SUBITO, trova X, usa modifica_file
 - Se vedi "0 colonne mappate" -> leggi_file orchestrator_agent.py, cerca il bug nel batch
 - Se vedi "Limite turni" -> il task e complesso, scrivi "continua" per proseguire
-- NON spiegare cosa faresti Ã¢ÂÂ FALLO direttamente con i tool
+- NON spiegare cosa faresti ÃÂ¢ÃÂÃÂ FALLO direttamente con i tool
 - Dopo modifica_file SEMPRE comunica quale file modificare e come riavviare
 - DROP TABLE e DELETE senza WHERE sono bloccati per sicurezza
 CHECKPOINT - REGOLA FONDAMENTALE:
@@ -952,15 +952,16 @@ CHECKPOINT - REGOLA FONDAMENTALE:
 - Quando utente dice 'continua': lista_checkpoint() poi leggi_checkpoint(task_id) e riparti
 - Quando ricevi un messaggio che inizia con PROCEDI IMMEDIATAMENTE: esegui il prossimo step SENZA chiedere nulla, SENZA spiegare, direttamente con i tool
 
-- Non modificare mai ui/app.py o ui/cam_agent.py (core dell'app)
-- Puoi modificare e CREARE liberamente: learner/*.py, plugins/**/*.py, importers/*.py, exporters/*.py, tools/*.py
+- Non modificare mai ui/cam_agent.py (il tuo stesso codice)
+- Puoi modificare e CREARE liberamente: ui/app.py, learner/*.py, plugins/**/*.py, importers/*.py, exporters/*.py, tools/*.py
+- ATTENZIONE su ui/app.py: dopo ogni modifica valida SEMPRE con py_compile e riavvia il server
 
 File principali:
-- learner/orchestrator_agent.py Ã¢ÂÂ motore AI di mapping
-- learner/cimatron_importer.py Ã¢ÂÂ import Cimatron
-- learner/cimatron_parser.py Ã¢ÂÂ parser ZIP Cimatron
-- plugins/cimatron/_core.py Ã¢ÂÂ core plugin Cimatron
-- plugins/_loader.py Ã¢ÂÂ loader plugin dinamico"""
+- learner/orchestrator_agent.py ÃÂ¢ÃÂÃÂ motore AI di mapping
+- learner/cimatron_importer.py ÃÂ¢ÃÂÃÂ import Cimatron
+- learner/cimatron_parser.py ÃÂ¢ÃÂÃÂ parser ZIP Cimatron
+- plugins/cimatron/_core.py ÃÂ¢ÃÂÃÂ core plugin Cimatron
+- plugins/_loader.py ÃÂ¢ÃÂÃÂ loader plugin dinamico"""
 
 def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
     import urllib.request, ssl
