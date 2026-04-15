@@ -24,7 +24,7 @@ def _conn():
     con.row_factory = sqlite3.Row
     return con
 
-# ââ TOOL IMPLEMENTATIONS âââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂ TOOL IMPLEMENTATIONS Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 def tool_leggi_schema_db():
     con = _conn()
@@ -246,7 +246,7 @@ def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
         if count == 0:
             return {'errore': f'Testo non trovato nel file. Verifica con leggi_file prima.'}
         if count > 1:
-            return {'errore': f'Testo trovato {count} volte â troppo ambiguo. Aggiungi piÃ¹ contesto.'}
+            return {'errore': f'Testo trovato {count} volte Ã¢ÂÂ troppo ambiguo. Aggiungi piÃÂ¹ contesto.'}
         nuovo_contenuto = contenuto.replace(vecchio_testo, nuovo_testo, 1)
         with open(full, 'w', encoding='utf-8') as f:
             f.write(nuovo_contenuto)
@@ -263,6 +263,89 @@ def tool_modifica_file(percorso, vecchio_testo, nuovo_testo, descrizione=''):
         }
     except Exception as e:
         return {'errore': str(e)}
+
+
+def tool_crea_file(percorso, contenuto, descrizione=''):
+    """
+    Crea un nuovo file del progetto o sovrascrive uno esistente.
+    Usa per: nuovi importer, nuovi plugin, nuovi test, nuovi moduli.
+    Il percorso e' relativo alla root del progetto.
+    Estensioni consentite: .py .sql .json .csv .txt .md .sh .bat
+    """
+    try:
+        root = os.path.normpath(os.path.join(_DIR, '..'))
+        full = os.path.normpath(os.path.join(root, percorso))
+        if not full.startswith(root):
+            return {'errore': f'Path non consentito: {percorso}'}
+        ext = os.path.splitext(full)[1].lower()
+        if ext not in ('.py', '.sql', '.json', '.csv', '.txt', '.md', '.sh', '.bat'):
+            return {'errore': f'Estensione non consentita: {ext}'}
+        # Crea cartelle intermedie se mancano
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        esisteva = os.path.exists(full)
+        with open(full, 'w', encoding='utf-8') as f:
+            f.write(contenuto)
+        righe = contenuto.count('\n') + 1
+        return {
+            'ok': True,
+            'percorso': percorso,
+            'azione': 'sovrascritto' if esisteva else 'creato',
+            'righe': righe,
+            'descrizione': descrizione,
+            'nota': 'File scritto su disco. Riavvia il server se e un modulo Python importato da Flask.'
+        }
+    except Exception as e:
+        return {'errore': str(e)}
+
+
+def tool_esegui_comando(comando, timeout=30, cwd=None):
+    """
+    Esegue un comando shell nella root del progetto.
+    Usa per: riavviare il server Flask, eseguire test, git commit, pip install.
+    
+    Comandi consentiti (whitelist):
+      - python3 / python  (esecuzione script)
+      - pip install       (solo pacchetti)
+      - pytest            (test)
+      - lsof              (trova PID server)
+      - kill              (ferma server)
+      - git add/commit/status  (versioning)
+      - bash start.sh / stop.sh
+      - ls / cat (solo file del progetto)
+    
+    Comandi bloccati: rm -rf, curl a URL esterni, wget, dd, mkfs.
+    Ritorna stdout, stderr e returncode.
+    """
+    import subprocess, shlex
+    
+    # Blocklist di sicurezza
+    BLOCKLIST = ['rm -rf', 'dd if=', 'mkfs', 'wget ', 'curl ', ':(){', 'chmod 777',
+                 'sudo', '> /dev/', '| sh', '| bash', 'eval ', 'exec(']
+    cmd_lower = comando.lower()
+    for blk in BLOCKLIST:
+        if blk in cmd_lower:
+            return {'errore': f'Comando bloccato per sicurezza: contiene "{blk}"'}
+    
+    root = os.path.normpath(os.path.join(_DIR, '..'))
+    work_dir = os.path.normpath(os.path.join(root, cwd)) if cwd else root
+    if not work_dir.startswith(root):
+        return {'errore': 'cwd fuori dalla root del progetto'}
+    
+    try:
+        result = subprocess.run(
+            comando, shell=True, capture_output=True, text=True,
+            timeout=timeout, cwd=work_dir
+        )
+        return {
+            'returncode': result.returncode,
+            'stdout': result.stdout[-3000:] if result.stdout else '',
+            'stderr': result.stderr[-1000:] if result.stderr else '',
+            'ok': result.returncode == 0
+        }
+    except subprocess.TimeoutExpired:
+        return {'errore': f'Timeout ({timeout}s). Processo avviato in background.', 'ok': False}
+    except Exception as e:
+        return {'errore': str(e), 'ok': False}
 
 
 def tool_lista_plugin():
@@ -384,17 +467,17 @@ def tool_cancella_checkpoint(task_id):
     except Exception as e:
         return {'errore': str(e)}
 
-# ââ TOOL REGISTRY ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂ TOOL REGISTRY Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 
 
-# ─────────────────────────────────────────────────────────────────
-# TOOL: cerca_web — ricerca documentazione tecnica via Anthropic
-# ─────────────────────────────────────────────────────────────────
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# TOOL: cerca_web â ricerca documentazione tecnica via Anthropic
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 def tool_cerca_web(query: str, max_results: int = 5) -> str:
     """
     Cerca documentazione tecnica su formati CAM, parametri DB, schemi proprietari.
-    Usa l'API Anthropic con web_search tool — stessa chiave API del progetto.
+    Usa l'API Anthropic con web_search tool â stessa chiave API del progetto.
     Ritorna un riassunto dei risultati trovati.
     """
     import requests as _req
@@ -434,9 +517,9 @@ def tool_cerca_web(query: str, max_results: int = 5) -> str:
         return f"Errore ricerca web: {e}"
 
 
-# ─────────────────────────────────────────────────────────────────
-# TOOL: formato_noto — knowledge base mappature CAM verificate
-# ─────────────────────────────────────────────────────────────────
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# TOOL: formato_noto â knowledge base mappature CAM verificate
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 def _ensure_formato_noto_table():
     """Crea la tabella formato_noto se non esiste."""
     conn = _conn()
@@ -465,10 +548,10 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
     """
     Gestisce la knowledge base dei formati CAM gia decodificati.
     azioni:
-      'cerca'  — cerca se il software e gia noto (ritorna mappatura JSON o None)
-      'salva'  — salva una nuova mappatura (richiede software + mappatura dict)
-      'lista'  — elenca tutti i formati noti
-      'aggiorna_count' — incrementa il contatore import per un software
+      'cerca'  â cerca se il software e gia noto (ritorna mappatura JSON o None)
+      'salva'  â salva una nuova mappatura (richiede software + mappatura dict)
+      'lista'  â elenca tutti i formati noti
+      'aggiorna_count' â incrementa il contatore import per un software
     """
     _ensure_formato_noto_table()
     conn = _conn()
@@ -496,7 +579,7 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
         elif azione == 'salva':
             if not software or not mappatura:
                 return "ERRORE: specificare software e mappatura."
-            # Controlla se esiste già
+            # Controlla se esiste giÃ 
             existing = conn.execute(
                 "SELECT id FROM formato_noto WHERE software=? AND versione=?",
                 (software, versione)
@@ -522,14 +605,14 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
                 "SELECT software, versione, confidenza, verificato, n_import, data_creazione FROM formato_noto ORDER BY data_creazione DESC"
             ).fetchall()
             if not rows:
-                return "Knowledge base vuota — nessun formato ancora imparato."
+                return "Knowledge base vuota â nessun formato ancora imparato."
             lines = ["=== FORMATI NOTI ==="]
             for r in rows:
                 d = dict(r)
                 lines.append(
                     f"  {d['software']} {d['versione']} | "
                     f"conf={d['confidenza']:.0%} | "
-                    f"{'✓ verificato' if d['verificato'] else '? ipotesi'} | "
+                    f"{'â verificato' if d['verificato'] else '? ipotesi'} | "
                     f"{d['n_import']} import | {d['data_creazione'][:10]}"
                 )
             return "\n".join(lines)
@@ -548,9 +631,9 @@ def tool_formato_noto(azione: str, software: str = '', mappatura: dict = None,
         conn.close()
 
 
-# ─────────────────────────────────────────────────────────────────
-# TOOL: decodifica_db — analisi statistica autonoma DB sconosciuti
-# ─────────────────────────────────────────────────────────────────
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# TOOL: decodifica_db â analisi statistica autonoma DB sconosciuti
+# âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 def tool_decodifica_db(filepath: str) -> str:
     """
     Analisi statistica + pattern matching per decodificare un DB CAM sconosciuto.
@@ -559,7 +642,7 @@ def tool_decodifica_db(filepath: str) -> str:
     2. Schema discovery: lista tabelle, colonne, tipi
     3. Statistica: min/max/media/nonzero per ogni colonna numerica
     4. Pattern matching: confronta con range attesi (diametri 0.1-300, angoli 0-180, ecc.)
-    5. Cross-check: se c'è una colonna nome/descrizione, cerca pattern tipo D10R0.5
+    5. Cross-check: se c'Ã¨ una colonna nome/descrizione, cerca pattern tipo D10R0.5
     6. Consulta formato_noto per software simili gia noti
     """
     import re as _re
@@ -678,7 +761,7 @@ def tool_decodifica_db(filepath: str) -> str:
 
                             report.append(
                                 f"    {col}: min={mn} max={mx} avg={avg} nonzero={nonzero}"
-                                + (f" → IPOTESI: {', '.join(guesses)}" if guesses else "")
+                                + (f" â IPOTESI: {', '.join(guesses)}" if guesses else "")
                             )
                         except Exception:
                             pass
@@ -771,6 +854,8 @@ TOOLS = [
        "nuovo_testo":{"type":"string","description":"Testo sostitutivo"},
        "descrizione":{"type":"string","description":"Descrizione del fix per il log"}
      },"required":["percorso","vecchio_testo","nuovo_testo"]}}
+    ,{"name":"crea_file","description":"Crea un nuovo file del progetto da zero o sovrascrive uno esistente. USA per: nuovi importer, nuovi plugin, nuovi moduli, file di configurazione. Percorso relativo alla root. Estensioni: .py .sql .json .csv .txt .md .sh .bat","input_schema":{"type":"object","properties":{"percorso":{"type":"string","description":"Percorso relativo alla root, es. 'learner/worknc_importer_v2.py' o 'plugins/worknc/plugin.py'"},"contenuto":{"type":"string","description":"Contenuto completo del file da scrivere"},"descrizione":{"type":"string","description":"Descrizione del file per il log"}},"required":["percorso","contenuto"]}},
+    {"name":"esegui_comando","description":"Esegue un comando shell nella root del progetto. USA per: riavviare il server Flask dopo modifiche Python (kill + python3 start), eseguire test con pytest, fare git commit, installare dipendenze. Comandi rm -rf e curl sono bloccati per sicurezza.","input_schema":{"type":"object","properties":{"comando":{"type":"string","description":"Comando shell da eseguire, es: 'lsof -ti:5000 | xargs kill -9 2>/dev/null; python3 ui/app.py &' oppure 'python3 -c \"import ast; ast.parse(open(\'learner/x.py\').read()); print(\'OK\')\"'"},"timeout":{"type":"integer","description":"Timeout in secondi (default 30). Usa 5 per kill, 60 per riavvio server, 120 per pip install.","default":30},"cwd":{"type":"string","description":"Sottocartella di lavoro relativa alla root (opzionale)"}},"required":["comando"]}}
 ]
 
 TOOL_FN = {
@@ -793,50 +878,72 @@ TOOL_FN = {
     'cerca_web':            lambda i: tool_cerca_web(i['query'], i.get('max_results', 5)),
     'formato_noto':         lambda i: tool_formato_noto(i['azione'], i.get('software',''), i.get('mappatura'), i.get('versione',''), i.get('confidenza',0.5), i.get('verificato',False), i.get('note','')),
     'decodifica_db':        lambda i: tool_decodifica_db(i['filepath']),
+        'crea_file':            lambda i: tool_crea_file(i['percorso'], i['contenuto'], i.get('descrizione','')),
+    'esegui_comando':       lambda i: tool_esegui_comando(i['comando'], i.get('timeout',30), i.get('cwd')),
 }
 
-# ââ AGENT LOOP âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# Ã¢ÂÂÃ¢ÂÂ AGENT LOOP Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 SYSTEM_PROMPT = """Sei l'agente tecnico di Tool DB Manager. Gestisci import CAM e fai debug/fix del codice.
 
 MODALITA' DEBUG (quando vedi un log con errore):
-1. Leggi il log â identifica il file e la riga dell'errore
-2. USA SUBITO leggi_file sul file incriminato â non spiegare prima, agisci
+1. Leggi il log Ã¢ÂÂ identifica il file e la riga dell'errore
+2. USA SUBITO leggi_file sul file incriminato Ã¢ÂÂ non spiegare prima, agisci
 3. Trova il bug esatto nel codice
-4. USA modifica_file per applicare il fix â non descrivere il fix, APPLICALO
+4. USA modifica_file per applicare il fix Ã¢ÂÂ non descrivere il fix, APPLICALO
 5. Conferma: "Fix applicato. Riavvia il server con: lsof -ti:PORT | xargs kill -9 && python3 FILE &"
 
 MODALITA' IMPORT (quando vedi un file CAM):
-1. formato_noto cerca — controlla knowledge base per formati gia noti
-2. lista_plugin — controlla plugin esistenti
-3. analizza_file_cam — studia la struttura del file
-4. Se e un .db SQLite sconosciuto: decodifica_db — analisi statistica autonoma
-5. Se hai dubbi su parametri: cerca_web — cerca documentazione online
-6. proponi_mapping — usa knowledge base + euristica
-7. importa_file dry_run=true — simula l'import
+1. formato_noto cerca â controlla knowledge base per formati gia noti
+2. lista_plugin â controlla plugin esistenti
+3. analizza_file_cam â studia la struttura del file
+4. Se e un .db SQLite sconosciuto: decodifica_db â analisi statistica autonoma
+5. Se hai dubbi su parametri: cerca_web â cerca documentazione online
+6. proponi_mapping â usa knowledge base + euristica
+7. importa_file dry_run=true â simula l'import
 8. Se import OK (10+ utensili): formato_noto salva con verificato=true
 9. Chiedi conferma, poi importa_file dry_run=false
 
 MODALITA' RICERCA AUTONOMA (formato sconosciuto):
-1. decodifica_db — analisi statistica del file
+1. decodifica_db â analisi statistica del file
 2. cerca_web query specifica (es: 'hypermill NCTools dbl_param fields')
 3. cerca_web release notes, documentazione vendor, forum CNC machining
 4. Incrocia risultati web con analisi statistica
 5. Proponi mappatura con confidenza esplicita (es: confidenza 85%)
 6. formato_noto salva con confidenza appropriata
-7. NON fermarti a 'non so' — cambia query e itera fino alla soluzione
-1. lista_plugin â controlla se esiste gia un plugin per questa versione
-2. analizza_file_cam â studia la struttura
-3. proponi_mapping â fast path Cimatron (0 token) o euristico
-4. importa_file dry_run=true â simula
+7. NON fermarti a 'non so' â cambia query e itera fino alla soluzione
+1. lista_plugin Ã¢ÂÂ controlla se esiste gia un plugin per questa versione
+2. analizza_file_cam Ã¢ÂÂ studia la struttura
+3. proponi_mapping Ã¢ÂÂ fast path Cimatron (0 token) o euristico
+4. importa_file dry_run=true Ã¢ÂÂ simula
 5. Chiedi conferma, poi importa_file dry_run=false
-6. leggi_utensili â verifica alias e fuori_pinza_mm
+6. leggi_utensili Ã¢ÂÂ verifica alias e fuori_pinza_mm
+
+
+MODALITA' DEV AUTONOMO (quando ricevi un task di sviluppo):
+1. leggi_file sui file rilevanti per capire la struttura esistente
+2. salva_checkpoint(task_id, 'analisi', {file_letti, plan})
+3. crea_file o modifica_file per implementare il task
+4. esegui_comando per validare sintassi: python3 -m py_compile percorso.py
+5. esegui_comando per riavviare il server: lsof -ti:5000 | xargs kill -9 2>/dev/null; sleep 1; python3 ui/app.py &
+6. esegui_comando per testare: curl -s http://localhost:5000/cam-agent/db-stats
+7. salva_checkpoint(task_id, 'completato', {files_creati, test_ok})
+8. Riporta: file creati/modificati, come testare, eventuali passi manuali
+
+REGOLE DEV AUTONOMO:
+- NON chiedere conferma prima di scrivere codice - vai diretto
+- Dopo crea_file/modifica_file SEMPRE valida con py_compile prima di riavviare
+- Se py_compile fallisce: correggi SUBITO con un altro crea_file/modifica_file
+- Il server va riavviato solo per modifiche a file importati da Flask (.py nel progetto)
+- Per nuovi plugin: crea il file, poi testa_plugin per verificare, poi esegui_comando per riavvio
+- Puoi creare file in: learner/, plugins/, importers/, exporters/, tools/
+- Non creare file in: ui/, database/ (usa esegui_sql per il DB)
 
 REGOLE ASSOLUTE:
 - Se vedi "errore: name X is not defined" -> leggi_file SUBITO, trova X, usa modifica_file
 - Se vedi "0 colonne mappate" -> leggi_file orchestrator_agent.py, cerca il bug nel batch
 - Se vedi "Limite turni" -> il task e complesso, scrivi "continua" per proseguire
-- NON spiegare cosa faresti â FALLO direttamente con i tool
+- NON spiegare cosa faresti Ã¢ÂÂ FALLO direttamente con i tool
 - Dopo modifica_file SEMPRE comunica quale file modificare e come riavviare
 - DROP TABLE e DELETE senza WHERE sono bloccati per sicurezza
 CHECKPOINT - REGOLA FONDAMENTALE:
@@ -846,14 +953,14 @@ CHECKPOINT - REGOLA FONDAMENTALE:
 - Quando ricevi un messaggio che inizia con PROCEDI IMMEDIATAMENTE: esegui il prossimo step SENZA chiedere nulla, SENZA spiegare, direttamente con i tool
 
 - Non modificare mai ui/app.py o ui/cam_agent.py (core dell'app)
-- Puoi modificare liberamente: learner/*.py, plugins/**/*.py
+- Puoi modificare e CREARE liberamente: learner/*.py, plugins/**/*.py, importers/*.py, exporters/*.py, tools/*.py
 
 File principali:
-- learner/orchestrator_agent.py â motore AI di mapping
-- learner/cimatron_importer.py â import Cimatron
-- learner/cimatron_parser.py â parser ZIP Cimatron
-- plugins/cimatron/_core.py â core plugin Cimatron
-- plugins/_loader.py â loader plugin dinamico"""
+- learner/orchestrator_agent.py Ã¢ÂÂ motore AI di mapping
+- learner/cimatron_importer.py Ã¢ÂÂ import Cimatron
+- learner/cimatron_parser.py Ã¢ÂÂ parser ZIP Cimatron
+- plugins/cimatron/_core.py Ã¢ÂÂ core plugin Cimatron
+- plugins/_loader.py Ã¢ÂÂ loader plugin dinamico"""
 
 def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
     import urllib.request, ssl
