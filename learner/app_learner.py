@@ -139,7 +139,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
   {% if r.agente_usato %}
   <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:.6rem 1rem;margin-bottom:1rem;font-size:13px;color:#1d4ed8">
     L'agente AI ha suggerito mapping per le colonne non identificate automaticamente.
-    I suggerimenti sono evidenziati in blu Ã¢ÂÂ verificali e correggi se necessario.
+    I suggerimenti sono evidenziati in blu — verificali e correggi se necessario.
   </div>
   {% endif %}
   {% if r.agente_errore %}
@@ -183,7 +183,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     </td>
     <td><select name="map_{{ info.colonna_file }}">
       <option value="">-- ignora --</option>
-      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} Ã¢ÂÂ {{ v.label }}</option>{% endfor %}
+      {% for k,v in fields.items() %}<option value="{{ k }}" {% if k==campo %}selected{% endif %}>{{ k }} — {{ v.label }}</option>{% endfor %}
     </select></td>
     <td><span class="badge b-{{ info.confidenza[0] }}">{{ info.confidenza }}</span></td>
     <td style="font-size:11px;color:#888">{{ info.get('motivazione','') }}</td>
@@ -194,7 +194,7 @@ ANALISI = BASE.replace('{% block content %}{% endblock %}', """
     <td><code>{{ col }}</code></td>
     <td><select name="map_{{ col }}">
       <option value="">-- ignora --</option>
-      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} Ã¢ÂÂ {{ v.label }}</option>{% endfor %}
+      {% for k,v in fields.items() %}<option value="{{ k }}">{{ k }} — {{ v.label }}</option>{% endfor %}
     </select></td>
     <td><span class="badge b-n">non rilevata</span></td>
     <td></td>
@@ -278,13 +278,13 @@ function lrnImportaDB() {
     } else {
       box.style.background = dry ? '#fef9c3' : '#dcfce7';
       box.style.color = dry ? '#713f12' : '#166534';
-      let msg = (dry ? 'SIMULAZIONE Ã¢ÂÂ ' : '') +
+      let msg = (dry ? 'SIMULAZIONE — ' : '') +
         d.inseriti + ' inseriti, ' +
         d.aggiornati + ' aggiornati';
       if (d.taglio_inserite) msg += ', ' + d.taglio_inserite + ' condizioni taglio';
       if (d.versione) msg += ' (v' + d.versione + ')';
-      if (d.errori && d.errori.length) msg += ' Ã¢ÂÂ ' + d.errori.length + ' errori';
-      if (!dry) msg += ' Ã¢ÂÂ <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master Ã¢ÂÂ</a>';
+      if (d.errori && d.errori.length) msg += ' — ' + d.errori.length + ' errori';
+      if (!dry) msg += ' — <a href="http://localhost:5000" target="_blank" style="color:#166534">Apri DB master →</a>';
       box.innerHTML = msg;
     }
   })
@@ -1176,7 +1176,7 @@ def converti_page():
 
 
 
-# Ã¢ÂÂÃ¢ÂÂ Widget agente CAM (pannello flottante) Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+# ── Widget agente CAM (pannello flottante) ──────────────────────────────
 
 _WIDGET_MARKUP_L = (
     '<div id="ai-fab" onclick="aiT()" title="Agente CAM" '
