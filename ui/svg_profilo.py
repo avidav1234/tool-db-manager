@@ -1,5 +1,5 @@
 """
-svg_profilo.py — Genera profilo SVG 2D utensile + holder
+svg_profilo.py â Genera profilo SVG 2D utensile + holder
 Asse verticale, punta in basso.
 Usa polyline raw Hypermill per profili accurati (holder + freeShaft).
 """
@@ -13,12 +13,12 @@ import sys
 _learner_path = os.path.join(os.path.dirname(__file__), '..', 'learner')
 if _learner_path not in sys.path:
     sys.path.insert(0, _learner_path)
-from polyline_decoder import decode_polyline as _decode_polyline_raw  # noqa
+from polyline_decoder import decode_polyline as _decode_polyline_raw, polyline_to_drawing_coords as _poly_to_drawing  # noqa
 
 
 def _parse_json_profilo(js_str):
-    """Parsa profilo_*_json. I punti JSON sono già solo quelli del profilo
-    esterno (salvati da decode_polyline) — nessuna origine da aggiungere."""
+    """Parsa profilo_*_json. I punti JSON sono giÃ  solo quelli del profilo
+    esterno (salvati da decode_polyline) â nessuna origine da aggiungere."""
     if not js_str:
         return []
     try:
@@ -40,7 +40,7 @@ def genera_svg_profilo(u, segmenti=None):
     if segmenti is None:
         segmenti = []
 
-    # ── Parametri geometrici ─────────────────────────────────────────
+    # ââ Parametri geometrici âââââââââââââââââââââââââââââââââââââââââ
     D            = float(u.get('diametro_mm') or 0)
     R            = float(u.get('raggio_punta_mm') or 0)
     L_tot        = float(u.get('lunghezza_totale_mm') or 0)
@@ -50,14 +50,14 @@ def genera_svg_profilo(u, segmenti=None):
     tipo         = u.get('tipo') or 'FLAT'
     gage_length  = float(u.get('gage_length_mm') or 0)
     angolo_punta = float(u.get('angolo_punta_gradi') or 118)
-    # Lunghezza fisica totale fresa — necessaria per convertire coordinate
+    # Lunghezza fisica totale fresa â necessaria per convertire coordinate
     # della freeShaft polyline (z misurata dal FONDO gambo, non dalla punta)
     total_length = float(u.get('lunghezza_totale_mm') or L_tot)
 
     if D <= 0 or L_tot <= 0:
         return '<svg width="200" height="100"><text x="10" y="50" fill="#999" font-size="12">Dati geometrici insufficienti</text></svg>'
 
-    # ── Lettura profili (polyline raw prioritaria, fallback JSON, ultimo fallback segmenti) ──
+    # ââ Lettura profili (polyline raw prioritaria, fallback JSON, ultimo fallback segmenti) ââ
     holder_poly = u.get('holder_polyline_raw') or u.get('profilo_polyline_raw')
     shaft_poly  = u.get('shaft_polyline_raw')
 
@@ -65,6 +65,11 @@ def genera_svg_profilo(u, segmenti=None):
     holder_z_tot = 0.0
     if holder_poly:
         holder_pts, holder_z_tot = _decode_polyline_raw(holder_poly)
+        # Converti dal sistema polyline (z=0 alla base HSK) al sistema disegno
+        # (z=0 alla punta, z cresce verso la base) tramite flip Z + offset z_tot.
+        # Verificato su ground truth DXF TSF0800-90_HSK-A63.
+        if holder_pts and holder_z_tot > 0:
+            holder_pts = _poly_to_drawing(holder_pts, holder_z_tot)
     if not holder_pts:
         holder_pts = _parse_json_profilo(u.get('profilo_punti_json'))
     if not holder_pts and segmenti:
@@ -84,11 +89,16 @@ def genera_svg_profilo(u, segmenti=None):
 
     shaft_pts = []
     if shaft_poly:
-        shaft_pts, _ = _decode_polyline_raw(shaft_poly)
+        shaft_pts_raw, shaft_z_tot = _decode_polyline_raw(shaft_poly)
+        # Stessa trasformazione flip Z applicata al profilo gambo fresa
+        if shaft_pts_raw and shaft_z_tot > 0:
+            shaft_pts = _poly_to_drawing(shaft_pts_raw, shaft_z_tot)
+        else:
+            shaft_pts = shaft_pts_raw
     if not shaft_pts:
         shaft_pts = _parse_json_profilo(u.get('profilo_gambo_json'))
 
-    # ── Calcolo scala e canvas ───────────────────────────────────────
+    # ââ Calcolo scala e canvas âââââââââââââââââââââââââââââââââââââââ
     # Scala uniforme sul diametro massimo effettivo di TUTTO il contenuto
     # (fresa + holder): niente cap ad-hoc, niente overflow.
 
@@ -142,7 +152,7 @@ def genera_svg_profilo(u, segmenti=None):
 
     H = max(int(draw_total_h * scale + margin_top + margin_bottom), 200)
 
-    # 8. Centro orizzontale — draw_w centrato nel canvas
+    # 8. Centro orizzontale â draw_w centrato nel canvas
     cx = margin_left + draw_w / 2
 
     def y_at(z_mm):
@@ -154,7 +164,7 @@ def genera_svg_profilo(u, segmenti=None):
     def x_right(d_mm):
         return cx + (d_mm / 2) * scale
 
-    # ── Colori ───────────────────────────────────────────────────────
+    # ââ Colori âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     COLORI = {
         'BALL': '#3b82f6', 'FLAT': '#10b981', 'BULL': '#8b5cf6',
         'DRILL': '#f59e0b', 'TAP': '#ef4444', 'REAM': '#06b6d4',
@@ -173,9 +183,9 @@ def genera_svg_profilo(u, segmenti=None):
     parts.append(f'<line x1="{cx}" y1="{margin_top-10}" x2="{cx}" y2="{H-margin_bottom+10}" '
                  f'stroke="#ddd" stroke-width="0.5" stroke-dasharray="4,4"/>')
 
-    # ══════════════════════════════════════════════════════════════════
-    # ZONA 1: PUNTA FRESA — geometria specifica per tipo
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ZONA 1: PUNTA FRESA â geometria specifica per tipo
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     tip_h = L_tagl if L_tagl > 0 else min(D * 2, L_tot * 0.3)
     y_bottom = y_at(0)
 
@@ -235,7 +245,7 @@ def genera_svg_profilo(u, segmenti=None):
         )
 
     elif tipo == 'SPOT':
-        # Fresa a centrare: cono con angolo 90° default (45° per lato)
+        # Fresa a centrare: cono con angolo 90Â° default (45Â° per lato)
         angle_spot = float(u.get('angolo_punta_gradi') or 90)
         tip_depth = (D / 2) / math.tan(math.radians(angle_spot / 2)) if angle_spot > 0 else D / 2
         tip_depth = min(tip_depth, tip_h)
@@ -295,18 +305,18 @@ def genera_svg_profilo(u, segmenti=None):
             f'fill="{col}" fill-opacity="0.85" stroke="{col}" stroke-width="1.5"/>'
         )
 
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     # ZONA 2: GAMBO FRESA
     # Costruisce i segmenti del gambo da dati scalari verificati.
-    # Struttura reale: [tagliente] → [clearance Ø D] → [raccordo] → [gambo Ø D_stelo]
-    # ══════════════════════════════════════════════════════════════════
+    # Struttura reale: [tagliente] â [clearance Ã D] â [raccordo] â [gambo Ã D_stelo]
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     stelo_start = tip_h
     stelo_end   = fuori_pinza if fuori_pinza > 0 else L_tot
     d_stelo     = D_stelo if D_stelo > 0 else D
     clearance   = float(u.get('clearance_length_mm') or 0)
 
     gambo_segs = []  # lista di (d_inf, d_sup, z_bot, z_top)
-    neck = d_stelo > D + 0.5  # gambo più largo del tagliente → c'è un neck
+    neck = d_stelo > D + 0.5  # gambo piÃ¹ largo del tagliente â c'Ã¨ un neck
 
     if stelo_end > stelo_start:
         if not neck:
@@ -314,16 +324,16 @@ def genera_svg_profilo(u, segmenti=None):
             if d_stelo > 0:
                 gambo_segs.append((d_stelo, d_stelo, stelo_start, stelo_end))
         else:
-            # Caso 2/3: neck tool — zona ridotta Ø D + raccordo + gambo Ø D_stelo
+            # Caso 2/3: neck tool â zona ridotta Ã D + raccordo + gambo Ã D_stelo
             z_clearance_top = stelo_start + clearance if clearance > 0 else stelo_end
             z_clearance_top = min(z_clearance_top, stelo_end)
 
             if clearance > 0 and z_clearance_top > stelo_start:
-                # Cilindro ridotto Ø D (neck)
+                # Cilindro ridotto Ã D (neck)
                 gambo_segs.append((D, D, stelo_start, z_clearance_top))
 
             if z_clearance_top < stelo_end:
-                # Raccordo conico D → d_stelo (lungo 3mm o 5% del gambo)
+                # Raccordo conico D â d_stelo (lungo 3mm o 5% del gambo)
                 l_raccordo = max(3.0, (stelo_end - z_clearance_top) * 0.05)
                 l_raccordo = min(l_raccordo, stelo_end - z_clearance_top)
                 z_raccordo_top = z_clearance_top + l_raccordo
@@ -359,9 +369,9 @@ def genera_svg_profilo(u, segmenti=None):
                 f'stroke="{STELO_STROKE}" stroke-width="1"/>'
             )
 
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     # ZONA 3: LINEA FUORI PINZA
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     if fuori_pinza > 0:
         y_fp = y_at(fuori_pinza)
         parts.append(
@@ -372,21 +382,21 @@ def genera_svg_profilo(u, segmenti=None):
             f'<text x="{margin_left-3}" y="{y_fp-3}" font-size="9" fill="#ef4444" text-anchor="end" font-weight="600">FP</text>'
         )
 
-    # ══════════════════════════════════════════════════════════════════
-    # ZONA 4: HOLDER — fonte di verità universale
-    # 1) Polyline raw (holder_polyline_raw / profilo_punti_json) — valida
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ZONA 4: HOLDER â fonte di veritÃ  universale
+    # 1) Polyline raw (holder_polyline_raw / profilo_punti_json) â valida
     #    per TUTTI i tipi di holder: TSF, SLSA, Weldon, BigKaiser, ecc.
-    # 2) Segmenti DB (portautensile_segmento) — fallback
+    # 2) Segmenti DB (portautensile_segmento) â fallback
     # 3) Nessun fallback ad-hoc per tipo
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     y_holder_base = fuori_pinza if fuori_pinza > 0 else L_tot
     holder_segs = []
 
-    # Priorità 1: punti reali dalla polyline.
+    # PrioritÃ  1: punti reali dalla polyline.
     # I segmenti vengono costruiti dai dati presenti nella polyline.
     # Se il primo punto ha z > 0 (Tipo B, es. TSF), il rendering estende
-    # un cilindro del diametro r_pt0 dalla base holder fino a z_pt0 —
-    # non inventa un nuovo diametro, estende solo ciò che la polyline dice.
+    # un cilindro del diametro r_pt0 dalla base holder fino a z_pt0 â
+    # non inventa un nuovo diametro, estende solo ciÃ² che la polyline dice.
     if holder_pts and len(holder_pts) >= 2:
         r0_poly, z0_poly = holder_pts[0]
         if z0_poly > 2.0:
@@ -394,9 +404,9 @@ def genera_svg_profilo(u, segmenti=None):
             d0 = round(r0_poly * 2, 2)
             holder_segs.append((d0, d0, round(z0_poly, 2)))
 
-        # Segmenti successivi dalla polyline — regola universale pendenza:
-        # |Δr/Δz| > 1.0 (45°) indica spigolo CAD (cilindro + spigolo implicito),
-        # ≤ 1.0 indica cono graduale (trapezio).
+        # Segmenti successivi dalla polyline â regola universale pendenza:
+        # |Îr/Îz| > 1.0 (45Â°) indica spigolo CAD (cilindro + spigolo implicito),
+        # â¤ 1.0 indica cono graduale (trapezio).
         PENDENZA_SPIGOLO = 1.0
         for i in range(1, len(holder_pts)):
             r_prev, z_prev = holder_pts[i-1]
@@ -406,7 +416,7 @@ def genera_svg_profilo(u, segmenti=None):
                 continue
             pendenza = abs(r_curr - r_prev) / l_seg
             if pendenza > PENDENZA_SPIGOLO:
-                # Spigolo: cilindro Ø r_prev, transizione verticale implicita al segmento successivo
+                # Spigolo: cilindro Ã r_prev, transizione verticale implicita al segmento successivo
                 holder_segs.append((round(r_prev*2, 2), round(r_prev*2, 2), round(l_seg, 2)))
             else:
                 # Cono graduale
@@ -427,7 +437,7 @@ def genera_svg_profilo(u, segmenti=None):
                 if l > 0.01:
                     holder_segs.append((d_i, d_s, l))
 
-    # Priorità 2: segmenti DB (fallback quando polyline assente)
+    # PrioritÃ  2: segmenti DB (fallback quando polyline assente)
     elif segmenti:
         for s in segmenti:
             d_i = float(s.get('diametro_inf_mm') or 0)
@@ -435,7 +445,7 @@ def genera_svg_profilo(u, segmenti=None):
             l = float(s.get('lunghezza_mm') or 0)
             if l > 0.01:
                 holder_segs.append((d_i, d_s, l))
-    # Priorità 3 eliminata: nessuna ricostruzione da campi derivati
+    # PrioritÃ  3 eliminata: nessuna ricostruzione da campi derivati
 
     # Rendering unificato dei segmenti
     y_cursor = y_holder_base
@@ -464,12 +474,12 @@ def genera_svg_profilo(u, segmenti=None):
             )
         y_cursor += h_seg
 
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     # ZONA 5: QUOTE E NOME
-    # ══════════════════════════════════════════════════════════════════
+    # ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     nome = u.get('alias') or u.get('codice_interno') or ''
     if nome:
-        nome_short = nome[:25] + ('…' if len(nome) > 25 else '')
+        nome_short = nome[:25] + ('â¦' if len(nome) > 25 else '')
         parts.append(
             f'<text x="{cx}" y="{margin_top-8}" font-size="10" fill="#475569" '
             f'text-anchor="middle" font-weight="600">{nome_short}</text>'
