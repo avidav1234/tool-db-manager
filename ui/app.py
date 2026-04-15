@@ -57,6 +57,24 @@ def importa_db_preflight():
     return resp
 
 # ---------------------------------------------------------------
+# Filtri Jinja custom
+# ---------------------------------------------------------------
+@app.template_filter('colore_badge_tipo')
+def colore_badge_tipo(tipo):
+    """Ritorna il colore HTML per il badge del tipo utensile."""
+    colori = {
+        'BALL': '#6366f1',      # Indigo
+        'FLAT': '#10b981',      # Green
+        'BULL': '#f59e0b',      # Amber
+        'DRILL': '#3b82f6',     # Blue
+        'TAP': '#ef4444',       # Red
+        'THREAD': '#8b5cf6',    # Purple
+        'REAM': '#06b6d4',      # Cyan
+        'SPOT': '#f97316',      # Orange
+    }
+    return colori.get(tipo.upper() if tipo else '', '#64748b')  # Slate di default
+
+# ---------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------
 def _ensure_db():
@@ -202,6 +220,15 @@ tr:hover td{background:#fafaf8}
 .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
 .b-ok{background:#dcfce7;color:#166534}
 .b-off{background:#f1f0ee;color:#6b7280}
+.badge-ball{background:#e0e7ff;color:#3730a3}
+.badge-flat{background:#d1fae5;color:#065f46}
+.badge-bull{background:#fef3c7;color:#92400e}
+.badge-drill{background:#dbeafe;color:#0c4a6e}
+.badge-tap{background:#fee2e2;color:#7f1d1d}
+.badge-thread{background:#f3e8ff;color:#581c87}
+.badge-ream{background:#cffafe;color:#164e63}
+.badge-spot{background:#fed7aa;color:#9a3412}
+.badge-default{background:#e2e8f0;color:#334155}
 .stat{background:#f8f8f6;border-radius:8px;padding:.75rem 1rem}
 .stat-n{font-size:1.4rem;font-weight:600}.stat-l{font-size:11px;color:#888;margin-top:2px}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.25rem}
@@ -2749,28 +2776,53 @@ async function send(){
   inp.value='';addMsg('user',m);
   const btn=document.getElementById('send-btn');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>';
-  const tid=addMsg('thinking','&#129302; Elaborazione...');
+  const tid=addMsg('thinking','&#9203; Agente al lavoro...');
   try{
-    const r=await fetch('/cam-agent/chat',{
+    // 1) Avvia job in background → ritorna subito con job_id
+    const r=await fetch('/cam-agent/job',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({messaggio:m,filepath:_fp,history:_hist})
     });
-    const d=await r.json();
-    removeMsg(tid);
-    if(d.errore){addMsg('error','&#10060; '+d.errore);}
-    else{
-      addMsg('agent',d.risposta);
-      _hist=d.history||_hist;
-      if(d.tool_calls&&d.tool_calls.length){
-        document.getElementById('tool-log').innerHTML=
-          d.tool_calls.map(t=>
-            '<div class="tool-item"><span class="tool-name">'+t.tool+'</span><br>'+
-            t.result_summary.slice(0,120)+'</div>'
-          ).join('');
+    const start=await r.json();
+    if(start.errore){ removeMsg(tid); addMsg('error','&#10060; '+start.errore); btn.disabled=false; btn.innerHTML='Invia'; return; }
+    const jobId=start.job_id;
+
+    // 2) Polling ogni 2s, max 10 minuti (300 tentativi)
+    let tries=0; const MAX=300;
+    const poll=setInterval(async()=>{
+      tries++;
+      if(tries>MAX){
+        clearInterval(poll); removeMsg(tid);
+        addMsg('error','&#9200; Timeout - l\\'agente sta ancora lavorando. Scrivi "continua" per riprendere.');
+        btn.disabled=false; btn.innerHTML='Invia'; return;
       }
-    }
-  }catch(e){removeMsg(tid);addMsg('error','Errore: '+e.message);}
-  btn.disabled=false;btn.innerHTML='Invia';
+      let pr;
+      try{ pr=await fetch('/cam-agent/job/'+jobId); }catch(e){ return; }
+      if(!pr.ok) return;
+      const pj=await pr.json();
+      if(pj.status==='running') return;
+      clearInterval(poll);
+      removeMsg(tid);
+      const d=pj.result||{};
+      if(pj.status==='error'||d.errore){
+        addMsg('error','&#10060; '+(d.errore||'Errore sconosciuto'));
+      } else {
+        addMsg('agent',d.risposta||'(nessuna risposta)');
+        _hist=d.history||_hist;
+        if(d.tool_calls&&d.tool_calls.length){
+          document.getElementById('tool-log').innerHTML=
+            d.tool_calls.map(t=>
+              '<div class="tool-item"><span class="tool-name">'+t.tool+'</span><br>'+
+              (t.result_summary||'').slice(0,120)+'</div>'
+            ).join('');
+        }
+      }
+      btn.disabled=false; btn.innerHTML='Invia';
+    },2000);
+  }catch(e){
+    removeMsg(tid); addMsg('error','Errore: '+e.message);
+    btn.disabled=false; btn.innerHTML='Invia';
+  }
 }
 
 function addMsg(t,txt){

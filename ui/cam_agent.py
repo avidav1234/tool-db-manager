@@ -778,6 +778,49 @@ def tool_decodifica_db(filepath: str) -> str:
     return "\n".join(report)
 
 
+def tool_affida_a_jules(task, branch='main1', titolo=None):
+    """Affida un task di sviluppo a Jules (agente Google AI cloud) via REST API."""
+    import urllib.request, ssl
+    jules_key = ''
+    try:
+        cfg = os.path.join(_DIR, '..', 'config.json')
+        with open(cfg) as f:
+            jules_key = json.load(f).get('jules_api_key', '')
+    except Exception:
+        pass
+    if not jules_key:
+        return {'errore': 'jules_api_key non configurata in config.json'}
+
+    payload = json.dumps({
+        "prompt": task,
+        "sourceContext": {
+            "source": "sources/github/avidav1234/tool-db-manager",
+            "githubRepoContext": {"startingBranch": branch}
+        },
+        "title": titolo or task[:60]
+    }).encode('utf-8')
+
+    ctx = ssl.create_default_context()
+    req = urllib.request.Request(
+        'https://jules.googleapis.com/v1alpha/sessions',
+        data=payload,
+        headers={'X-Goog-Api-Key': jules_key, 'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+            resp = json.loads(r.read())
+        session_id = resp.get('name', '').split('/')[-1]
+        return {
+            'ok': True,
+            'session_id': session_id,
+            'url': f'https://jules.google.com/tasks/{session_id}',
+            'messaggio': f'Task affidato a Jules. Controlla su: https://jules.google.com/tasks/{session_id}',
+        }
+    except Exception as e:
+        return {'errore': f'Jules API error: {e}'}
+
+
 TOOLS = [
     {
         "name": "cerca_web",
@@ -855,7 +898,8 @@ TOOLS = [
        "descrizione":{"type":"string","description":"Descrizione del fix per il log"}
      },"required":["percorso","vecchio_testo","nuovo_testo"]}}
     ,{"name":"crea_file","description":"Crea un nuovo file del progetto da zero o sovrascrive uno esistente. USA per: nuovi importer, nuovi plugin, nuovi moduli, file di configurazione. Percorso relativo alla root. Estensioni: .py .sql .json .csv .txt .md .sh .bat","input_schema":{"type":"object","properties":{"percorso":{"type":"string","description":"Percorso relativo alla root, es. 'learner/worknc_importer_v2.py' o 'plugins/worknc/plugin.py'"},"contenuto":{"type":"string","description":"Contenuto completo del file da scrivere"},"descrizione":{"type":"string","description":"Descrizione del file per il log"}},"required":["percorso","contenuto"]}},
-    {"name":"esegui_comando","description":"Esegue un comando shell nella root del progetto. USA per: riavviare il server Flask dopo modifiche Python (kill + python3 start), eseguire test con pytest, fare git commit, installare dipendenze. Comandi rm -rf e curl sono bloccati per sicurezza.","input_schema":{"type":"object","properties":{"comando":{"type":"string","description":"Comando shell da eseguire, es: 'lsof -ti:5000 | xargs kill -9 2>/dev/null; python3 ui/app.py &' oppure 'python3 -c \"import ast; ast.parse(open(\'learner/x.py\').read()); print(\'OK\')\"'"},"timeout":{"type":"integer","description":"Timeout in secondi (default 30). Usa 5 per kill, 60 per riavvio server, 120 per pip install.","default":30},"cwd":{"type":"string","description":"Sottocartella di lavoro relativa alla root (opzionale)"}},"required":["comando"]}}
+    {"name":"esegui_comando","description":"Esegue un comando shell nella root del progetto. USA per: riavviare il server Flask dopo modifiche Python (kill + python3 start), eseguire test con pytest, fare git commit, installare dipendenze. Comandi rm -rf e curl sono bloccati per sicurezza.","input_schema":{"type":"object","properties":{"comando":{"type":"string","description":"Comando shell da eseguire, es: 'lsof -ti:5000 | xargs kill -9 2>/dev/null; python3 ui/app.py &' oppure 'python3 -c \"import ast; ast.parse(open(\'learner/x.py\').read()); print(\'OK\')\"'"},"timeout":{"type":"integer","description":"Timeout in secondi (default 30). Usa 5 per kill, 60 per riavvio server, 120 per pip install.","default":30},"cwd":{"type":"string","description":"Sottocartella di lavoro relativa alla root (opzionale)"}},"required":["comando"]}},
+    {"name":"affida_a_jules","description":"Affida un task di sviluppo a Jules (agente Google AI cloud). Usalo per task grandi che richiedono molte modifiche a piu file, refactoring, nuove feature complete. Jules lavora in cloud su GitHub e crea una PR. NON usarlo per fix veloci o task che richiedono accesso al DB locale.","input_schema":{"type":"object","properties":{"task":{"type":"string","description":"Descrizione dettagliata del task da fare"},"branch":{"type":"string","description":"Branch di partenza (default: main1)"},"titolo":{"type":"string","description":"Titolo breve del task"}},"required":["task"]}}
 ]
 
 TOOL_FN = {
@@ -880,6 +924,7 @@ TOOL_FN = {
     'decodifica_db':        lambda i: tool_decodifica_db(i['filepath']),
         'crea_file':            lambda i: tool_crea_file(i['percorso'], i['contenuto'], i.get('descrizione','')),
     'esegui_comando':       lambda i: tool_esegui_comando(i['comando'], i.get('timeout',30), i.get('cwd')),
+    'affida_a_jules':       lambda i: tool_affida_a_jules(i['task'], i.get('branch','main1'), i.get('titolo')),
 }
 
 # ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ AGENT LOOP ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
