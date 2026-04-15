@@ -324,7 +324,9 @@ def _l3_mapping(analisi, struttura, api_key, log) -> dict:
                 analisi_keys_norm = {k.strip().lower(): k for k in analisi.keys()}
                 if col_norm not in analisi_keys_norm:
                     continue
-                mapping_totale[col] = info
+                # Usa la chiave ORIGINALE dall'analisi, non quella dal modello
+                col_originale = analisi_keys_norm[col_norm]
+                mapping_totale[col_originale] = info
                 campi_gia_mappati.add(campo)
 
             ambigue.extend(result.get('ambigue', []))
