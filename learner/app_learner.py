@@ -1,10 +1,20 @@
+# -*- coding: utf-8 -*-
 """
 app_learner.py - Interfaccia web standalone del modulo Format Learner
 Porta: 5001  |  Avvia con: python learner/app_learner.py
 Apri: http://localhost:5001
 """
 
-import os, sys, json, tempfile
+import os, sys, json, tempfile, io
+
+# Forza stdout/stderr in UTF-8 (necessario su macOS con locale italiano)
+if getattr(sys.stdout, 'encoding', '').lower() != 'utf-8':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    except Exception:
+        pass
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from flask import Flask, render_template_string, request, redirect, url_for, send_file, session
@@ -15,6 +25,14 @@ from universal_converter import converti
 app = Flask(__name__)
 app.secret_key = 'tooldb-learner-2025'
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
+
+@app.after_request
+def set_charset(response):
+    """Forza Content-Type charset=utf-8 su tutte le risposte HTML."""
+    ct = response.content_type or ''
+    if ct.startswith('text/html') and 'charset' not in ct.lower():
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response
 
 # Preload moduli al boot per abilitare hot-reload
 def _preload_moduli():

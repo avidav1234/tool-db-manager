@@ -1,9 +1,19 @@
+# -*- coding: utf-8 -*-
 """
 app.py - Tool DB Manager - interfaccia web principale
 Avvia: python ui/app.py   oppure   bash start.sh
 """
 
-import os, sys, json, zipfile, tempfile, sqlite3
+import os, sys, json, zipfile, tempfile, sqlite3, io
+
+# Forza stdout/stderr in UTF-8 (necessario su macOS con locale italiano)
+if getattr(sys.stdout, 'encoding', '').lower() != 'utf-8':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    except Exception:
+        pass
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'learner'))
 
@@ -15,6 +25,15 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), '..', 'config.json')
 OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'output', 'manual')
 
 app = Flask(__name__)
+
+@app.after_request
+def set_charset(response):
+    """Forza Content-Type charset=utf-8 su tutte le risposte HTML."""
+    ct = response.content_type or ''
+    if ct.startswith('text/html') and 'charset' not in ct.lower():
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response
+
 # CORS: permetti richieste dal Format Learner (porta 5001)
 @app.after_request
 def add_cors_headers(response):

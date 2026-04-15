@@ -71,7 +71,8 @@ echo "  [4/4] Avvio servizi..."
 mkdir -p logs
 
 # App principale (porta 5000)
-nohup $PYTHON ui/app.py > logs/app_main.log 2>&1 &
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 LANG=it_IT.UTF-8 LC_ALL=it_IT.UTF-8 \
+    nohup $PYTHON ui/app.py > logs/app_main.log 2>&1 &
 PID_MAIN=$!
 
 # Format Learner (porta 5001) - avviato direttamente come modulo
@@ -83,7 +84,8 @@ from learner.app_learner import app
 app.run(debug=False, port=5001, host='127.0.0.1')
 PYEOF
 )
-nohup $PYTHON learner/app_learner_prod.py > logs/app_learner.log 2>&1 &
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 LANG=it_IT.UTF-8 LC_ALL=it_IT.UTF-8 \
+    nohup $PYTHON learner/app_learner_prod.py > logs/app_learner.log 2>&1 &
 PID_LEARNER=$!
 
 # Salva i PID per stop.sh
