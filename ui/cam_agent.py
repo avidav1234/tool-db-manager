@@ -1010,7 +1010,7 @@ File principali:
 - plugins/cimatron/_core.py ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ core plugin Cimatron
 - plugins/_loader.py ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ loader plugin dinamico"""
 
-def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
+def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=40):
     import urllib.request, ssl
     api_key = _get_api_key()
     if not api_key:
@@ -1170,6 +1170,18 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=20):
             results.append({'type':'tool_result','tool_use_id':tu['id'],'content':res_str})
         messages.append({'role':'user','content':results})
 
-    return {'risposta': f'Limite {max_turns} turni. Progresso salvato nei checkpoint. Scrivi "continua [task_id]" per riprendere.',
+    # Cerca il checkpoint più recente per suggerire il task_id
+    try:
+        cp_list = tool_lista_checkpoint()
+        tasks = cp_list.get('tasks', [])
+        if tasks:
+            task_recente = sorted(tasks, key=lambda t: t.get('data_modifica', ''), reverse=True)[0]
+            tid = task_recente['task_id']
+            msg_limite = f"Limite turni raggiunto. Task in corso: '{tid}'\nScrivi: continua {tid}"
+        else:
+            msg_limite = "Limite turni. Nessun checkpoint salvato — il task non e' riprendibile."
+    except Exception:
+        msg_limite = f"Limite {max_turns} turni raggiunto."
+    return {'risposta': msg_limite,
             'tool_calls': tool_calls_log, 'history': messages,
             'eseguito_da': 'claude', 'modello': modello}
