@@ -2802,10 +2802,23 @@ async function send(){
         btn.disabled=false; btn.innerHTML='Invia'; return;
       }
       let pr;
-      try{ pr=await fetch('/cam-agent/job/'+jobId); }catch(e){ return; }
+      try{ pr=await fetch('/cam-agent/job/'+jobId); }catch(e){
+        if(tries>10){ clearInterval(poll); removeMsg(tid); addMsg('error','&#9888; Server non raggiungibile. Riavvia il server e riprova.'); btn.disabled=false; btn.innerHTML='Invia'; }
+        return;
+      }
+      if(pr.status===404||pr.status===410){
+        clearInterval(poll); removeMsg(tid);
+        addMsg('error','&#9888; Job perso — il server e stato riavviato. Riprova.');
+        btn.disabled=false; btn.innerHTML='Invia'; return;
+      }
       if(!pr.ok) return;
       const pj=await pr.json();
       if(pj.status==='running') return;
+      if(pj.status==='not_found'){
+        clearInterval(poll); removeMsg(tid);
+        addMsg('error','&#9888; Job non trovato — il server potrebbe essere stato riavviato. Riprova.');
+        btn.disabled=false; btn.innerHTML='Invia'; return;
+      }
       clearInterval(poll);
       removeMsg(tid);
       const d=pj.result||{};
@@ -2859,9 +2872,23 @@ async function sendSupervisor(){
     const poll=setInterval(async()=>{
       att++;
       if(att>600){ clearInterval(poll); removeMsg(tid); addMsg('error','Timeout supervisore (20 min)'); btn.disabled=false; sbtn.disabled=false; return; }
+      let pr2;
+      try{ pr2=await fetch('/cam-agent/job/'+jid); }catch(e){
+        if(att>10){ clearInterval(poll); removeMsg(tid); addMsg('error','&#9888; Server non raggiungibile. Riavvia e riprova.'); btn.disabled=false; sbtn.disabled=false; }
+        return;
+      }
+      if(pr2.status===404||pr2.status===410){
+        clearInterval(poll); removeMsg(tid);
+        addMsg('error','&#9888; Job supervisore perso — il server e stato riavviato. Riprova.');
+        btn.disabled=false; sbtn.disabled=false; return;
+      }
       try{
-        const pr=await fetch('/cam-agent/job/'+jid);
-        const pd=await pr.json();
+        const pd=await pr2.json();
+        if(pd.status==='not_found'){
+          clearInterval(poll); removeMsg(tid);
+          addMsg('error','&#9888; Job supervisore non trovato — il server potrebbe essere stato riavviato. Riprova.');
+          btn.disabled=false; sbtn.disabled=false; return;
+        }
         if(pd.status==='done'){
           clearInterval(poll); removeMsg(tid);
           addAgentMsg(pd.result?.risposta||'(nessuna risposta)', pd.result);
