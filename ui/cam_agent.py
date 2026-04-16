@@ -1170,18 +1170,30 @@ def esegui_agente(messaggio_utente, filepath=None, history=None, max_turns=40):
             results.append({'type':'tool_result','tool_use_id':tu['id'],'content':res_str})
         messages.append({'role':'user','content':results})
 
-    # Cerca il checkpoint più recente per suggerire il task_id
+    # Trova il task_id più recente dai checkpoint salvati
+    _task_id_recente = None
     try:
-        cp_list = tool_lista_checkpoint()
-        tasks = cp_list.get('tasks', [])
-        if tasks:
-            task_recente = sorted(tasks, key=lambda t: t.get('data_modifica', ''), reverse=True)[0]
-            tid = task_recente['task_id']
-            msg_limite = f"Limite turni raggiunto. Task in corso: '{tid}'\nScrivi: continua {tid}"
-        else:
-            msg_limite = "Limite turni. Nessun checkpoint salvato — il task non e' riprendibile."
+        import glob as _glob
+        _cp_dir = os.path.join(os.path.dirname(__file__), '..', 'checkpoints')
+        _cp_files = _glob.glob(os.path.join(_cp_dir, '*.json'))
+        if _cp_files:
+            _newest = max(_cp_files, key=os.path.getmtime)
+            _task_id_recente = os.path.basename(_newest).replace('.json', '')
     except Exception:
-        msg_limite = f"Limite {max_turns} turni raggiunto."
-    return {'risposta': msg_limite,
+        pass
+
+    if _task_id_recente:
+        _msg_fine = (
+            f"Limite {max_turns} turni raggiunto.\n\n"
+            f"**Task in corso:** `{_task_id_recente}`\n\n"
+            f"Scrivi esattamente: **`continua {_task_id_recente}`** per riprendere."
+        )
+    else:
+        _msg_fine = (
+            f"Limite {max_turns} turni raggiunto.\n"
+            "Nessun checkpoint trovato — rilancia il task da capo."
+        )
+
+    return {'risposta': _msg_fine,
             'tool_calls': tool_calls_log, 'history': messages,
             'eseguito_da': 'claude', 'modello': modello}

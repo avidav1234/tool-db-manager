@@ -2730,6 +2730,7 @@ Carica un file CAM in alto e scrivi cosa vuoi fare, oppure usa i pulsanti rapidi
         <textarea id="user-input" rows="1" placeholder="Scrivi qui... (Enter = invia, Shift+Enter = a capo)"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
         <button id="send-btn" onclick="send()">Invia</button>
+        <button id="super-btn" onclick="sendSupervisor()" title="Per task complessi multi-step: scompone automaticamente e non chiede mai continua" style="background:#8b5cf6;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;cursor:pointer;font-size:.8rem;font-weight:500;margin-left:6px">Supervisore</button>
       </div>
     </div>
   </div>
@@ -2838,6 +2839,44 @@ function addMsg(t,txt){
   el.scrollIntoView({behavior:'smooth',block:'end'});
   return id;
 }
+async function sendSupervisor(){
+  const inp=document.getElementById('user-input');
+  const m=inp.value.trim(); if(!m) return;
+  inp.value=''; addMsg('user','[Supervisore] '+m);
+  const btn=document.getElementById('super-btn');
+  const sbtn=document.getElementById('send-btn');
+  btn.disabled=true; sbtn.disabled=true;
+  const tid=addMsg('thinking','Supervisore al lavoro — scompone il task e coordina...');
+  try{
+    const r=await fetch('/cam-agent/supervisor',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messaggio:m})
+    });
+    const d=await r.json();
+    if(d.errore){ removeMsg(tid); addMsg('error',d.errore); btn.disabled=false; sbtn.disabled=false; return; }
+    const jid=d.job_id;
+    let att=0;
+    const poll=setInterval(async()=>{
+      att++;
+      if(att>600){ clearInterval(poll); removeMsg(tid); addMsg('error','Timeout supervisore (20 min)'); btn.disabled=false; sbtn.disabled=false; return; }
+      try{
+        const pr=await fetch('/cam-agent/job/'+jid);
+        const pd=await pr.json();
+        if(pd.status==='done'){
+          clearInterval(poll); removeMsg(tid);
+          addAgentMsg(pd.result?.risposta||'(nessuna risposta)', pd.result);
+          _hist=pd.result?.history||_hist;
+          btn.disabled=false; sbtn.disabled=false;
+        } else if(pd.status==='error'){
+          clearInterval(poll); removeMsg(tid);
+          addMsg('error',((pd.result&&pd.result.errore)||'Errore supervisore'));
+          btn.disabled=false; sbtn.disabled=false;
+        }
+      }catch(e){}
+    },3000);
+  }catch(e){ removeMsg(tid); addMsg('error',e.message); btn.disabled=false; sbtn.disabled=false; }
+}
+
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function addAgentMsg(txt, meta){
   const id='m'+(++_mid);
@@ -3006,6 +3045,40 @@ def cam_agent_chat():
         return json.dumps({'errore': f'Errore agente: {e}\n{_tb.format_exc()[-500:]}'},
                           ensure_ascii=False), 200, {'Content-Type':'application/json'}
     return json.dumps(result, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
+
+
+@app.route('/cam-agent/supervisor', methods=['POST', 'OPTIONS'])
+def cam_agent_supervisor():
+    """Avvia il supervisore in background. Scompone task grandi in subtask."""
+    if request.method == 'OPTIONS':
+        return app.make_default_options_response()
+    data = request.get_json(silent=True) or {}
+    messaggio = data.get('messaggio', '').strip()
+    if not messaggio:
+        return json.dumps({'errore': 'Messaggio vuoto'}), 400, \
+               {'Content-Type': 'application/json'}
+    _cleanup_jobs()
+    job_id = str(_uuid.uuid4())[:8]
+    _JOBS[job_id] = {'status': 'running', 'result': None, 'created_at': _time.time()}
+
+    def _run_sup(jid, msg):
+        try:
+            import sys as _sys
+            _root = os.path.join(os.path.dirname(__file__), '..')
+            if _root not in _sys.path:
+                _sys.path.insert(0, _root)
+            if os.path.dirname(__file__) not in _sys.path:
+                _sys.path.insert(0, os.path.dirname(__file__))
+            import supervisor_agent as _sa
+            result = _sa.esegui_supervisore(msg)
+            _JOBS[jid] = {'status': 'done', 'result': result}
+        except Exception as e:
+            import traceback as _tb
+            _JOBS[jid] = {'status': 'error',
+                          'result': {'errore': f'{e}\n{_tb.format_exc()[-300:]}'}}
+
+    _threading.Thread(target=_run_sup, args=(job_id, messaggio), daemon=True).start()
+    return json.dumps({'job_id': job_id}), 200, {'Content-Type': 'application/json'}
 
 
 @app.route('/version')
