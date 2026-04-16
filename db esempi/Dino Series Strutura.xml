@@ -1,0 +1,184 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<omtdx version="34" srcURL="sqlite://H:\00 Interno Cam\Librerie\Hypermill\Database Vetimec 2025.db" srcGuid="9cf396ed-d781-4659-8495-c2de94e67b6f" srcType="standard" files="Dino Series Strutura_files">
+  <ncTools>
+    <ncTools folder="Dino Series" objGuid="9c6a7152-7f78-4f4e-a528-ef95b1651198">
+      <ncTools folder="01 Utensili Teorici" objGuid="aa9ad853-9673-4e08-aed5-238ab13f5263">
+        <ncTools folder="D25R2" objGuid="02a181de-f1d4-41c2-b2ee-976798491761"/>
+      </ncTools>
+      <ncTools folder="02 Utensili Torici" objGuid="b18f830d-2ce4-4c63-b9ae-12a760a868cb">
+        <ncTools folder="Diam 40" objGuid="ee7d5b0d-79ff-445a-8076-61f335352589">
+          <ncTools folder="D40 R6" objGuid="aabc2644-a3b0-47e2-b64e-d546c6da7e28">
+            <ncTools folder="40r6 Non Standard" objGuid="7f999f3a-8621-4e38-948b-bb3e6fba2507"/>
+          </ncTools>
+        </ncTools>
+        <ncTools folder="Diam 35" objGuid="32d36aa9-f8b6-478c-bbae-0b08598f9a57">
+          <ncTools folder="D35R0.8" objGuid="978ecfbf-e815-49ec-9b17-5cb26217ad2f"/>
+        </ncTools>
+        <ncTools folder="Diam 16" objGuid="d926ba95-1f0d-4faa-b0cc-15c89cd1c36d">
+          <ncTools folder="D16 R1 L65 S50" objGuid="a7f318fb-922b-4fd4-97dd-516cb7837bf7"/>
+          <ncTools folder="D16R1 (non standard)" objGuid="ffd30325-e609-4144-a3d3-4a746adc9b6b"/>
+          <ncTools folder="D16 R1 L65 S50 Test Moldino" objGuid="29f5f11f-71e5-4a68-aa34-b29acb36143b"/>
+          <ncTools folder="D16 R1 L90 S86 Test Moldino" objGuid="326a3f46-9b77-4dcb-a35f-1bc47a6ddbe8"/>
+        </ncTools>
+        <ncTools folder="Diam 10" objGuid="e9b21f38-71e2-4866-b959-d9e83e789962">
+          <ncTools folder="D10 R2" objGuid="9f98823a-7d89-4a5c-95ad-446a6303f989"/>
+          <ncTools folder="D10 R2 non standard" objGuid="e7f94cfe-7b65-4353-9adb-95d4bd224cc4"/>
+        </ncTools>
+        <ncTools folder="Diam 06" objGuid="df6f88f1-c89d-464b-b2ba-5c5fccba87cf">
+          <ncTools folder="D6 R1 L30" objGuid="3810c920-34a4-4849-bead-23d5ab7134cf"/>
+          <ncTools folder="D6 R0.5 L30" objGuid="8c36d58e-6bb2-4810-b1c2-45526bf15ab2"/>
+          <ncTools folder="D6 R1.5" objGuid="ddd023de-f79a-4dca-a9a7-e43b504713bb"/>
+          <ncTools folder="D6 R0.5 Non Standard" objGuid="c63d5ab0-7b3f-402c-99de-60168070dff8"/>
+          <ncTools folder="D6 R1 L40 Non stadard" objGuid="3b3032b5-e67e-4559-aa5a-a75c45705b5f"/>
+        </ncTools>
+        <ncTools folder="Diam 12" objGuid="f9983300-10ff-4235-8978-5523cc3db19a">
+          <ncTools folder="D12R1 L50 S40" objGuid="6b7bd88f-a5d9-4e89-9fba-0d7c03ed85f4"/>
+          <ncTools folder="D12R1 (non standard)" objGuid="d1420fec-2551-4fb4-845f-fe7f505a74bb"/>
+        </ncTools>
+        <ncTools folder="Diam 04" objGuid="d8c8f9bf-984d-4f01-9c15-d1f2ac0be6ce">
+          <ncTools folder="D4 R1" objGuid="7b33ef1c-67db-47b8-9c51-14de8a6e5047"/>
+          <ncTools folder="D4 R1 Para" objGuid="e732638a-b06d-4c74-a582-df4f2bbc7857"/>
+          <ncTools folder="D4 R0.2 N16" objGuid="6f329e52-462a-4af5-82d3-9131763ba50f"/>
+        </ncTools>
+        <ncTools folder="Diam 03" objGuid="7e8e088d-3a22-479c-a9fe-a6f38c5e94cd">
+          <ncTools folder="D3 R0.5 N30" objGuid="67b1a8af-f1fa-49d5-8211-dfb71a63ccff"/>
+          <ncTools folder="D3 R0.5 N15" objGuid="e9cb1dfb-cb62-4656-a82d-1b3109a743f6"/>
+        </ncTools>
+        <ncTools folder="Diam 08" objGuid="650066ab-af2e-4c54-9806-bc44f0bc242d">
+          <ncTools folder="D8 R1 L35" objGuid="4dd7cc18-0435-4ade-8522-92dd54eda51d"/>
+        </ncTools>
+        <ncTools folder="Diam 05" objGuid="20094195-6fad-4305-9100-76540402d153">
+          <ncTools folder="D5R1 L30" objGuid="f6c21860-0ece-4890-b205-de9360a5583c"/>
+        </ncTools>
+        <ncTools folder="Diam 20" objGuid="c56ed93d-9b72-4cac-a8a8-caea9f6da678">
+          <ncTools folder="D20 R1 L85" objGuid="5801309c-5674-4111-b419-6e60ee3efd13"/>
+          <ncTools folder="D20 R1 Non Standard" objGuid="76aeeb47-8295-408c-a0a0-09e2b366bd81"/>
+        </ncTools>
+      </ncTools>
+      <ncTools folder="05 Utensili Nerve" objGuid="22f8c98e-f90f-466b-a340-4ddeba77476e">
+        <ncTools folder="Tor D02R0.5 (standard)" objGuid="f73ff92a-a6de-4733-ac7f-008185ecd2e3">
+          <ncTools folder="Test" objGuid="f80619eb-0c1e-45cc-ba41-3a5735257e9d"/>
+        </ncTools>
+        <ncTools folder="Sfe D2R1 (standard)" objGuid="e427016e-2d40-4020-b96b-71cd3929f045">
+          <ncTools folder="Test" objGuid="56342e9c-ae3d-4975-b469-ec114ed93dfa"/>
+        </ncTools>
+      </ncTools>
+      <ncTools folder="03 Utensili Sferici" objGuid="281afeda-209d-4b8a-94c4-5511029c2238">
+        <ncTools folder="Diam 03" objGuid="e3be522b-585d-4781-a937-d0c28436b52c">
+          <ncTools folder="D03R1.5 L32 v7474180" objGuid="ab625f5e-ce4a-4e9b-b6ed-35040636bb23"/>
+          <ncTools folder="D03R1.5 L25 v7470180" objGuid="86972794-31ed-4b3c-bd90-c2b723999823"/>
+        </ncTools>
+        <ncTools folder="Diam 10" objGuid="a9caf94d-1683-4677-8ede-8f4f3ff26310">
+          <ncTools folder="D10R5 L50 (non standard)" objGuid="859ee4da-9336-4bd2-ae41-eb514a164775"/>
+        </ncTools>
+        <ncTools folder="Diam 20" objGuid="997a1042-5e48-4847-8354-61884deceb9b">
+          <ncTools folder="D20R10 L80" objGuid="45371b9a-d07a-4b6f-8343-0637305bfce0"/>
+          <ncTools folder="D20R10 L80 Test Moldino" objGuid="52d35fed-c05c-4248-a786-ea33dadd25df"/>
+          <ncTools folder="D20R10 L65" objGuid="3d61d6bc-48b8-44d3-9591-fa6cbd5a739b"/>
+        </ncTools>
+        <ncTools folder="Diam 06" objGuid="76b40005-3969-4bd8-9198-7786385e6880">
+          <ncTools folder="D6R3 L25" objGuid="765e7750-9b8d-4b07-ad58-30b97778a26a"/>
+          <ncTools folder="D6R3 L30" objGuid="3cd0994d-b85d-41d3-97fe-b4c083c1f64b"/>
+          <ncTools folder="D6R3 L35 (Colate)" objGuid="2c0239c3-a007-4ac3-b7d4-4f71ad9aecfe"/>
+        </ncTools>
+        <ncTools folder="Diam 12" objGuid="1bb8074d-c635-4d8e-8458-5617bd08430b">
+          <ncTools folder="D12R6 L50" objGuid="5dc2bbc6-6d75-4695-9bf1-00a89fbff4b4"/>
+        </ncTools>
+        <ncTools folder="Diam 16" objGuid="6f27dd68-4635-4d7b-9123-8fc7b4a018e8">
+          <ncTools folder="D16R8 L65" objGuid="14eb68c9-0e37-4de2-ae6f-c3222d50a801"/>
+          <ncTools folder="D16R8 L65 Test Moldino" objGuid="994493b9-1551-4e04-9629-bf0be08f5040"/>
+          <ncTools folder="D16R8 L90 S86 Moldino" objGuid="3ebd3806-b216-402c-80f9-04df02a01e99"/>
+          <ncTools folder="D16R8 (non standard)" objGuid="d78a4efb-fccc-49f8-86ba-749b6c084d20"/>
+        </ncTools>
+        <ncTools folder="Diam 08" objGuid="21b0ff0d-5785-4b0c-9ae6-dbd47384b043">
+          <ncTools folder="D8R4 L30" objGuid="9676968a-0b9c-4ff6-81cd-9f4495f20673"/>
+          <ncTools folder="D8R4 L50" objGuid="34b4bb2d-c47b-4111-b9a2-dba2c2c3ac96"/>
+        </ncTools>
+        <ncTools folder="Diam 0.5" objGuid="fe64226b-dcc2-42e2-9084-9e66b2ca862d">
+          <ncTools folder="D0.5R0.25 L15" objGuid="de77d50d-51a8-43ba-8f4f-18b82d1208f0"/>
+        </ncTools>
+        <ncTools folder="Diam 04" objGuid="c7c89378-b23c-4cdd-883f-7682b7f3a951">
+          <ncTools folder="D04R02 L32 (7474220)" objGuid="37479d34-96d8-4829-88d9-51a2a840588b"/>
+          <ncTools folder="D04R02 L25 (7470220)" objGuid="e714d1b0-0be8-4d14-a650-f727f2664bbd"/>
+        </ncTools>
+        <ncTools folder="Diam 02" objGuid="339cf1c5-590a-49b5-8e56-7881a28785da">
+          <ncTools folder="D02R1 L25 (7470140)" objGuid="8c102f1c-4aa6-49d2-91ae-ac3f34a10c66"/>
+          <ncTools folder="D02R1 L30 (7474140)" objGuid="eada04c4-d327-420c-ae4a-90f139fe0d78"/>
+        </ncTools>
+        <ncTools folder="Diam 01" objGuid="358091a3-06be-4d58-9711-8ce31550c1cf">
+          <ncTools folder="D01R0.5 L30 (7474100)" objGuid="e6038430-7f38-44bf-9e96-1ccd3c386eec"/>
+          <ncTools folder="D01R0.5 L25 (7470100)" objGuid="4479cdb0-75b7-4555-9593-b1935e623208"/>
+        </ncTools>
+      </ncTools>
+      <ncTools folder="99 Utensili Test" objGuid="63ab1294-de64-4ea7-9a63-8cfc5c4175c0"/>
+      <ncTools folder="07 Coda di rondine" objGuid="a1430645-de37-47c2-8864-01b1d7c6f78f"/>
+      <ncTools folder="06 Incisori" objGuid="98eb0594-1757-496a-a282-5624b3b706d0">
+        <ncTools folder="Incisori (non Standard)" objGuid="8e14f715-df3a-4280-9ec7-1f00619eccc6"/>
+      </ncTools>
+      <ncTools folder="08 Foratura" objGuid="48dd4c13-ed3b-4433-a719-52396a8b0e23">
+        <ncTools folder="01 Punte" objGuid="db3c15a4-e56f-4974-8eda-bd9f33eb83b0">
+          <ncTools folder="Punte D19" objGuid="5ac280e4-60aa-4fe1-afb5-ca4a9ff03239"/>
+          <ncTools folder="Punte D13.7" objGuid="7378e8aa-785f-4a54-9b17-434cc7fc0e71"/>
+          <ncTools folder="Punte per M" objGuid="4341084d-e28b-45bd-b445-46080d690f20"/>
+          <ncTools folder="Punte D13" objGuid="6a4249cb-32a7-4008-a1d7-7a9a60224cb2"/>
+          <ncTools folder="Test AbbA" objGuid="304fcd41-b76c-4309-b202-a2eb62db2153"/>
+          <ncTools folder="Punta Bodie" objGuid="5ebea73c-c65c-4d7d-94f8-aa941dc2749f"/>
+          <ncTools folder="Punte D10" objGuid="ad728a3a-176f-4476-b446-1839af5ef6f1"/>
+          <ncTools folder="Punte D11" objGuid="9738b4eb-ea4c-4cbf-8c2a-fdc572f6add9"/>
+          <ncTools folder="Punte D12" objGuid="a9181ee7-73b6-46e3-93c3-9aee9a014361"/>
+          <ncTools folder="Punte D05" objGuid="38de551f-c0ac-4fc9-9f12-7fe2d8e5e66f"/>
+          <ncTools folder="Punte D06" objGuid="609bf315-4b86-4159-a61e-60add91e7e4f"/>
+          <ncTools folder="Punte D07" objGuid="cc0e7c15-3621-4f58-b716-268934cda2d0"/>
+          <ncTools folder="Punte D08" objGuid="249f96fa-b575-4e70-9e29-630644375fcf"/>
+          <ncTools folder="Punte D09.5" objGuid="2f80cc9b-dc3b-4c2b-9e2c-3edb3d6356f9"/>
+          <ncTools folder="Punte D09" objGuid="1c03d95c-f735-430f-ad54-55e774129ceb"/>
+          <ncTools folder="Punte D08.5" objGuid="b42cc8e9-15b7-4c6a-860d-0259e12f1b23"/>
+          <ncTools folder="Punte D12.5" objGuid="696019ee-a71a-4003-be40-ba5e3de2e532"/>
+        </ncTools>
+        <ncTools folder="02 Alesatori" objGuid="eca4a92e-a3db-43b2-b12c-1526adf9b86d">
+          <ncTools folder="Alesatore D10.03" objGuid="d1944284-a7a8-49a4-9952-7036cf1a4aad"/>
+          <ncTools folder="Alesatore D12.03" objGuid="1f394bee-ecef-438e-afeb-2b7f0bfa670c"/>
+          <ncTools folder="Alesatore D10 H7" objGuid="4b2791b2-aea8-4406-a501-b6a765d01bee"/>
+          <ncTools folder="Alesatore D12 H7" objGuid="cea2eceb-fbab-4722-a96e-f54507f513b2"/>
+          <ncTools folder="Alesatore D09.5 H7" objGuid="a2fc26ce-ea2b-4307-adf8-8507b035d63b"/>
+          <ncTools folder="Alesatore D09 H7" objGuid="ee3fc3c8-d3c8-4e60-8a74-d8d514e67147"/>
+          <ncTools folder="Alesatore D08 H7" objGuid="3ef1bcad-e965-46c7-9e01-2aa42fb47f16"/>
+          <ncTools folder="Alesatore D06.03" objGuid="4de71936-d779-43cd-8fa9-7629f6741719"/>
+          <ncTools folder="Alesatore D05 H7" objGuid="82ebd587-2751-404b-8261-7485b7a229f2"/>
+          <ncTools folder="Alesatore D08.03" objGuid="29276c45-a1dc-4291-bca6-053e4e62b272"/>
+          <ncTools folder="Alesatore D06 H7" objGuid="6ca4e3a9-00a1-4e79-9a06-f5726a7fc1f2"/>
+          <ncTools folder="Alesatore D07 H7" objGuid="5e0761a6-0abb-4b44-963d-199377b0acc4"/>
+          <ncTools folder="Alesatore D08.5 H7" objGuid="0bb9840c-7e1e-4769-8139-ddcae1afaf9f"/>
+        </ncTools>
+        <ncTools folder="04 Centrini" objGuid="b6a82258-d6b7-44ea-b67f-49f5e325d7d0">
+          <ncTools folder="D08 L50" objGuid="12c215a7-8820-4edf-aaab-4c376cbf4b8c"/>
+          <ncTools folder="D08 non standard" objGuid="b1d3599a-7a90-4205-a9f9-59f2632aaa11"/>
+        </ncTools>
+        <ncTools folder="03 Pettine" objGuid="e43531c7-c34a-4b4c-a649-ad2c8e59b88f"/>
+        <ncTools folder="05 Staw" objGuid="7c041538-4a87-4da7-90d4-7680684cc2b9">
+          <ncTools folder="Staw D18" objGuid="1b85e9a1-4978-4dc1-aa71-18115ff0cc94"/>
+        </ncTools>
+      </ncTools>
+      <ncTools folder="04 Utensili Trocoidali" objGuid="8af3da3a-31ca-4dcc-b4bd-723d9abeb2db">
+        <ncTools folder="D12R0.5 moldino test" objGuid="dd1c23ba-dfc2-46f1-a55a-ea96f95f38b2"/>
+        <ncTools folder="D10R0.5 Moldino" objGuid="9f0342c9-2b94-4d64-836b-aca39b279162">
+          <ncTools folder="Non standard" objGuid="8acc6008-f6fa-4f7c-a12a-060a7c6ec435"/>
+        </ncTools>
+        <ncTools folder="D16R1 Moldino" objGuid="3fad2b6e-73cc-4c76-b3f9-83ed77595c16"/>
+        <ncTools folder="D20R1 Moldino" objGuid="2f4644a4-2486-4454-a2b7-e3524eb2a678">
+          <ncTools folder="D20R1 Moldino" objGuid="4ba1b963-37ab-4ee4-aaa5-93e7e25e8f40"/>
+        </ncTools>
+        <ncTools folder="D20R1 SCM" objGuid="1d030d45-bcef-4e55-b083-470a8c1d063b"/>
+      </ncTools>
+      <ncTools folder="09 Utesili Lollipop" objGuid="0ffa5931-5ed5-4cba-bb71-902616f4a915">
+        <ncTools folder="Lollipop D06" objGuid="c3f55efc-14f0-4476-9ba9-30f22a72c023"/>
+        <ncTools folder="Lollipop D05" objGuid="f6a9c14f-139c-4698-95ff-0bfe0664a0fa"/>
+        <ncTools folder="Lollipop D04" objGuid="95365906-c19b-41ba-8d99-998f29572012"/>
+      </ncTools>
+      <ncTools folder="10 Smussatore" objGuid="ef4a94fa-1490-4ea2-8d03-c00b595a41b8"/>
+      <ncTools folder="11 Utensili non comuni" objGuid="ca381a75-5634-4e16-b2d6-b5188d63ecf3">
+        <ncTools folder="Disco" objGuid="0cff6fe0-6620-4415-9227-5a14e60d09e6"/>
+      </ncTools>
+    </ncTools>
+  </ncTools>
+</omtdx>
