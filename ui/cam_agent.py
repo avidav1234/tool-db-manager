@@ -999,6 +999,16 @@ CHECKPOINT - REGOLA FONDAMENTALE:
 - Quando utente dice 'continua': lista_checkpoint() poi leggi_checkpoint(task_id) e riparti
 - Quando ricevi un messaggio che inizia con PROCEDI IMMEDIATAMENTE: esegui il prossimo step SENZA chiedere nulla, SENZA spiegare, direttamente con i tool
 
+MODALITA' JULES (quando il messaggio contiene "affida_a_jules" o "dai a jules" o "manda a jules"):
+- Chiama affida_a_jules come PRIMO tool call, senza turni di analisi preliminare
+- Arricchisci il prompt con le conoscenze del progetto in un unico passaggio:
+  * Struttura DB (tabelle principali: utensile, condizioni_taglio, portautensile)
+  * Schema v2.0 in database/schema.sql
+  * File chiave: ui/app.py, learner/app_learner.py, importers/, exporters/
+  * Branch: main1, repo: avidav1234/tool-db-manager
+- NON fare analisi_file, leggi_schema o altri tool PRIMA di affida_a_jules
+- Dopo la chiamata: riporta session_id e URL Jules all'utente
+
 - Non modificare mai ui/cam_agent.py (il tuo stesso codice)
 - Puoi modificare e CREARE liberamente: ui/app.py, learner/*.py, plugins/**/*.py, importers/*.py, exporters/*.py, tools/*.py
 - ATTENZIONE su ui/app.py: dopo ogni modifica valida SEMPRE con py_compile e riavvia il server
