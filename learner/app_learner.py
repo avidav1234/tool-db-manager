@@ -107,7 +107,7 @@ HOME = BASE.replace('{% block content %}{% endblock %}', """
     <label class="up" for="fi">
       <div style="font-size:2rem">&#8679;</div>
       <div>Trascina qui il file o clicca per sceglierlo</div>
-      <input type="file" id="fi" name="file" accept=".csv,.xls,.xlsx,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt"
+      <input type="file" id="fi" name="file" accept=".csv,.xls,.xlsx,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml"
              style="display:none" onchange="document.querySelector('.up div+div').textContent=this.files[0].name">
     </label>
     <div style="margin-top:1rem">
@@ -332,7 +332,7 @@ CONVERTI_P = BASE.replace('{% block content %}{% endblock %}', """
   <form method="post" action="/converti" enctype="multipart/form-data">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
     <div><label style="font-size:12px;font-weight:600">File sorgente</label>
-         <input type="file" name="file" accept=".csv,.xls,.xlsx,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt" required></div>
+         <input type="file" name="file" accept=".csv,.xls,.xlsx,.zip,.db,.tooldb,.tools,.json,.wkz,.js,.hlx,.hld,.tsv,.txt,.xml" required></div>
     <div></div>
     <div><label style="font-size:12px;font-weight:600">Profilo DA (sorgente)</label>
          <select name="profilo_input" required>
@@ -937,7 +937,46 @@ def analizza():
                 except Exception as _e:
                     return redirect(url_for('home', msg=f'Errore parsing .js: {str(_e)[:150]}'))
 
-            if ext == '.csv':
+            if ext == '.xml':
+                # XML tool library (ISO 13399, NX, Vericut, generic)
+                try:
+                    import xml.etree.ElementTree as _ET
+                    _tree = _ET.parse(fp)
+                    _root_el = _tree.getroot()
+                    # Cerca il tag piu frequente con >= 2 occorrenze come "riga utensile"
+                    _tag_counts = {}
+                    for el in _root_el.iter():
+                        tag = el.tag.split('}')[-1] if '}' in el.tag else el.tag
+                        if el.attrib or len(list(el)):
+                            _tag_counts[tag] = _tag_counts.get(tag, 0) + 1
+                    _candidates = sorted([(c, t) for t, c in _tag_counts.items() if c >= 2],
+                                         reverse=True)
+                    if not _candidates:
+                        return redirect(url_for('home', msg='XML: nessun elemento ripetuto trovato'))
+                    _best_tag = _candidates[0][1]
+                    _rows_xml = []
+                    for el in _root_el.iter():
+                        tag = el.tag.split('}')[-1] if '}' in el.tag else el.tag
+                        if tag != _best_tag:
+                            continue
+                        row = dict(el.attrib)
+                        for child in el:
+                            ctag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                            if child.text and child.text.strip():
+                                row[ctag] = child.text.strip()
+                        if row:
+                            _rows_xml.append(row)
+                    if not _rows_xml:
+                        return redirect(url_for('home', msg='XML: nessun dato utensile trovato'))
+                    df_tmp = pd.DataFrame(_rows_xml)
+                    _ns = _root_el.tag.split('}')[0].lstrip('{') if '}' in _root_el.tag else ''
+                    _info = f'XML: {len(_rows_xml)} elementi <{_best_tag}>, {len(df_tmp.columns)} colonne'
+                    if _ns:
+                        _info += f' (namespace: {_ns[:60]})'
+                    print(f'[XML] {_info}', flush=True)
+                except Exception as _xe:
+                    return redirect(url_for('home', msg=f'Errore parsing XML: {str(_xe)[:100]}'))
+            elif ext == '.csv':
                 for sep in [',', ';', '\t', '|']:
                     try:
                         test = pd.read_csv(fp, sep=sep, nrows=3)
