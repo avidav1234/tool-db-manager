@@ -2730,7 +2730,6 @@ Carica un file CAM in alto e scrivi cosa vuoi fare, oppure usa i pulsanti rapidi
         <textarea id="user-input" rows="1" placeholder="Scrivi qui... (Enter = invia, Shift+Enter = a capo)"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
         <button id="send-btn" onclick="send()">Invia</button>
-        <button id="super-btn" onclick="sendSupervisor()" title="Per task complessi multi-step: scompone automaticamente e non chiede mai continua" style="background:#8b5cf6;color:#fff;border:none;border-radius:8px;padding:.6rem 1rem;cursor:pointer;font-size:.8rem;font-weight:500;margin-left:6px">Supervisore</button>
       </div>
     </div>
   </div>
@@ -2851,57 +2850,6 @@ function addMsg(t,txt){
   document.getElementById('msgs').appendChild(el);
   el.scrollIntoView({behavior:'smooth',block:'end'});
   return id;
-}
-async function sendSupervisor(){
-  const inp=document.getElementById('user-input');
-  const m=inp.value.trim(); if(!m) return;
-  inp.value=''; addMsg('user','[Supervisore] '+m);
-  const btn=document.getElementById('super-btn');
-  const sbtn=document.getElementById('send-btn');
-  btn.disabled=true; sbtn.disabled=true;
-  const tid=addMsg('thinking','Supervisore al lavoro  scompone il task e coordina...');
-  try{
-    const r=await fetch('/cam-agent/supervisor',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({messaggio:m})
-    });
-    const d=await r.json();
-    if(d.errore){ removeMsg(tid); addMsg('error',d.errore); btn.disabled=false; sbtn.disabled=false; return; }
-    const jid=d.job_id;
-    let att=0;
-    const poll=setInterval(async()=>{
-      att++;
-      if(att>600){ clearInterval(poll); removeMsg(tid); addMsg('error','Timeout supervisore (20 min)'); btn.disabled=false; sbtn.disabled=false; return; }
-      let pr2;
-      try{ pr2=await fetch('/cam-agent/job/'+jid); }catch(e){
-        if(att>10){ clearInterval(poll); removeMsg(tid); addMsg('error','&#9888; Server non raggiungibile. Riavvia e riprova.'); btn.disabled=false; sbtn.disabled=false; }
-        return;
-      }
-      if(pr2.status===404||pr2.status===410){
-        clearInterval(poll); removeMsg(tid);
-        addMsg('error','&#9888; Job supervisore perso — il server e stato riavviato. Riprova.');
-        btn.disabled=false; sbtn.disabled=false; return;
-      }
-      try{
-        const pd=await pr2.json();
-        if(pd.status==='not_found'){
-          clearInterval(poll); removeMsg(tid);
-          addMsg('error','&#9888; Job supervisore non trovato — il server potrebbe essere stato riavviato. Riprova.');
-          btn.disabled=false; sbtn.disabled=false; return;
-        }
-        if(pd.status==='done'){
-          clearInterval(poll); removeMsg(tid);
-          addAgentMsg(pd.result?.risposta||'(nessuna risposta)', pd.result);
-          _hist=pd.result?.history||_hist;
-          btn.disabled=false; sbtn.disabled=false;
-        } else if(pd.status==='error'){
-          clearInterval(poll); removeMsg(tid);
-          addMsg('error',((pd.result&&pd.result.errore)||'Errore supervisore'));
-          btn.disabled=false; sbtn.disabled=false;
-        }
-      }catch(e){}
-    },3000);
-  }catch(e){ removeMsg(tid); addMsg('error',e.message); btn.disabled=false; sbtn.disabled=false; }
 }
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
