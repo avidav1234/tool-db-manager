@@ -2029,36 +2029,44 @@ MATERIALI_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Materiali
 </div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
-  <h2 style="margin:0;font-size:1.1rem">&#129514; Materiali pezzo</h2>
+  <h2 style="margin:0;font-size:1.1rem">Materiali pezzo</h2>
   <a href="/" class="btn">&#8592; Dashboard</a>
 </div>
 <div class="card" style="margin-bottom:1rem">
 <table style="font-size:13px">
-<thead><tr><th>Nome master</th><th>Gruppo</th><th>Durezza min</th><th>Durezza max</th><th>Norm code</th></tr></thead>
+<thead><tr><th>ID</th><th>Nome master</th><th>HyperMill</th><th>Cimatron</th><th>WorkNC</th><th>HRC</th><th>Azioni</th></tr></thead>
 <tbody>
 {% for m in materiali %}
 <tr>
-  <td><b>{{ m.nome }}</b></td>
-  <td>{{ m.gruppo or '—' }}</td>
-  <td>{{ m.durezza_min or '—' }}</td>
-  <td>{{ m.durezza_max or '—' }}</td>
-  <td style="color:#888">{{ m.norm_code or '—' }}</td>
+  <td>{{ m.id }}</td>
+  <td><b>{{ m.nome_master }}</b></td>
+  <td style="color:#888;font-size:12px">{{ m.nome_hypermill or '—' }}</td>
+  <td style="color:#888;font-size:12px">{{ m.nome_cimatron or '—' }}</td>
+  <td style="color:#888;font-size:12px">{{ m.nome_worknc or '—' }}</td>
+  <td>{{ m.durezza_hrc or '—' }}</td>
+  <td style="white-space:nowrap">
+    <form method="post" action="/materiali/{{ m.id }}/elimina" style="display:inline">
+      <button class="btn btn-d" style="padding:2px 8px;font-size:11px" onclick="return confirm('Eliminare {{ m.nome_master }}?')">Elimina</button>
+    </form>
+  </td>
 </tr>
 {% endfor %}
-{% if not materiali %}<tr><td colspan="5" style="text-align:center;color:#aaa;padding:2rem">Nessun materiale definito</td></tr>{% endif %}
+{% if not materiali %}<tr><td colspan="7" style="text-align:center;color:#aaa;padding:2rem">Nessun materiale definito</td></tr>{% endif %}
 </tbody></table>
 </div>
 <div class="card">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Aggiungi materiale</h3>
   <form method="post" action="/materiali/nuovo" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
-    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome</label>
-      <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
-    <div><label style="font-size:12px;display:block;margin-bottom:3px">Gruppo</label>
-      <input name="gruppo" placeholder="es. Acciaio" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
-    <div><label style="font-size:12px;display:block;margin-bottom:3px">Durezza min</label>
-      <input name="durezza_min" type="number" step="0.1" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:70px"></div>
-    <div><label style="font-size:12px;display:block;margin-bottom:3px">Durezza max</label>
-      <input name="durezza_max" type="number" step="0.1" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:70px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome master</label>
+      <input name="nome_master" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:120px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">HyperMill</label>
+      <input name="nome_hypermill" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Cimatron</label>
+      <input name="nome_cimatron" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">WorkNC</label>
+      <input name="nome_worknc" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">HRC</label>
+      <input name="durezza_hrc" type="number" step="0.1" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
     <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
   </form>
 </div>
@@ -2067,24 +2075,23 @@ MATERIALI_HTML = BASE.replace('{% block content %}{% endblock %}', """
 @app.route('/materiali')
 def materiali_page():
     conn = get_conn()
-    materiali = [dict(r) for r in conn.execute("SELECT * FROM materiale_pezzo ORDER BY nome")]
+    materiali = [dict(r) for r in conn.execute(
+        "SELECT id, nome_master, nome_hypermill, nome_cimatron, nome_worknc, durezza_hrc FROM Materiali ORDER BY nome_master")]
     conn.close()
     return render_template_string(MATERIALI_HTML, materiali=materiali, active='materiali')
 
 @app.route('/materiali/nuovo', methods=['POST'])
 def materiale_nuovo():
-    nome = request.form.get('nome', '').strip()
-    if not nome:
-        return redirect('/materiali')
+    nome = request.form.get('nome_master', '').strip()
+    if not nome: return redirect('/materiali')
+    f = request.form
     conn = get_conn()
     try:
-        conn.execute("INSERT INTO materiale_pezzo (nome, gruppo, durezza_min, durezza_max) VALUES (?,?,?,?)",
-            (nome, request.form.get('gruppo') or None,
-             float(request.form['durezza_min']) if request.form.get('durezza_min') else None,
-             float(request.form['durezza_max']) if request.form.get('durezza_max') else None))
+        conn.execute("INSERT INTO Materiali (nome_master, nome_hypermill, nome_cimatron, nome_worknc, durezza_hrc) VALUES (?,?,?,?,?)",
+            (nome, f.get('nome_hypermill') or None, f.get('nome_cimatron') or None,
+             f.get('nome_worknc') or None, float(f['durezza_hrc']) if f.get('durezza_hrc') else None))
         conn.commit()
-    except Exception:
-        pass
+    except Exception: pass
     conn.close()
     return redirect('/materiali')
 
@@ -2120,15 +2127,29 @@ FAM_HOLDER_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <h2 style="font-size:1.1rem;margin:0 0 1.25rem">Famiglie Holder</h2>
 <div class="card" style="margin-bottom:1rem">
 <table style="font-size:13px">
-<thead><tr><th>ID</th><th>Nome</th><th>k_Vc</th><th>k_fz</th><th>k_ap</th><th>N holders</th><th>Azioni</th></tr></thead>
+<thead><tr><th>ID</th><th>Nome</th><th>k_Vc</th><th>k_fz</th><th>k_ap</th><th>Descrizione</th><th>N holders</th><th>Azioni</th></tr></thead>
 <tbody>
 {% for f in famiglie %}
-<tr class="clickable" onclick="location.href='/famiglie-holder/{{ f.id }}/holders'">
+<tr class="clickable" onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='BUTTON'&&event.target.tagName!=='A')location.href='/famiglie-holder/{{ f.id }}/holders'">
   <td>{{ f.id }}</td><td><b>{{ f.nome }}</b></td>
   <td>{{ f.k_vc }}</td><td>{{ f.k_fz }}</td><td>{{ f.k_ap }}</td>
+  <td style="color:#888;font-size:12px">{{ f.descrizione or '—' }}</td>
   <td><span class="badge b-ok">{{ f.n_holders }}</span></td>
-  <td><a href="/famiglie-holder/{{ f.id }}/holders" class="btn btn-p" style="padding:3px 10px;font-size:11px">Holders &#8594;</a></td>
+  <td style="white-space:nowrap">
+    <a href="/famiglie-holder/{{ f.id }}/holders" class="btn btn-p" style="padding:3px 10px;font-size:11px">Holders</a>
+    <button class="btn btn-mod" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();document.getElementById('edit-fh-{{ f.id }}').style.display=document.getElementById('edit-fh-{{ f.id }}').style.display==='none'?'table-row':'none'">&#9998;</button>
+  </td>
 </tr>
+<tr id="edit-fh-{{ f.id }}" style="display:none"><td colspan="8">
+  <form method="post" action="/famiglie-holder/{{ f.id }}/modifica" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:end;padding:6px">
+    <input name="nome" value="{{ f.nome }}" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:120px">
+    <input name="k_vc" type="number" step="0.01" value="{{ f.k_vc }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="k_fz" type="number" step="0.01" value="{{ f.k_fz }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="k_ap" type="number" step="0.01" value="{{ f.k_ap }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="descrizione" value="{{ f.descrizione or '' }}" placeholder="descrizione" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:140px">
+    <button class="btn btn-s" style="padding:3px 10px;font-size:11px">Salva</button>
+  </form>
+</td></tr>
 {% endfor %}
 </tbody></table>
 </div>
@@ -2175,6 +2196,16 @@ def famiglia_holder_nuova():
     conn.close()
     return redirect('/famiglie-holder')
 
+@app.route('/famiglie-holder/<int:fid>/modifica', methods=['POST'])
+def famiglia_holder_modifica(fid):
+    f = request.form
+    conn = get_conn()
+    conn.execute("UPDATE FamiglieHolder SET nome=?, k_vc=?, k_fz=?, k_ap=?, descrizione=? WHERE id=?",
+        (f['nome'], float(f.get('k_vc', 1)), float(f.get('k_fz', 1)),
+         float(f.get('k_ap', 1)), f.get('descrizione') or None, fid))
+    conn.commit(); conn.close()
+    return redirect('/famiglie-holder')
+
 
 FAM_HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div style="font-size:12px;color:#888;margin-bottom:.5rem">
@@ -2198,7 +2229,7 @@ FAM_HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
   {% if liberi %}
   <table style="font-size:13px"><thead><tr><th>Codice</th><th>Tipo attacco</th><th>Azioni</th></tr></thead>
   <tbody>{% for h in liberi %}
-  <tr><td>{{ h.codice_interno }}</td><td>{{ h.tipo_attacco or '---' }}</td>
+  <tr><td>{{ h.codice_interno }}</td><td>{{ h.tipo_attacco or (h.codice_interno[:20] if h.codice_interno else '---') }}</td>
   <td><form method="post" action="/famiglie-holder/{{ fam.id }}/assegna" style="display:inline"><input type="hidden" name="holder_id" value="{{ h.id }}"><button class="btn btn-ok" style="padding:2px 8px;font-size:11px">Assegna</button></form></td></tr>
   {% endfor %}</tbody></table>
   {% else %}<p style="color:#aaa;font-size:13px">Tutti i holder sono assegnati</p>{% endif %}
@@ -2243,15 +2274,29 @@ LAVORAZIONI_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <h2 style="font-size:1.1rem;margin:0 0 1.25rem">Lavorazioni</h2>
 <div class="card" style="margin-bottom:1rem">
 <table style="font-size:13px">
-<thead><tr><th>ID</th><th>Nome</th><th>Vc base</th><th>fz/D</th><th>Ap/D</th><th>Ae/D</th><th>Scopo</th><th style="font-size:11px;color:#999">D10 esempio</th></tr></thead>
+<thead><tr><th>ID</th><th>Nome</th><th>Vc base</th><th>fz/D</th><th>Ap/D</th><th>Ae/D</th><th>Scopo</th><th style="font-size:11px;color:#999">D10 esempio</th><th></th></tr></thead>
 <tbody>
 {% for l in lavorazioni %}
 <tr>
   <td>{{ l.id }}</td><td><b>{{ l.nome }}</b></td>
   <td>{{ l.vc_base }}</td><td>{{ l.fz_D_ratio }}</td><td>{{ l.ap_D_ratio }}</td><td>{{ l.ae_D_ratio }}</td>
   <td><span class="badge b-ok">{{ l.scopo }}</span></td>
-  <td style="font-size:11px;color:#888">fz={{ '%.2f'|format(l.fz_D_ratio * 10) }} Ap={{ '%.2f'|format(l.ap_D_ratio * 10) }} Ae={{ '%.1f'|format(l.ae_D_ratio * 10) }}</td>
+  <td style="font-size:11px;color:#888">fz={{ '%.3f'|format(l.fz_D_ratio * 10) }} Ap={{ '%.3f'|format(l.ap_D_ratio * 10) }} Ae={{ '%.1f'|format(l.ae_D_ratio * 10) }}</td>
+  <td><button class="btn btn-mod" style="padding:2px 8px;font-size:11px" onclick="document.getElementById('edit-lav-{{ l.id }}').style.display=document.getElementById('edit-lav-{{ l.id }}').style.display==='none'?'table-row':'none'">&#9998;</button></td>
 </tr>
+<tr id="edit-lav-{{ l.id }}" style="display:none"><td colspan="9">
+  <form method="post" action="/lavorazioni/{{ l.id }}/modifica" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:end;padding:6px">
+    <input name="nome" value="{{ l.nome }}" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:120px">
+    <input name="vc_base" type="number" step="0.1" value="{{ l.vc_base }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="fz_D_ratio" type="number" step="0.001" value="{{ l.fz_D_ratio }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:60px">
+    <input name="ap_D_ratio" type="number" step="0.001" value="{{ l.ap_D_ratio }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:60px">
+    <input name="ae_D_ratio" type="number" step="0.01" value="{{ l.ae_D_ratio }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <select name="scopo" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+      {% for s in ['sgrossatura','semifinitura','finitura','foratura'] %}<option value="{{ s }}" {{ 'selected' if s==l.scopo }}>{{ s }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-s" style="padding:3px 10px;font-size:11px">Salva</button>
+  </form>
+</td></tr>
 {% endfor %}
 </tbody></table>
 </div>
@@ -2296,6 +2341,16 @@ def lavorazione_nuova():
         conn.commit()
     except Exception: pass
     conn.close()
+    return redirect('/lavorazioni')
+
+@app.route('/lavorazioni/<int:lid>/modifica', methods=['POST'])
+def lavorazione_modifica(lid):
+    f = request.form
+    conn = get_conn()
+    conn.execute("UPDATE Lavorazioni SET nome=?, vc_base=?, fz_D_ratio=?, ap_D_ratio=?, ae_D_ratio=?, scopo=? WHERE id=?",
+        (f['nome'], float(f['vc_base']), float(f['fz_D_ratio']),
+         float(f['ap_D_ratio']), float(f['ae_D_ratio']), f['scopo'], lid))
+    conn.commit(); conn.close()
     return redirect('/lavorazioni')
 
 
