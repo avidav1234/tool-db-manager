@@ -58,3 +58,7 @@ tool-db-manager/
 
 # Test gitignore
 .gitignore_test
+fix.patch
+importers/import_hypermill_xml_LOCAL.py
+tools/dump_polyline.py
+.claude/
