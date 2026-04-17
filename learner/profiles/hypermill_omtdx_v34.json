@@ -1,0 +1,49 @@
+{
+  "nome": "hypermill_omtdx_v34",
+  "software": "hypermill",
+  "versione": "34",
+  "creato_il": "2026-04-18T00:00:00",
+  "note": "Profilo bidirezionale per HyperMill OMTDX v34 XML",
+  "encoding": "utf-8",
+  "param_mapping": {
+    "toolDiameter": { "campo_master": "diametro_mm", "tipo": "float" },
+    "Diameter": { "campo_master": "diametro_mm", "tipo": "float" },
+    "cornerRadius": { "campo_master": "raggio_punta_mm", "tipo": "float" },
+    "CornerRadius": { "campo_master": "raggio_punta_mm", "tipo": "float" },
+    "fluteLength": { "campo_master": "lunghezza_tagl_mm", "tipo": "float" },
+    "FluteLenght": { "campo_master": "lunghezza_tagl_mm", "tipo": "float" },
+    "cuttingLength": { "campo_master": "lunghezza_tagl_mm", "tipo": "float" },
+    "overallLength": { "campo_master": "lunghezza_totale_mm", "tipo": "float" },
+    "OverallLength": { "campo_master": "lunghezza_totale_mm", "tipo": "float" },
+    "toolTotalLength": { "campo_master": "lunghezza_totale_mm", "tipo": "float" },
+    "clearanceLength": { "campo_master": "fuori_pinza_mm", "tipo": "float" },
+    "Length": { "campo_master": "fuori_pinza_mm", "tipo": "float" },
+    "toolType": { "campo_master": "tipo", "tipo": "string" },
+    "fluteCount": { "campo_master": "num_taglienti", "tipo": "int" },
+    "cuttingEdges": { "campo_master": "num_taglienti", "tipo": "int" }
+  },
+  "tipo_mapping": {
+    "radiusMill": "BULL",
+    "flatMill": "FLAT",
+    "ballMill": "BALL",
+    "chamferMill": "CHAMFER",
+    "drill": "DRILL",
+    "tap": "TAP",
+    "reamer": "REAM",
+    "threadMill": "THREAD",
+    "formTool": "FORM",
+    "lollipopMill": "LOLLIPOP"
+  },
+  "tipo_da_percorso": [
+    { "keyword": "toric", "tipo": "BULL" },
+    { "keyword": "sferic", "tipo": "BALL" },
+    { "keyword": "piatt", "tipo": "FLAT" },
+    { "keyword": "punt", "tipo": "DRILL" },
+    { "keyword": "alesator", "tipo": "REAM" },
+    { "keyword": "maschi", "tipo": "TAP" },
+    { "keyword": "centrin", "tipo": "SPOT" },
+    { "keyword": "pettin", "tipo": "THREAD" },
+    { "keyword": "lollipop", "tipo": "LOLLIPOP" },
+    { "keyword": "smussator", "tipo": "CHAMFER" }
+  ]
+}
