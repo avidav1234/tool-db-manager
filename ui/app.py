@@ -261,8 +261,9 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
 <div class="hdr">
   <h1>Tool DB Manager</h1>
   <a href="/" class="{{ 'active' if active=='home' }}">Utensili</a>
-  <a href="/export" class="{{ 'active' if active=='export' }}">Export</a>
-  <a href="/cam" class="{{ 'active' if active=='cam' }}">CAM</a>
+  <a href="/staging" class="{{ 'active' if active=='staging' }}">&#128230; Staging</a>
+  <a href="/master" class="{{ 'active' if active=='master' }}">&#11088; Master</a>
+  <a href="/export" class="{{ 'active' if active=='export' }}">&#128228; Export</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
   <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente CAM</a>
   <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
@@ -1800,6 +1801,332 @@ EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </div>
 </div>
 """)
+
+# ---------------------------------------------------------------
+# STAGING — utensili da validare
+# ---------------------------------------------------------------
+STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">&#128230; Staging — Utensili da validare</h2>
+    <span style="color:#888;font-size:.85rem">{{ n_staging }} utensili in attesa</span>
+  </div>
+  <a href="/" class="btn">&#8592; Indietro</a>
+</div>
+
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <select onchange="location.href='?tipo='+this.value+'&cam={{ cam_f }}&q={{ q_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti i tipi</option>
+    {% for t in tipi %}<option value="{{ t }}" {{ 'selected' if t==tipo_f }}>{{ t }}</option>{% endfor %}
+  </select>
+  <select onchange="location.href='?cam='+this.value+'&tipo={{ tipo_f }}&q={{ q_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti i CAM</option>
+    {% for c in cams %}<option value="{{ c }}" {{ 'selected' if c==cam_f }}>{{ c }}</option>{% endfor %}
+  </select>
+  <input type="text" placeholder="Cerca alias..." value="{{ q_f }}"
+    onkeyup="if(event.key==='Enter')location.href='?q='+this.value+'&tipo={{ tipo_f }}&cam={{ cam_f }}'"
+    style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:180px">
+</div>
+
+<form id="bulk-form">
+<div class="card" style="padding:.5rem">
+<table style="font-size:13px">
+<thead><tr>
+  <th style="width:30px"><input type="checkbox" onclick="document.querySelectorAll('.sel-cb').forEach(c=>c.checked=this.checked);updSel()"></th>
+  <th>Alias</th><th>Tipo</th><th>D mm</th><th>CAM</th><th>Codice</th><th>Azioni</th>
+</tr></thead>
+<tbody>
+{% for u in utensili %}
+<tr>
+  <td><input type="checkbox" class="sel-cb" value="{{ u.id }}" onchange="updSel()"></td>
+  <td><b>{{ u.alias or u.codice_interno }}</b></td>
+  <td><span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></td>
+  <td>{{ u.diametro_mm or '' }}</td>
+  <td>{{ u.cam_sorgente or '' }}</td>
+  <td style="color:#888;font-size:12px">{{ u.codice_interno }}</td>
+  <td style="white-space:nowrap">
+    <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-s" style="padding:3px 10px;font-size:12px">Promuovi</a>
+    <button type="button" onclick="archivia({{ u.id }})" class="btn" style="padding:3px 8px;font-size:11px;color:#888">Archivia</button>
+  </td>
+</tr>
+{% endfor %}
+{% if not utensili %}<tr><td colspan="7" style="text-align:center;color:#aaa;padding:2rem">Nessun utensile in staging</td></tr>{% endif %}
+</tbody>
+</table>
+</div>
+<div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
+  <select id="bulk-fam" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">-- Famiglia --</option>
+    {% for f in famiglie %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+  </select>
+  <select id="bulk-imp" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">-- Impiego --</option>
+    <option value="sgrossatura">Sgrossatura</option>
+    <option value="semifinitura">Semifinitura</option>
+    <option value="finitura">Finitura</option>
+    <option value="sgrossatura,semifinitura">Sgr+Semi</option>
+    <option value="semifinitura,finitura">Semi+Fin</option>
+    <option value="sgrossatura,semifinitura,finitura">Tutti</option>
+  </select>
+  <button type="button" id="bulk-btn" onclick="bulkPromuovi()" class="btn btn-s" disabled>Promuovi selezionati (0)</button>
+</div>
+</form>
+<script>
+function updSel(){
+  const n=document.querySelectorAll('.sel-cb:checked').length;
+  const b=document.getElementById('bulk-btn');
+  b.textContent='Promuovi selezionati ('+n+')';
+  b.disabled=n===0;
+}
+async function archivia(id){
+  if(!confirm('Archiviare questo utensile?'))return;
+  await fetch('/staging/archivia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[id]})});
+  location.reload();
+}
+async function bulkPromuovi(){
+  const ids=[...document.querySelectorAll('.sel-cb:checked')].map(c=>+c.value);
+  const fam=document.getElementById('bulk-fam').value;
+  const imp=document.getElementById('bulk-imp').value;
+  if(!ids.length)return;
+  const r=await fetch('/staging/promuovi-bulk',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ids:ids,famiglia_id:fam?+fam:null,impiego:imp||null})});
+  const d=await r.json();
+  alert('Promossi: '+d.promossi+' utensili');
+  location.reload();
+}
+</script>
+""")
+
+@app.route('/staging')
+def staging_page():
+    conn=get_conn()
+    tipo_f=request.args.get('tipo','')
+    cam_f=request.args.get('cam','')
+    q_f=request.args.get('q','')
+    where="WHERE u.stato='staging'"
+    params=[]
+    if tipo_f:
+        where+=" AND tu.codice=?"; params.append(tipo_f)
+    if cam_f:
+        where+=" AND u.cam_sorgente=?"; params.append(cam_f)
+    if q_f:
+        where+=" AND (u.alias LIKE ? OR u.codice_interno LIKE ?)"; params+=[f'%{q_f}%',f'%{q_f}%']
+    utensili=[dict(r) for r in conn.execute(f"""
+        SELECT u.id, u.codice_interno, u.alias, tu.codice as tipo_codice,
+               u.diametro_mm, u.cam_sorgente
+        FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
+        {where} ORDER BY u.cam_sorgente, tu.codice, u.diametro_mm LIMIT 200
+    """, params)]
+    n_staging=conn.execute("SELECT COUNT(*) FROM utensile WHERE stato='staging'").fetchone()[0]
+    tipi=[r[0] for r in conn.execute("SELECT DISTINCT tu.codice FROM utensile u JOIN tipo_utensile tu ON u.id_tipo=tu.id WHERE u.stato='staging' AND tu.codice IS NOT NULL ORDER BY tu.codice")]
+    cams=[r[0] for r in conn.execute("SELECT DISTINCT cam_sorgente FROM utensile WHERE stato='staging' AND cam_sorgente IS NOT NULL ORDER BY cam_sorgente")]
+    famiglie=[dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(STAGING_HTML, utensili=utensili, n_staging=n_staging,
+        tipi=tipi, cams=cams, famiglie=famiglie, tipo_f=tipo_f, cam_f=cam_f, q_f=q_f, active='staging')
+
+
+@app.route('/staging/promuovi-bulk', methods=['POST'])
+def staging_promuovi_bulk():
+    """Promozione bulk: promuove N utensili a master in un colpo."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    famiglia_id = data.get('famiglia_id')
+    impiego = data.get('impiego')
+    if not ids:
+        return jsonify({'errore': 'Nessun ID', 'promossi': 0})
+    conn = get_conn()
+    promossi = 0
+    errori = []
+    for uid in ids:
+        try:
+            conn.execute("""UPDATE utensile SET stato='master', famiglia_id=?, impiego=?,
+                promosso_da='operatore', promosso_il=datetime('now') WHERE id=? AND stato='staging'""",
+                (famiglia_id, impiego, uid))
+            if conn.total_changes: promossi += 1
+        except Exception as e:
+            errori.append(f'id {uid}: {e}')
+    conn.commit(); conn.close()
+    return jsonify({'promossi': promossi, 'errori': errori})
+
+
+@app.route('/staging/archivia', methods=['POST'])
+def staging_archivia():
+    """Archivia utensili dallo staging."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    conn = get_conn()
+    for uid in ids:
+        conn.execute("UPDATE utensile SET stato='archiviato' WHERE id=?", (uid,))
+    conn.commit(); conn.close()
+    return jsonify({'archiviati': len(ids)})
+
+
+# ---------------------------------------------------------------
+# PROMOZIONE SINGOLA
+# ---------------------------------------------------------------
+PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">Promuovi utensile a Master</h2>
+  <a href="/staging" class="btn">&#8592; Staging</a>
+</div>
+<div class="card">
+  <div style="margin-bottom:1.25rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:13px">
+      <div><b>Codice:</b> {{ u.codice_interno }}</div>
+      <div><b>Alias:</b> {{ u.alias or '-' }}</div>
+      <div><b>Tipo:</b> <span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></div>
+      <div><b>Diametro:</b> {{ u.diametro_mm }} mm</div>
+      <div><b>CAM:</b> {{ u.cam_sorgente or '-' }}</div>
+      <div><b>Raggio punta:</b> {{ u.raggio_punta_mm or 0 }} mm</div>
+    </div>
+  </div>
+  <form method="post">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Famiglia utensile</label>
+        <select name="famiglia_id" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px">
+          <option value="">-- Nessuna --</option>
+          {% for f in famiglie %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Impiego</label>
+        <div style="display:flex;flex-wrap:wrap;gap:.75rem;font-size:13px">
+          {% for imp in ['sgrossatura','semifinitura','finitura','foratura'] %}
+          <label style="cursor:pointer"><input type="checkbox" name="impiego" value="{{ imp }}"> {{ imp|capitalize }}</label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Note operatore</label>
+      <textarea name="note" rows="2" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="(opzionale)"></textarea>
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <a href="/staging" class="btn">Annulla</a>
+      <button type="submit" class="btn btn-s">Promuovi a Master &#10003;</button>
+    </div>
+  </form>
+</div>
+""")
+
+@app.route('/utensile/<int:uid>/promuovi', methods=['GET','POST'])
+def promuovi_utensile(uid):
+    conn=get_conn()
+    if request.method=='POST':
+        fam=request.form.get('famiglia_id') or None
+        impiego=','.join(request.form.getlist('impiego')) or None
+        note=request.form.get('note','').strip() or None
+        conn.execute("""UPDATE utensile SET stato='master', famiglia_id=?, impiego=?,
+            promosso_da='operatore', promosso_il=datetime('now'), note=COALESCE(note||' | ','')||?
+            WHERE id=?""", (fam, impiego, note or '', uid))
+        conn.commit(); conn.close()
+        return redirect('/master')
+    row=conn.execute("""SELECT u.*, tu.codice as tipo_codice FROM utensile u
+        LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id WHERE u.id=?""", (uid,)).fetchone()
+    if not row:
+        conn.close()
+        return redirect('/staging')
+    famiglie=[dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(PROMUOVI_HTML, u=dict(row), famiglie=famiglie, active='staging')
+
+
+# ---------------------------------------------------------------
+# MASTER — utensili validati
+# ---------------------------------------------------------------
+MASTER_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">&#11088; DB Master — Utensili validati</h2>
+    <span style="color:#888;font-size:.85rem">{{ n_master }} utensili nel master</span>
+  </div>
+  <div style="display:flex;gap:.5rem">
+    <a href="/export" class="btn btn-s" style="padding:6px 14px;font-size:13px">&#128228; Esporta tutti</a>
+    <a href="/staging" class="btn" style="padding:6px 14px;font-size:13px">&#128230; Staging</a>
+  </div>
+</div>
+
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <select onchange="location.href='?famiglia='+this.value+'&tipo={{ tipo_f }}&impiego={{ imp_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutte le famiglie</option>
+    {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if f.id|string==fam_f }}>{{ f.nome }}</option>{% endfor %}
+  </select>
+  <select onchange="location.href='?tipo='+this.value+'&famiglia={{ fam_f }}&impiego={{ imp_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti i tipi</option>
+    {% for t in tipi %}<option value="{{ t }}" {{ 'selected' if t==tipo_f }}>{{ t }}</option>{% endfor %}
+  </select>
+  <select onchange="location.href='?impiego='+this.value+'&famiglia={{ fam_f }}&tipo={{ tipo_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti gli impieghi</option>
+    {% for i in ['sgrossatura','semifinitura','finitura','foratura'] %}<option value="{{ i }}" {{ 'selected' if i==imp_f }}>{{ i }}</option>{% endfor %}
+  </select>
+</div>
+
+{% for grp in gruppi %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="margin:0 0 .75rem;font-size:.95rem;color:#555">
+    {{ grp.nome or 'Senza famiglia' }}
+    <span style="background:#e9ecef;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:400;margin-left:.4rem">{{ grp.utensili|length }}</span>
+  </h3>
+  <table style="font-size:13px">
+  <thead><tr><th>Alias</th><th>Tipo</th><th>D mm</th><th>R mm</th><th>Impiego</th><th>CAM</th><th>Promosso</th><th>Azioni</th></tr></thead>
+  <tbody>
+  {% for u in grp.utensili %}
+  <tr>
+    <td><b>{{ u.alias or u.codice_interno }}</b></td>
+    <td><span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></td>
+    <td>{{ u.diametro_mm or '' }}</td>
+    <td>{{ u.raggio_punta_mm or '' }}</td>
+    <td style="font-size:12px">{{ u.impiego or '' }}</td>
+    <td style="font-size:12px;color:#888">{{ u.cam_sorgente or '' }}</td>
+    <td style="font-size:11px;color:#aaa">{{ (u.promosso_il or '')[:10] }}</td>
+    <td>
+      <a href="/utensile/{{ u.id }}" class="btn" style="padding:2px 8px;font-size:11px">Dettaglio</a>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endfor %}
+{% if not gruppi %}<div class="card" style="text-align:center;color:#aaa;padding:2rem">Nessun utensile nel master. <a href="/staging">Promuovine alcuni dallo staging.</a></div>{% endif %}
+""")
+
+@app.route('/master')
+def master_page():
+    conn=get_conn()
+    fam_f=request.args.get('famiglia','')
+    tipo_f=request.args.get('tipo','')
+    imp_f=request.args.get('impiego','')
+    where="WHERE u.stato='master'"
+    params=[]
+    if fam_f:
+        where+=" AND u.famiglia_id=?"; params.append(int(fam_f))
+    if tipo_f:
+        where+=" AND tu.codice=?"; params.append(tipo_f)
+    if imp_f:
+        where+=" AND u.impiego LIKE ?"; params.append(f'%{imp_f}%')
+    rows=[dict(r) for r in conn.execute(f"""
+        SELECT u.id, u.codice_interno, u.alias, tu.codice as tipo_codice,
+               u.diametro_mm, u.raggio_punta_mm, u.cam_sorgente,
+               u.impiego, u.promosso_il, u.famiglia_id,
+               COALESCE(f.nome, 'Senza famiglia') as fam_nome
+        FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
+        LEFT JOIN FamiglieUtensile f ON u.famiglia_id=f.id
+        {where} ORDER BY f.nome, tu.codice, u.diametro_mm
+    """, params)]
+    n_master=conn.execute("SELECT COUNT(*) FROM utensile WHERE stato='master'").fetchone()[0]
+    tipi=[r[0] for r in conn.execute("SELECT DISTINCT tu.codice FROM utensile u JOIN tipo_utensile tu ON u.id_tipo=tu.id WHERE u.stato='master' AND tu.codice IS NOT NULL")]
+    famiglie=[dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    # Raggruppa per famiglia
+    from itertools import groupby
+    gruppi=[]
+    for k, grp in groupby(rows, key=lambda r: r['fam_nome']):
+        gruppi.append({'nome': k, 'utensili': list(grp)})
+    return render_template_string(MASTER_HTML, gruppi=gruppi, n_master=n_master,
+        tipi=tipi, famiglie=famiglie, fam_f=fam_f, tipo_f=tipo_f, imp_f=imp_f, active='master')
+
 
 @app.route('/export')
 def export_page():
