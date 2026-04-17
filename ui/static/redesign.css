@@ -54,7 +54,8 @@ tbody tr:hover td{background:var(--brand-light)!important}
 .section-title{font-size:11px!important;font-weight:700!important;text-transform:uppercase!important;letter-spacing:.7px!important;color:var(--text-3)!important;padding:6px 0 4px!important;border-bottom:1px solid var(--border)!important;margin-bottom:8px!important}
 .drop-zone{border:2px dashed var(--border-strong)!important;border-radius:var(--radius)!important;padding:2.5rem!important;text-align:center!important;color:var(--text-3)!important;cursor:pointer!important;transition:.2s!important}
 .drop-zone:hover,.drop-zone.over{border-color:var(--brand)!important;color:var(--brand)!important;background:var(--brand-light)!important}
-tbody td:last-child a,tbody td:last-child button{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:28px!important;height:28px!important;border-radius:6px!important;border:1px solid transparent!important;transition:all .15s!important;font-size:14px!important;cursor:pointer!important;text-decoration:none!important;margin:0 1px!important;background:transparent!important}
+tbody td:last-child .btn-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:28px!important;height:28px!important;border-radius:6px!important;border:1px solid transparent!important;transition:all .15s!important;font-size:14px!important;cursor:pointer!important;text-decoration:none!important;margin:0 1px!important;background:transparent!important}
+tbody td:last-child a:not(.btn-icon), tbody td:last-child button:not(.btn-icon){margin:0 1px!important;white-space:nowrap!important}
 tbody td:last-child a:hover,tbody td:last-child button:hover{background:#f0efec!important;border-color:var(--border-strong)!important}
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px}
