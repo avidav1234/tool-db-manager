@@ -500,8 +500,5 @@ CREATE TABLE IF NOT EXISTS ParametriTaglio (
     UNIQUE(nctool_id, materiale_id, scopo)
 );
 
--- SQLite non supporta completamente IF NOT EXISTS su ADD COLUMN per le versioni molto vecchie.
--- Utilizziamo una sintassi che tenta di aggiungere la colonna e la ignorerà se non è presente il supporto nativo o fallirà silenziosamente se implementata via try-except nello script.
--- Comunque, in SQLite 3.25.0+ ADD COLUMN è supportato.
--- Inseriamo direttamente:
-ALTER TABLE utensile ADD COLUMN famiglia_id INTEGER REFERENCES FamiglieUtensile(id);
+-- Nota: famiglia_id gia presente nella CREATE TABLE utensile (riga 283).
+-- ALTER TABLE rimosso per evitare "duplicate column name" su DB nuovi.
