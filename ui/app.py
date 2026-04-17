@@ -1978,7 +1978,7 @@ def famiglia_parametri(fid):
         UNIQUE(famiglia_id, materiale_id, scopo))""")
     conn.commit()
     if request.method == 'POST':
-        materiali = [dict(r) for r in conn.execute("SELECT id, nome FROM materiale_pezzo ORDER BY nome")]
+        materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
         for m in materiali:
             for sc in scopi:
                 key = f"{m['id']}_{sc}"
@@ -1990,7 +1990,7 @@ def famiglia_parametri(fid):
                             float(vc) if vc else None, float(fz) if fz else None))
         conn.commit(); conn.close()
         return redirect(f'/famiglie/{fid}/parametri')
-    materiali = [dict(r) for r in conn.execute("SELECT id, nome FROM materiale_pezzo ORDER BY nome")]
+    materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
     existing = conn.execute("SELECT materiale_id, scopo, vc_base, fz_base FROM ParametriBase WHERE famiglia_id=?", (fid,)).fetchall()
     vals = {}
     for r in existing:
