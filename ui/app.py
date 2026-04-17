@@ -26,6 +26,15 @@ OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'output', 'manual')
 
 app = Flask(__name__)
 
+@app.context_processor
+def inject_nav_stats():
+    """Inietta nav_staging e nav_master in tutti i template."""
+    try:
+        ns, nm = _nav_stats()
+        return {'nav_staging': ns, 'nav_master': nm}
+    except Exception:
+        return {'nav_staging': 0, 'nav_master': 0}
+
 @app.after_request
 def set_charset(response):
     """Forza Content-Type charset=utf-8 su tutte le risposte HTML."""
@@ -254,29 +263,60 @@ hr{border:none;border-top:1px solid #e2e2df;margin:1.25rem 0}
 .drop-zone:hover,.drop-zone.over{border-color:#0055cc;color:#0055cc;background:#f0f4ff}
 """
 
+def _nav_stats():
+    """Contatori per la navbar (staging/master)."""
+    try:
+        c = get_conn()
+        ns = c.execute("SELECT COUNT(*) FROM utensile WHERE stato='staging'").fetchone()[0]
+        nm = c.execute("SELECT COUNT(*) FROM utensile WHERE stato='master'").fetchone()[0]
+        c.close()
+        return ns, nm
+    except Exception:
+        return 0, 0
+
 BASE = """<!DOCTYPE html><html lang="it"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tool DB Manager</title>
 <link rel="stylesheet" href="/static/redesign.css"></head><body>
 <div class="hdr">
   <h1>Tool DB Manager</h1>
-  <a href="/" class="{{ 'active' if active=='home' }}">Utensili</a>
-  <a href="/staging" class="{{ 'active' if active=='staging' }}">&#128230; Staging</a>
-  <a href="/master" class="{{ 'active' if active=='master' }}">&#11088; Master</a>
+  <a href="/" class="{{ 'active' if active=='home' }}">Dashboard</a>
+  <a href="/staging" class="{{ 'active' if active=='staging' }}">&#128230; Staging <span class="nav-badge nav-badge-amber">{{ nav_staging }}</span></a>
+  <a href="/master" class="{{ 'active' if active=='master' }}">&#11088; Master <span class="nav-badge nav-badge-green">{{ nav_master }}</span></a>
   <a href="/export" class="{{ 'active' if active=='export' }}">&#128228; Export</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
   <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente CAM</a>
   <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
-  <a href="/test-agente" {% if active=='test' %}class="active"{% endif %}
-       style="color:{% if active=='test' %}#fff{% else %}#fbbf24{% endif %}">&#129516; Test AI</a>
-    <a href="/verifica" class="{{ 'active' if active=='verifica' }}"
-     style="color:{% if active=='verifica' %}#fff{% else %}#4ade80{% endif %}">&#9989; Verifica</a>
-  <a href="/log" class="{{ 'active' if active=='log' }}">Log</a>
   <span style="margin-left:auto">
     <a href="http://localhost:5001" target="_blank" style="color:#555;font-size:12px">
       Format Learner &#8599;</a>
   </span>
 </div>
+<style>
+.nav-badge{font-size:10px;padding:1px 6px;border-radius:8px;font-weight:700;margin-left:3px}
+.nav-badge-amber{background:#fbbf24;color:#78350f}
+.nav-badge-green{background:#34d399;color:#064e3b}
+.dashboard-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:32px 0}
+.dash-card{background:#fff;border:1px solid #e2e2df;border-radius:12px;padding:28px;text-align:center}
+.dash-card .dc-icon{font-size:2.5rem;margin-bottom:4px}
+.dash-card .dc-count{font-size:48px;font-weight:700;margin:4px 0}
+.dash-card .dc-label{font-size:14px;font-weight:600;color:#555}
+.dash-card .dc-sub{font-size:12px;color:#999;margin-top:4px}
+.dash-card .dc-btn{display:inline-block;margin-top:16px;padding:8px 20px;background:#6366f1;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500}
+.dc-staging .dc-count{color:#f59e0b}
+.dc-master .dc-count{color:#10b981}
+.dc-export .dc-count{color:#6366f1}
+.source-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f0f0ee}
+.source-name{font-weight:600;font-size:13px;min-width:100px}
+.source-bar{flex:1;background:#f0f0ee;border-radius:4px;height:14px;overflow:hidden}
+.source-fill{height:100%;border-radius:4px;transition:width .3s}
+.source-count{font-size:13px;font-weight:600;min-width:40px;text-align:right}
+.badge-staging{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.badge-master{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.quick-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+.action-btn{padding:10px 20px;background:#fff;border:1px solid #e2e2df;border-radius:8px;text-decoration:none;color:#333;font-size:13px;font-weight:500}
+.action-btn:hover{background:#f8f8f6;border-color:#ccc}
+</style>
 <div class="main">
 {% if msg %}<div class="flash {{ mtype }}">{{ msg }}</div>{% endif %}
 {% block content %}{% endblock %}
@@ -286,23 +326,56 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
 # HOME
 # ---------------------------------------------------------------
 HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
-  <div>
-    <h2 style="margin:0;font-size:1.1rem">Utensili</h2>
-    <p style="margin:4px 0 0;color:#888;font-size:13px">{{ n }} utensili nel database master</p>
+<div style="margin-bottom:1.5rem">
+  <h2 style="margin:0;font-size:1.2rem">Tool DB Manager</h2>
+  <p style="margin:4px 0 0;color:#888;font-size:13px">Vetimec — gestione utensili centralizzata per HyperMill, Cimatron, WorkNC</p>
+</div>
+
+<div class="dashboard-cards">
+  <div class="dash-card dc-staging">
+    <div class="dc-icon">&#128230;</div>
+    <div class="dc-count">{{ n_staging }}</div>
+    <div class="dc-label">Staging</div>
+    <div class="dc-sub">utensili da validare</div>
+    <a href="/staging" class="dc-btn">Vai allo Staging &#8594;</a>
   </div>
-  <div style="display:flex;gap:.5rem">
-    <a class="btn" href="/importa">&#8657; Importa</a>
-    <a class="btn btn-p" href="/utensile/nuovo">+ Nuovo</a>
-    <a class="btn btn-s btn-lg" href="/export">&#8659; Esporta tutti</a>
+  <div class="dash-card dc-master">
+    <div class="dc-icon">&#11088;</div>
+    <div class="dc-count">{{ n_master }}</div>
+    <div class="dc-label">Master</div>
+    <div class="dc-sub">utensili validati</div>
+    <a href="/master" class="dc-btn">Vai al Master &#8594;</a>
+  </div>
+  <div class="dash-card dc-export">
+    <div class="dc-icon">&#128228;</div>
+    <div class="dc-count">3</div>
+    <div class="dc-label">CAM pronti</div>
+    <div class="dc-sub">HyperMill &middot; Cimatron &middot; WorkNC</div>
+    <a href="/export" class="dc-btn">Esporta &#8594;</a>
   </div>
 </div>
 
-<div class="stats-hero">
-  <div class="stat-card stat-blue"><div class="stat-icon">&#128295;</div><div class="stat-num">{{ n }}</div><div class="stat-lbl">Utensili nel DB</div></div>
-  <div class="stat-card stat-purple"><div class="stat-icon">&#128208;</div><div class="stat-num">{{ n_tipi }}</div><div class="stat-lbl">Tipi diversi</div></div>
-  <div class="stat-card stat-green"><div class="stat-icon">&#128228;</div><div class="stat-num">{{ n_profili }}</div><div class="stat-lbl">Profili export</div></div>
-  <div class="stat-card stat-amber"><div class="stat-icon">&#9889;</div><div class="stat-num">{{ n_attivi }}</div><div class="stat-lbl">Formati attivi</div></div>
+<h3 style="font-size:.95rem;color:#555;margin:2rem 0 .75rem">Sorgenti dati importate</h3>
+<div class="card" style="padding:1rem 1.25rem">
+{% for s in sorgenti %}
+<div class="source-row">
+  <span class="source-name">{{ s.cam_sorgente }}</span>
+  <div class="source-bar">
+    <div class="source-fill" style="width:{{ s.pct }}%;background:{% if s.cam_sorgente=='HyperMill' %}#10b981{% elif s.cam_sorgente=='WorkNC' %}#3b82f6{% elif s.cam_sorgente=='Cimatron' %}#f59e0b{% else %}#94a3b8{% endif %}"></div>
+  </div>
+  <span class="source-count">{{ s.n }}</span>
+  <span class="badge-{{ s.stato }}">{{ s.stato }}</span>
+</div>
+{% endfor %}
+{% if not sorgenti %}<div style="color:#aaa;font-size:13px;text-align:center;padding:.75rem">Nessun dato importato. <a href="/importa">Importa un file CAM.</a></div>{% endif %}
+</div>
+
+<h3 style="font-size:.95rem;color:#555;margin:2rem 0 .75rem">Azioni rapide</h3>
+<div class="quick-actions">
+  <a href="/importa" class="action-btn">&#8657; Importa file CAM</a>
+  <a href="/staging" class="action-btn">&#128203; Valida utensili</a>
+  <a href="/export" class="action-btn">&#128228; Genera export</a>
+  <a href="/cam-agent" class="action-btn">&#129302; Agente CAM</a>
 </div>
 
 <div class="card">
@@ -470,69 +543,26 @@ def api_utensili():
 
 @app.route('/')
 def home():
-    def arrotonda(v, dec=3):
-        if v is None: return v
-        try:
-            f = float(v)
-            return round(f, 1) if abs(f - round(f)) < 0.0001 else round(f, dec)
-        except: return v
-
-    q_filter = request.args.get('q', '').strip().lower()
-    tipo_filter = request.args.get('tipo', '').strip()
-    pinza_filter = request.args.get('pinza', '').strip()
+    ns, nm = _nav_stats()
+    # Sorgenti dati raggruppate per cam_sorgente + stato
+    sorgenti = []
     try:
-        conn=get_conn()
-        rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno").fetchall()
-        total=conn.execute("SELECT COUNT(*) FROM utensile_completo WHERE attivo=1").fetchone()[0]
-        tipi_lista=sorted(set(r['tipo'] for r in conn.execute("SELECT DISTINCT tipo FROM utensile_completo WHERE attivo=1 AND tipo IS NOT NULL")))
-        pinze_lista=sorted(set(r['nome_pinza'] for r in conn.execute("SELECT DISTINCT nome_pinza FROM utensile_completo WHERE attivo=1 AND nome_pinza IS NOT NULL")))
+        conn = get_conn()
+        total = conn.execute("SELECT COUNT(*) FROM utensile").fetchone()[0] or 1
+        for r in conn.execute("""SELECT cam_sorgente, stato, COUNT(*) as n
+            FROM utensile WHERE cam_sorgente IS NOT NULL
+            GROUP BY cam_sorgente, stato ORDER BY cam_sorgente"""):
+            sorgenti.append({
+                'cam_sorgente': r[0], 'stato': r[1], 'n': r[2],
+                'pct': round(r[2] / total * 100)
+            })
         conn.close()
-        utensili=[]
-        for row in rows:
-            u=dict(row)
-            # Filtro tipo da URL (?tipo=BALL)
-            if tipo_filter and u.get('tipo') != tipo_filter:
-                continue
-            # Filtro pinza da URL (?pinza=TSF...)
-            if pinza_filter and u.get('nome_pinza') != pinza_filter:
-                continue
-            # Filtro testo da URL (?q=D10)
-            if q_filter:
-                searchable = ' '.join(str(v) for v in u.values() if v).lower()
-                if q_filter not in searchable:
-                    continue
-            for campo in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm','lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
-                if u.get(campo) is not None: u[campo]=arrotonda(u[campo])
-            utensili.append(u)
-    except Exception: utensili=[]; total=0; tipi_lista=[]; pinze_lista=[]
-    cfg=carica_config()
-    try:
-        _conn2=get_conn()
-        profili=_conn2.execute("SELECT COUNT(DISTINCT profilo_export) FROM utensile_completo WHERE attivo=1 AND profilo_export IS NOT NULL").fetchone()[0]
-        _conn2.close()
-    except Exception: profili=0
-    n_worknc=0; n_parametri=0
-    try:
-        _c3=get_conn()
-        n_worknc=_c3.execute(
-            "SELECT COUNT(*) FROM utensile WHERE cam_sorgente='WorkNC'"
-        ).fetchone()[0]
-        n_parametri=_c3.execute(
-            "SELECT COUNT(*) FROM condizioni_taglio WHERE cam_sorgente='WorkNC'"
-        ).fetchone()[0]
-        _c3.close()
-    except Exception: pass
+    except Exception:
+        pass
     return render_template_string(HOME_HTML,
-        utensili=utensili,n=total,
-        n_tipi=len(tipi_lista),
-        n_profili=profili,
-        n_attivi=len(cfg.get('formati_attivi',[])),
-        n_worknc=n_worknc,
-        n_parametri=n_parametri,
-        tipi_lista=tipi_lista,
-        pinze_lista=pinze_lista,
-        msg=request.args.get('msg',''),
-        mtype=request.args.get('mtype',''))
+        n_staging=ns, n_master=nm, sorgenti=sorgenti,
+        nav_staging=ns, nav_master=nm, active='home',
+        msg=request.args.get('msg',''), mtype=request.args.get('mtype',''))
 
 def _get_lookup():
     """Ritorna le liste per i dropdown: tipi, materiali, fornitori."""
