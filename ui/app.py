@@ -218,10 +218,14 @@ tr:hover td{background:#fafaf8}
      border:1px solid #d0d0ce;cursor:pointer;font-size:13px;text-decoration:none;
      background:#fff;color:#333;font-weight:500;white-space:nowrap}
 .btn:hover{background:#f5f5f3}
-.btn-p{background:#0055cc;color:#fff;border-color:#0055cc}.btn-p:hover{background:#0047ad}
-.btn-s{background:#1a6e35;color:#fff;border-color:#1a6e35}.btn-s:hover{background:#155c2c}
-.btn-d{background:#b91c1c;color:#fff;border-color:#b91c1c}.btn-d:hover{background:#991515}
+.btn-p{background:#6366f1;color:#fff !important;border-color:#4f46e5}.btn-p:hover{background:#4f46e5}
+.btn-s{background:#10b981;color:#fff !important;border-color:#059669}.btn-s:hover{background:#059669}
+.btn-d{background:#ef4444;color:#fff !important;border-color:#dc2626}.btn-d:hover{background:#dc2626}
+.btn-mod{background:#f59e0b;color:#fff !important;border-color:#d97706}.btn-mod:hover{background:#d97706}
+.btn-ok{background:#10b981;color:#fff !important;border-color:#059669}.btn-ok:hover{background:#047857}
+.btn-sec{background:#fff;color:#333 !important;border:1px solid #d1d5db}.btn-sec:hover{background:#f3f4f6}
 .btn-lg{padding:10px 22px;font-size:14px}
+tr.clickable{cursor:pointer}tr.clickable:hover td{background:#f8f8f6 !important}
 .flash{padding:10px 14px;border-radius:6px;margin-bottom:1rem;font-size:13px;
        background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
 .flash.err{background:#fee2e2;color:#991b1b;border-color:#fecaca}
@@ -1770,13 +1774,13 @@ HOLDERS_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <thead><tr><th>ID</th><th>Codice</th><th>Tipo attacco</th><th>Segmenti</th><th>Speed factor</th><th>Azioni</th></tr></thead>
 <tbody>
 {% for h in holders %}
-<tr>
+<tr class="clickable" onclick="location.href='/holders/{{ h.id }}'">
   <td>{{ h.id }}</td>
   <td><b>{{ h.codice_interno }}</b></td>
   <td>{{ h.tipo_attacco or '—' }}</td>
   <td>{{ h.num_segmenti or 0 }}</td>
   <td>{{ h.spindle_speed_factor or 1.0 }}</td>
-  <td><a href="/holders/{{ h.id }}" class="btn" style="padding:3px 10px;font-size:12px">Dettaglio &#8594;</a></td>
+  <td><a href="/holders/{{ h.id }}" class="btn btn-p" style="padding:3px 10px;font-size:12px">Dettaglio &#8594;</a></td>
 </tr>
 {% endfor %}
 {% if not holders %}<tr><td colspan="6" style="text-align:center;color:#aaa;padding:2rem">Nessun holder nel database</td></tr>{% endif %}
@@ -1862,7 +1866,7 @@ FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Mat. tagliente</th><th>N taglienti</th><th>Utensili</th><th>Azioni</th></tr></thead>
 <tbody>
 {% for f in famiglie %}
-<tr>
+<tr class="clickable" onclick="location.href='/famiglie/{{ f.id }}/parametri'">
   <td>{{ f.id }}</td>
   <td><b>{{ f.nome }}</b></td>
   <td>{{ f.tipo or '—' }}</td>
@@ -2191,7 +2195,7 @@ STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
 </tr></thead>
 <tbody>
 {% for u in utensili %}
-<tr>
+<tr class="clickable" onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='SELECT'&&event.target.tagName!=='A'&&event.target.tagName!=='BUTTON')location.href='/utensile/{{ u.id }}/modifica'">
   <td><input type="checkbox" class="sel-cb" value="{{ u.id }}" onchange="updSel()"></td>
   <td><b>{{ u.alias or u.codice_interno }}</b></td>
   <td><span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></td>
@@ -2205,9 +2209,9 @@ STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
     </select>
   </td>
   <td style="white-space:nowrap">
-    <a href="/utensile/{{ u.id }}/modifica" class="btn" style="padding:3px 8px;font-size:11px">&#9998;</a>
-    <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-s" style="padding:3px 10px;font-size:11px">Promuovi</a>
-    <button type="button" onclick="archivia({{ u.id }})" class="btn" style="padding:3px 8px;font-size:11px;color:#888">&#128465;</button>
+    <a href="/utensile/{{ u.id }}/modifica" class="btn btn-mod" style="padding:3px 8px;font-size:11px">&#9998;</a>
+    <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-ok" style="padding:3px 10px;font-size:11px">Promuovi</a>
+    <button type="button" onclick="event.stopPropagation();archivia({{ u.id }})" class="btn btn-sec" style="padding:3px 8px;font-size:11px">&#128465;</button>
   </td>
 </tr>
 {% endfor %}
