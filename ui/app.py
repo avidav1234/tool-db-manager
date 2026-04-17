@@ -1936,7 +1936,7 @@ PARAMETRI_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div class="card">
 <table style="font-size:13px">
 <thead><tr><th>Materiale</th>
-  {% for sc in scopi %}<th colspan="2" style="text-align:center;background:#f8f8f6">{{ sc|capitalize }}<br><span style="font-size:10px;color:#999">Vc | fz</span></th>{% endfor %}
+  {% for sc in scopi %}<th colspan="2" style="text-align:center;background:#f8f8f6">{{ sc|capitalize }}<br><span style="font-size:10px;color:#999">Vc | fz/D</span></th>{% endfor %}
 </tr></thead>
 <tbody>
 {% for m in materiali %}
@@ -1947,13 +1947,18 @@ PARAMETRI_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <td><input name="vc_{{ key }}" type="number" step="0.1" value="{{ vals.get(key,{}).get('vc','') }}"
     style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="Vc"></td>
   <td><input name="fz_{{ key }}" type="number" step="0.001" value="{{ vals.get(key,{}).get('fz','') }}"
-    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="fz"></td>
+    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="fz/D"></td>
   {% endfor %}
 </tr>
 {% endfor %}
 {% if not materiali %}<tr><td colspan="{{ 1 + scopi|length * 2 }}" style="text-align:center;color:#aaa;padding:1rem">Aggiungi materiali nella pagina <a href="/materiali">Materiali</a></td></tr>{% endif %}
 </tbody></table>
 </div>
+<p style="font-size:12px;color:#888;margin-top:.75rem;line-height:1.6">
+  <b>fz/D</b> = coefficiente avanzamento per dente / diametro (adimensionale).<br>
+  Valore reale: <b>fz = (fz/D) x diametro utensile</b>.<br>
+  Esempio: fz/D=0.040 con D10mm &rarr; fz=0.40 mm/dente | con D6mm &rarr; fz=0.24 | con D25mm &rarr; fz=1.00
+</p>
 <div style="margin-top:1rem;display:flex;gap:.75rem">
   <a href="/famiglie" class="btn">&#8592; Famiglie</a>
   <button type="submit" class="btn btn-p">&#128190; Salva tutto</button>
@@ -1985,13 +1990,13 @@ def famiglia_parametri(fid):
                 vc = request.form.get(f'vc_{key}')
                 fz = request.form.get(f'fz_{key}')
                 if vc or fz:
-                    conn.execute("""INSERT OR REPLACE INTO ParametriBase (famiglia_id, materiale_id, scopo, vc_base, fz_base)
+                    conn.execute("""INSERT OR REPLACE INTO ParametriBase (famiglia_id, materiale_id, scopo, vc_base, fz_D_ratio)
                         VALUES (?,?,?,?,?)""", (fid, m['id'], sc,
                             float(vc) if vc else None, float(fz) if fz else None))
         conn.commit(); conn.close()
         return redirect(f'/famiglie/{fid}/parametri')
     materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
-    existing = conn.execute("SELECT materiale_id, scopo, vc_base, fz_base FROM ParametriBase WHERE famiglia_id=?", (fid,)).fetchall()
+    existing = conn.execute("SELECT materiale_id, scopo, vc_base, fz_D_ratio FROM ParametriBase WHERE famiglia_id=?", (fid,)).fetchall()
     vals = {}
     for r in existing:
         key = f"{r[0]}_{r[1]}"

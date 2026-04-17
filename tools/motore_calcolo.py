@@ -109,7 +109,7 @@ def calcola_parametri_nctool(db_path: str, nctool_id: int, materiale_id: int, sc
 
         # 2. Recupera ParametriBase
         cur.execute('''
-            SELECT vc_base, fz_base, ae_pct, ap_base
+            SELECT vc_base, fz_D_ratio, ae_pct, ap_base
             FROM ParametriBase
             WHERE famiglia_id = ? AND materiale_id = ? AND scopo = ?
         ''', (famiglia_id, materiale_id, scopo))
@@ -120,7 +120,7 @@ def calcola_parametri_nctool(db_path: str, nctool_id: int, materiale_id: int, sc
             return False # Parametri base non trovati
 
         vc_base = pb['vc_base']
-        fz_base = pb['fz_base']
+        fz_D_ratio = pb['fz_D_ratio']   # coefficiente fz/D (adimensionale)
         ae_pct = pb['ae_pct'] or 50.0
         ap_base = pb['ap_base'] or 0.0
 
@@ -134,7 +134,8 @@ def calcola_parametri_nctool(db_path: str, nctool_id: int, materiale_id: int, sc
         k_ap_tot = fattori_diam['k_ap'] * fattori_ld['k_ap']
 
         vc_calc = vc_base * k_vc_tot
-        fz_calc = fz_base * k_fz_tot
+        # fz_reale = fz_D_ratio * diametro * fattori_correzione
+        fz_calc = fz_D_ratio * diametro * k_fz_tot
         ap_calc = ap_base * k_ap_tot
         ae_calc = diametro * (ae_pct / 100.0)
 
@@ -143,7 +144,7 @@ def calcola_parametri_nctool(db_path: str, nctool_id: int, materiale_id: int, sc
         fxy = calcola_fxy(fz_calc, n_taglienti, n_rpm)
 
         # Tracciabilità
-        formula_usata = "Cascade formula base * K_diam * K_ld * K_holder"
+        formula_usata = "fz = fz_D_ratio * D * K_diam * K_ld * K_holder"
         fattori_applicati = f"k_vc:{k_vc_tot:.2f}, k_fz:{k_fz_tot:.2f}, k_ap:{k_ap_tot:.2f}"
 
         # 6. Salva in ParametriTaglio (upsert)
