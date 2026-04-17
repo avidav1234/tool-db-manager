@@ -2679,59 +2679,83 @@ MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
 </div>
 <h2 style="font-size:1.1rem;margin:0 0 1.25rem">Modifica utensile — {{ u.alias or u.codice_interno }}</h2>
 <form method="post">
+
 <div class="card" style="margin-bottom:1rem">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Identita</h3>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Alias</label>
       <input name="alias" value="{{ u.alias or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Codice interno</label>
+      <input value="{{ u.codice_interno or '' }}" readonly style="width:100%;padding:6px 10px;border:1px solid #eee;border-radius:5px;font-size:13px;background:#f8f8f6;color:#888"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Codice catalogo</label>
+      <input name="codice_catalogo" value="{{ u.codice_catalogo or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Descrizione</label>
+      <input name="descrizione" value="{{ u.descrizione or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">CAM sorgente</label>
+      <input value="{{ u.cam_sorgente or '' }}" readonly style="width:100%;padding:6px 10px;border:1px solid #eee;border-radius:5px;font-size:13px;background:#f8f8f6;color:#888"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Geometria</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Tipo</label>
       <select name="id_tipo" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
         {% for t in tipi %}<option value="{{ t.id }}" {{ 'selected' if t.id==u.id_tipo }}>{{ t.codice }}</option>{% endfor %}
       </select></div>
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Stato</label>
-      <select name="stato" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
-        {% for s in ['staging','master','archiviato'] %}<option value="{{ s }}" {{ 'selected' if s==u.stato }}>{{ s }}</option>{% endfor %}
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Materiale tagliente</label>
+      <select name="id_materiale" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for m in mat_utensile %}<option value="{{ m.id }}" {{ 'selected' if m.id==u.id_materiale }}>{{ m.codice }}</option>{% endfor %}
       </select></div>
-  </div>
-</div>
-<div class="card" style="margin-bottom:1rem">
-  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Geometria</h3>
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem">
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diametro mm</label>
-      <input name="diametro_mm" type="number" step="0.001" value="{{ u.diametro_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Raggio punta mm</label>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diametro [mm]</label>
+      <input name="diametro_mm" type="number" step="0.001" value="{{ u.diametro_mm or '' }}" required style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Raggio punta [mm]</label>
       <input name="raggio_punta_mm" type="number" step="0.001" value="{{ u.raggio_punta_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Fuori pinza mm</label>
-      <input name="fuori_pinza_mm" type="number" step="0.01" value="{{ u.fuori_pinza_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">L tagliente mm</label>
-      <input name="lunghezza_tagl_mm" type="number" step="0.01" value="{{ u.lunghezza_tagl_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">N taglienti</label>
-      <input name="num_taglienti" type="number" value="{{ u.num_taglienti or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+      <input name="num_taglienti" type="number" min="1" value="{{ u.num_taglienti or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Lunghezza totale [mm]</label>
+      <input name="lunghezza_totale_mm" type="number" step="0.01" value="{{ u.lunghezza_totale_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Lunghezza tagliente [mm]</label>
+      <input name="lunghezza_tagl_mm" type="number" step="0.01" value="{{ u.lunghezza_tagl_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Angolo punta [gradi]</label>
+      <input name="angolo_punta_gradi" type="number" step="0.1" value="{{ u.angolo_punta_gradi or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Passo filetto [mm]</label>
+      <input name="passo_mm" type="number" step="0.01" value="{{ u.passo_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
   </div>
 </div>
+
 <div class="card" style="margin-bottom:1rem">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Classificazione</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Famiglia</label>
       <select name="famiglia_id" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
-        <option value="">-- Nessuna --</option>
+        <option value="">-- non assegnata --</option>
         {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if f.id==u.famiglia_id }}>{{ f.nome }}</option>{% endfor %}
       </select></div>
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Impiego</label>
-      <div style="display:flex;gap:.75rem;padding-top:4px;font-size:13px">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Stato</label>
+      <select name="stato" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for s in ['staging','master','archiviato'] %}<option value="{{ s }}" {{ 'selected' if s==u.stato }}>{{ s }}</option>{% endfor %}
+      </select></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Impiego</label>
+      <div style="display:flex;gap:1rem;padding-top:4px;font-size:13px">
         {% for imp in ['sgrossatura','semifinitura','finitura','foratura'] %}
         <label style="cursor:pointer"><input type="checkbox" name="impiego" value="{{ imp }}" {{ 'checked' if u.impiego and imp in u.impiego }}> {{ imp|capitalize }}</label>
         {% endfor %}
       </div></div>
   </div>
 </div>
+
 <div class="card" style="margin-bottom:1rem">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Note</h3>
-  <textarea name="note" rows="2" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">{{ u.note or '' }}</textarea>
+  <textarea name="note" rows="3" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">{{ u.note or '' }}</textarea>
 </div>
-<div style="display:flex;gap:.75rem">
+
+<div style="display:flex;gap:.75rem;align-items:center">
   <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" class="btn">Annulla</a>
-  <button type="submit" class="btn btn-p">Salva modifiche</button>
+  <button type="submit" class="btn btn-p">&#10003; Salva modifiche</button>
+  {% if u.stato == 'staging' %}
+  <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-ok" style="margin-left:auto">Promuovi a Master &#8594;</a>
+  {% endif %}
 </div>
 </form>
 """)
@@ -2744,17 +2768,23 @@ def modifica_utensile(uid):
         fam = f.get('famiglia_id') or None
         impiego = ','.join(f.getlist('impiego')) or None
         stato_new = f.get('stato', 'staging')
-        conn.execute("""UPDATE utensile SET alias=?, id_tipo=?, stato=?,
-            diametro_mm=?, raggio_punta_mm=?, fuori_pinza_mm=?,
-            lunghezza_tagl_mm=?, num_taglienti=?, famiglia_id=?, impiego=?, note=?
+        conn.execute("""UPDATE utensile SET alias=?, codice_catalogo=?, descrizione=?,
+            id_tipo=?, id_materiale=?, diametro_mm=?, raggio_punta_mm=?,
+            num_taglienti=?, lunghezza_totale_mm=?, lunghezza_tagl_mm=?,
+            angolo_punta_gradi=?, passo_mm=?,
+            famiglia_id=?, impiego=?, stato=?, note=?
             WHERE id=?""", (
-            f.get('alias') or None, int(f.get('id_tipo',1)), stato_new,
+            f.get('alias') or None, f.get('codice_catalogo') or None,
+            f.get('descrizione') or None,
+            int(f.get('id_tipo', 1)), int(f.get('id_materiale', 1)),
             float(f['diametro_mm']) if f.get('diametro_mm') else None,
             float(f['raggio_punta_mm']) if f.get('raggio_punta_mm') else None,
-            float(f['fuori_pinza_mm']) if f.get('fuori_pinza_mm') else None,
-            float(f['lunghezza_tagl_mm']) if f.get('lunghezza_tagl_mm') else None,
             int(f['num_taglienti']) if f.get('num_taglienti') else None,
-            int(fam) if fam else None, impiego, f.get('note') or None, uid))
+            float(f['lunghezza_totale_mm']) if f.get('lunghezza_totale_mm') else None,
+            float(f['lunghezza_tagl_mm']) if f.get('lunghezza_tagl_mm') else None,
+            float(f['angolo_punta_gradi']) if f.get('angolo_punta_gradi') else None,
+            float(f['passo_mm']) if f.get('passo_mm') else None,
+            int(fam) if fam else None, impiego, stato_new, f.get('note') or None, uid))
         conn.commit(); conn.close()
         return redirect('/master' if stato_new == 'master' else '/staging')
     row = conn.execute("SELECT * FROM utensile WHERE id=?", (uid,)).fetchone()
@@ -2762,8 +2792,9 @@ def modifica_utensile(uid):
         conn.close(); return redirect('/staging')
     tipi = [dict(r) for r in conn.execute("SELECT id, codice FROM tipo_utensile ORDER BY codice")]
     famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    mat_utensile = [dict(r) for r in conn.execute("SELECT id, codice FROM materiale_utensile ORDER BY codice")]
     conn.close()
-    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, active='staging')
+    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, mat_utensile=mat_utensile, active='staging')
 
 
 PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
