@@ -394,3 +394,109 @@ INSERT OR IGNORE INTO materiale_utensile(codice, descrizione) VALUES
     ('CERAMICA', 'Ceramica'),
     ('CERMET',   'Cermet'),
     ('UNKNOWN',  'Materiale non definito');
+
+-- ── Tabelle Fase 2+3 (Motore Calcolo Parametrico) ───────────────────────
+
+CREATE TABLE IF NOT EXISTS FamiglieUtensile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL UNIQUE,
+    tipo TEXT NOT NULL,
+    materiale_tagliente TEXT,
+    n_taglienti_default INTEGER,
+    note TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS Materiali (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_master TEXT NOT NULL UNIQUE,
+    nome_hypermill TEXT,
+    nome_cimatron TEXT,
+    nome_worknc TEXT,
+    durezza_hrc REAL,
+    note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ParametriBase (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    famiglia_id INTEGER NOT NULL REFERENCES FamiglieUtensile(id),
+    materiale_id INTEGER NOT NULL REFERENCES Materiali(id),
+    scopo TEXT NOT NULL CHECK(scopo IN ('sgrossatura','semifinitura','finitura')),
+    vc_base REAL NOT NULL,
+    fz_base REAL NOT NULL,
+    ae_pct REAL DEFAULT 50.0,
+    ap_base REAL,
+    note TEXT,
+    fonte TEXT DEFAULT 'manuale',
+    approvato INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(famiglia_id, materiale_id, scopo)
+);
+
+CREATE TABLE IF NOT EXISTS FattoriCorrezione (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    famiglia_id INTEGER REFERENCES FamiglieUtensile(id),
+    tipo_fattore TEXT NOT NULL CHECK(tipo_fattore IN ('diametro','lunghezza_diametro','holder','scopo')),
+    range_min REAL,
+    range_max REAL,
+    k_vc REAL NOT NULL DEFAULT 1.0,
+    k_fz REAL NOT NULL DEFAULT 1.0,
+    k_ap REAL NOT NULL DEFAULT 1.0,
+    note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS Holders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    codice_ordinazione TEXT,
+    marchio TEXT,
+    interfaccia TEXT,
+    lunghezza_totale_mm REAL,
+    geometria_cont2D TEXT,
+    k_vc REAL DEFAULT 1.0,
+    k_fz REAL DEFAULT 1.0,
+    fonte TEXT DEFAULT 'manuale',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS NCTools (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    utensile_id INTEGER NOT NULL REFERENCES utensile(id),
+    holder_id INTEGER REFERENCES Holders(id),
+    nome TEXT NOT NULL,
+    nc_number INTEGER,
+    reach_mm REAL,
+    gage_length_mm REAL,
+    fuori_pinza_mm REAL,
+    k_vc REAL DEFAULT 1.0,
+    k_fz REAL DEFAULT 1.0,
+    vc_calcolato REAL,
+    fz_calcolato REAL,
+    n_rpm_calcolato REAL,
+    approvato INTEGER DEFAULT 0,
+    fonte TEXT DEFAULT 'manuale',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS ParametriTaglio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nctool_id INTEGER NOT NULL REFERENCES NCTools(id),
+    materiale_id INTEGER NOT NULL REFERENCES Materiali(id),
+    scopo TEXT NOT NULL CHECK(scopo IN ('sgrossatura','semifinitura','finitura')),
+    vc REAL, n_rpm REAL, fz REAL,
+    fxy REAL, fz_assiale REAL,
+    ae_mm REAL, ap_mm REAL,
+    refrigerante TEXT,
+    formula_usata TEXT,
+    fattori_applicati TEXT,
+    approvato INTEGER DEFAULT 0,
+    fonte TEXT DEFAULT 'calcolato',
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(nctool_id, materiale_id, scopo)
+);
+
+-- SQLite non supporta completamente IF NOT EXISTS su ADD COLUMN per le versioni molto vecchie.
+-- Utilizziamo una sintassi che tenta di aggiungere la colonna e la ignorerà se non è presente il supporto nativo o fallirà silenziosamente se implementata via try-except nello script.
+-- Comunque, in SQLite 3.25.0+ ADD COLUMN è supportato.
+-- Inseriamo direttamente:
+ALTER TABLE utensile ADD COLUMN famiglia_id INTEGER REFERENCES FamiglieUtensile(id);

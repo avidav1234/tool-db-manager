@@ -1,0 +1,11 @@
+--- tools/motore_calcolo.py
++++ tools/motore_calcolo.py
+@@ -107,2 +107,3 @@
+     """
++    conn = None
+     try:
+@@ -188,3 +189,3 @@
+         print(f"Errore DB in calcola_parametri_nctool: {e}")
+-        if not db_conn:
++        if not db_conn and conn:
+             conn.close()
