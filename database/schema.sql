@@ -279,6 +279,11 @@ CREATE TABLE IF NOT EXISTS utensile (
     -- ── Note e stato ──────────────────────────────────────────────────────
     note                    TEXT,
     attivo                  INTEGER NOT NULL DEFAULT 1,
+    stato                   TEXT DEFAULT 'staging' CHECK(stato IN ('staging','master','archiviato')),
+    famiglia_id             INTEGER REFERENCES FamiglieUtensile(id),
+    impiego                 TEXT,       -- es. 'sgrossatura,semifinitura,finitura'
+    promosso_da             TEXT,       -- 'operatore' o username
+    promosso_il             TEXT,       -- datetime promozione a master
     data_inserimento        TEXT NOT NULL DEFAULT (datetime('now')),
     data_modifica           TEXT NOT NULL DEFAULT (datetime('now'))
 );
