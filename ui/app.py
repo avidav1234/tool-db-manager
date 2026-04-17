@@ -283,6 +283,9 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
   <a href="/" class="{{ 'active' if active=='home' }}">Dashboard</a>
   <a href="/staging" class="{{ 'active' if active=='staging' }}">&#128230; Staging <span class="nav-badge nav-badge-amber">{{ nav_staging }}</span></a>
   <a href="/master" class="{{ 'active' if active=='master' }}">&#11088; Master <span class="nav-badge nav-badge-green">{{ nav_master }}</span></a>
+  <a href="/holders" class="{{ 'active' if active=='holders' }}">&#128295; Holders</a>
+  <a href="/famiglie" class="{{ 'active' if active=='famiglie' }}">&#128193; Famiglie</a>
+  <a href="/materiali" class="{{ 'active' if active=='materiali' }}">&#129514; Materiali</a>
   <a href="/export" class="{{ 'active' if active=='export' }}">&#128228; Export</a>
   <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
   <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente CAM</a>
@@ -1742,6 +1745,325 @@ def importa_template():
 # ---------------------------------------------------------------
 # EXPORT
 # ---------------------------------------------------------------
+# ---------------------------------------------------------------
+# HOLDERS
+# ---------------------------------------------------------------
+HOLDERS_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Holders
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">&#128295; Portautensili — {{ holders|length }} holder</h2>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <select onchange="location.href='?attacco='+this.value+'&q={{ q_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti gli attacchi</option>
+    {% for a in attacchi %}<option value="{{ a }}" {{ 'selected' if a==att_f }}>{{ a }}</option>{% endfor %}
+  </select>
+  <input type="text" placeholder="Cerca nome..." value="{{ q_f }}"
+    onkeyup="if(event.key==='Enter')location.href='?q='+this.value+'&attacco={{ att_f }}'"
+    style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:180px">
+</div>
+<div class="card" style="padding:.5rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Codice</th><th>Tipo attacco</th><th>Segmenti</th><th>Speed factor</th><th>Azioni</th></tr></thead>
+<tbody>
+{% for h in holders %}
+<tr>
+  <td>{{ h.id }}</td>
+  <td><b>{{ h.codice_interno }}</b></td>
+  <td>{{ h.tipo_attacco or '—' }}</td>
+  <td>{{ h.num_segmenti or 0 }}</td>
+  <td>{{ h.spindle_speed_factor or 1.0 }}</td>
+  <td><a href="/holders/{{ h.id }}" class="btn" style="padding:3px 10px;font-size:12px">Dettaglio &#8594;</a></td>
+</tr>
+{% endfor %}
+{% if not holders %}<tr><td colspan="6" style="text-align:center;color:#aaa;padding:2rem">Nessun holder nel database</td></tr>{% endif %}
+</tbody></table>
+</div>
+""")
+
+@app.route('/holders')
+def holders_page():
+    conn = get_conn()
+    att_f = request.args.get('attacco', '')
+    q_f = request.args.get('q', '')
+    where = "WHERE 1=1"
+    params = []
+    if att_f:
+        where += " AND tipo_attacco=?"; params.append(att_f)
+    if q_f:
+        where += " AND codice_interno LIKE ?"; params.append(f'%{q_f}%')
+    holders = [dict(r) for r in conn.execute(f"""
+        SELECT id, codice_interno, tipo_attacco, num_segmenti, spindle_speed_factor
+        FROM portautensile {where} ORDER BY codice_interno""", params)]
+    attacchi = [r[0] for r in conn.execute("SELECT DISTINCT tipo_attacco FROM portautensile WHERE tipo_attacco IS NOT NULL ORDER BY tipo_attacco")]
+    conn.close()
+    return render_template_string(HOLDERS_HTML, holders=holders, attacchi=attacchi, att_f=att_f, q_f=q_f, active='holders')
+
+
+HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/holders" style="color:#888;text-decoration:none">Holders</a> &rsaquo; {{ h.codice_interno }}
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Holder — {{ h.codice_interno }}</h2>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Info base</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:13px">
+    <div><b>Codice:</b> {{ h.codice_interno }}</div>
+    <div><b>Descrizione:</b> {{ h.descrizione or '—' }}</div>
+    <div><b>Tipo attacco:</b> {{ h.tipo_attacco or '—' }}</div>
+    <div><b>N segmenti:</b> {{ h.num_segmenti or 0 }}</div>
+    <div><b>Speed factor:</b> {{ h.spindle_speed_factor or 1.0 }}</div>
+    <div><b>Feedrate factor:</b> {{ h.feedrate_factor or 1.0 }}</div>
+  </div>
+</div>
+{% if segmenti %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Segmenti geometria</h3>
+  <table style="font-size:13px">
+  <thead><tr><th>Seq</th><th>D inf mm</th><th>D sup mm</th><th>Lunghezza mm</th></tr></thead>
+  <tbody>
+  {% for s in segmenti %}
+  <tr><td>{{ s.numero_segmento }}</td><td>{{ s.diametro_inf_mm or '—' }}</td><td>{{ s.diametro_sup_mm or '—' }}</td><td>{{ s.lunghezza_mm or '—' }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+<a href="/holders" class="btn">&#8592; Torna ai Holder</a>
+""")
+
+@app.route('/holders/<int:hid>')
+def holder_detail(hid):
+    conn = get_conn()
+    h = conn.execute("SELECT * FROM portautensile WHERE id=?", (hid,)).fetchone()
+    if not h:
+        conn.close(); return redirect('/holders')
+    segmenti = [dict(r) for r in conn.execute("SELECT * FROM portautensile_segmento WHERE id_portautensile=? ORDER BY numero_segmento", (hid,))]
+    conn.close()
+    return render_template_string(HOLDER_DETAIL_HTML, h=dict(h), segmenti=segmenti, active='holders')
+
+
+# ---------------------------------------------------------------
+# FAMIGLIE UTENSILE
+# ---------------------------------------------------------------
+FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Famiglie
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">&#128193; Famiglie Utensile</h2>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Mat. tagliente</th><th>N taglienti</th><th>Utensili</th><th>Azioni</th></tr></thead>
+<tbody>
+{% for f in famiglie %}
+<tr>
+  <td>{{ f.id }}</td>
+  <td><b>{{ f.nome }}</b></td>
+  <td>{{ f.tipo or '—' }}</td>
+  <td>{{ f.materiale_tagliente or '—' }}</td>
+  <td>{{ f.n_taglienti_default or '—' }}</td>
+  <td><span class="badge b-ok">{{ f.n_utensili }}</span></td>
+  <td style="white-space:nowrap">
+    <a href="/famiglie/{{ f.id }}/parametri" class="btn btn-p" style="padding:3px 10px;font-size:11px">Parametri</a>
+  </td>
+</tr>
+{% endfor %}
+{% if not famiglie %}<tr><td colspan="7" style="text-align:center;color:#aaa;padding:2rem">Nessuna famiglia definita</td></tr>{% endif %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Nuova famiglia</h3>
+  <form method="post" action="/famiglie/nuova" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome</label>
+      <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Tipo</label>
+      <input name="tipo" placeholder="es. BULL" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:80px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Mat. tagliente</label>
+      <input name="materiale_tagliente" placeholder="es. HM" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:80px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/famiglie')
+def famiglie_page():
+    conn = get_conn()
+    famiglie = [dict(r) for r in conn.execute("""
+        SELECT f.*, COALESCE(cnt.n, 0) as n_utensili
+        FROM FamiglieUtensile f
+        LEFT JOIN (SELECT famiglia_id, COUNT(*) as n FROM utensile WHERE famiglia_id IS NOT NULL GROUP BY famiglia_id) cnt
+          ON cnt.famiglia_id = f.id
+        ORDER BY f.nome""")]
+    conn.close()
+    return render_template_string(FAMIGLIE_HTML, famiglie=famiglie, active='famiglie')
+
+@app.route('/famiglie/nuova', methods=['POST'])
+def famiglia_nuova():
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return redirect('/famiglie')
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO FamiglieUtensile (nome, tipo, materiale_tagliente) VALUES (?,?,?)",
+            (nome, request.form.get('tipo') or None, request.form.get('materiale_tagliente') or None))
+        conn.commit()
+    except Exception:
+        pass
+    conn.close()
+    return redirect('/famiglie')
+
+
+# ---------------------------------------------------------------
+# PARAMETRI FAMIGLIA (griglia materiale x scopo)
+# ---------------------------------------------------------------
+PARAMETRI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/famiglie" style="color:#888;text-decoration:none">Famiglie</a> &rsaquo; {{ fam.nome }} &rsaquo; Parametri
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Parametri — {{ fam.nome }}</h2>
+<form method="post">
+<div class="card">
+<table style="font-size:13px">
+<thead><tr><th>Materiale</th>
+  {% for sc in scopi %}<th colspan="2" style="text-align:center;background:#f8f8f6">{{ sc|capitalize }}<br><span style="font-size:10px;color:#999">Vc | fz</span></th>{% endfor %}
+</tr></thead>
+<tbody>
+{% for m in materiali %}
+<tr>
+  <td><b>{{ m.nome }}</b></td>
+  {% for sc in scopi %}
+  {% set key = (m.id|string) + '_' + sc %}
+  <td><input name="vc_{{ key }}" type="number" step="0.1" value="{{ vals.get(key,{}).get('vc','') }}"
+    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="Vc"></td>
+  <td><input name="fz_{{ key }}" type="number" step="0.001" value="{{ vals.get(key,{}).get('fz','') }}"
+    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="fz"></td>
+  {% endfor %}
+</tr>
+{% endfor %}
+{% if not materiali %}<tr><td colspan="{{ 1 + scopi|length * 2 }}" style="text-align:center;color:#aaa;padding:1rem">Aggiungi materiali nella pagina <a href="/materiali">Materiali</a></td></tr>{% endif %}
+</tbody></table>
+</div>
+<div style="margin-top:1rem;display:flex;gap:.75rem">
+  <a href="/famiglie" class="btn">&#8592; Famiglie</a>
+  <button type="submit" class="btn btn-p">&#128190; Salva tutto</button>
+</div>
+</form>
+""")
+
+@app.route('/famiglie/<int:fid>/parametri', methods=['GET','POST'])
+def famiglia_parametri(fid):
+    conn = get_conn()
+    fam = conn.execute("SELECT * FROM FamiglieUtensile WHERE id=?", (fid,)).fetchone()
+    if not fam:
+        conn.close(); return redirect('/famiglie')
+    scopi = ['sgrossatura', 'semifinitura', 'finitura']
+    # Assicura tabella ParametriBase esista
+    conn.execute("""CREATE TABLE IF NOT EXISTS ParametriBase (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        famiglia_id INTEGER NOT NULL REFERENCES FamiglieUtensile(id),
+        materiale_id INTEGER NOT NULL,
+        scopo TEXT NOT NULL,
+        vc_base REAL, fz_base REAL,
+        UNIQUE(famiglia_id, materiale_id, scopo))""")
+    conn.commit()
+    if request.method == 'POST':
+        materiali = [dict(r) for r in conn.execute("SELECT id, nome FROM materiale_pezzo ORDER BY nome")]
+        for m in materiali:
+            for sc in scopi:
+                key = f"{m['id']}_{sc}"
+                vc = request.form.get(f'vc_{key}')
+                fz = request.form.get(f'fz_{key}')
+                if vc or fz:
+                    conn.execute("""INSERT OR REPLACE INTO ParametriBase (famiglia_id, materiale_id, scopo, vc_base, fz_base)
+                        VALUES (?,?,?,?,?)""", (fid, m['id'], sc,
+                            float(vc) if vc else None, float(fz) if fz else None))
+        conn.commit(); conn.close()
+        return redirect(f'/famiglie/{fid}/parametri')
+    materiali = [dict(r) for r in conn.execute("SELECT id, nome FROM materiale_pezzo ORDER BY nome")]
+    existing = conn.execute("SELECT materiale_id, scopo, vc_base, fz_base FROM ParametriBase WHERE famiglia_id=?", (fid,)).fetchall()
+    vals = {}
+    for r in existing:
+        key = f"{r[0]}_{r[1]}"
+        vals[key] = {'vc': r[2] or '', 'fz': r[3] or ''}
+    conn.close()
+    return render_template_string(PARAMETRI_HTML, fam=dict(fam), materiali=materiali, scopi=scopi, vals=vals, active='famiglie')
+
+
+# ---------------------------------------------------------------
+# MATERIALI
+# ---------------------------------------------------------------
+MATERIALI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Materiali
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">&#129514; Materiali pezzo</h2>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>Nome master</th><th>Gruppo</th><th>Durezza min</th><th>Durezza max</th><th>Norm code</th></tr></thead>
+<tbody>
+{% for m in materiali %}
+<tr>
+  <td><b>{{ m.nome }}</b></td>
+  <td>{{ m.gruppo or '—' }}</td>
+  <td>{{ m.durezza_min or '—' }}</td>
+  <td>{{ m.durezza_max or '—' }}</td>
+  <td style="color:#888">{{ m.norm_code or '—' }}</td>
+</tr>
+{% endfor %}
+{% if not materiali %}<tr><td colspan="5" style="text-align:center;color:#aaa;padding:2rem">Nessun materiale definito</td></tr>{% endif %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Aggiungi materiale</h3>
+  <form method="post" action="/materiali/nuovo" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome</label>
+      <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Gruppo</label>
+      <input name="gruppo" placeholder="es. Acciaio" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Durezza min</label>
+      <input name="durezza_min" type="number" step="0.1" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:70px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Durezza max</label>
+      <input name="durezza_max" type="number" step="0.1" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:70px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/materiali')
+def materiali_page():
+    conn = get_conn()
+    materiali = [dict(r) for r in conn.execute("SELECT * FROM materiale_pezzo ORDER BY nome")]
+    conn.close()
+    return render_template_string(MATERIALI_HTML, materiali=materiali, active='materiali')
+
+@app.route('/materiali/nuovo', methods=['POST'])
+def materiale_nuovo():
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return redirect('/materiali')
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO materiale_pezzo (nome, gruppo, durezza_min, durezza_max) VALUES (?,?,?,?)",
+            (nome, request.form.get('gruppo') or None,
+             float(request.form['durezza_min']) if request.form.get('durezza_min') else None,
+             float(request.form['durezza_max']) if request.form.get('durezza_max') else None))
+        conn.commit()
+    except Exception:
+        pass
+    conn.close()
+    return redirect('/materiali')
+
+
 EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <h2 style="margin:0 0 1.25rem;font-size:1.1rem">Export CAM</h2>
 <div class="grid2">
@@ -1836,12 +2158,14 @@ EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
 # STAGING — utensili da validare
 # ---------------------------------------------------------------
 STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Staging
+</div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
   <div>
-    <h2 style="margin:0;font-size:1.1rem">&#128230; Staging — Utensili da validare</h2>
-    <span style="color:#888;font-size:.85rem">{{ n_staging }} utensili in attesa</span>
+    <h2 style="margin:0;font-size:1.1rem">&#128230; Staging — {{ n_staging }} utensili da validare</h2>
   </div>
-  <a href="/" class="btn">&#8592; Indietro</a>
+  <a href="/" class="btn">&#8592; Dashboard</a>
 </div>
 
 <div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
@@ -1863,7 +2187,7 @@ STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <table style="font-size:13px">
 <thead><tr>
   <th style="width:30px"><input type="checkbox" onclick="document.querySelectorAll('.sel-cb').forEach(c=>c.checked=this.checked);updSel()"></th>
-  <th>Alias</th><th>Tipo</th><th>D mm</th><th>CAM</th><th>Codice</th><th>Azioni</th>
+  <th>Alias</th><th>Tipo</th><th>D mm</th><th>R mm</th><th>CAM</th><th>Famiglia</th><th>Azioni</th>
 </tr></thead>
 <tbody>
 {% for u in utensili %}
@@ -1871,16 +2195,23 @@ STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <td><input type="checkbox" class="sel-cb" value="{{ u.id }}" onchange="updSel()"></td>
   <td><b>{{ u.alias or u.codice_interno }}</b></td>
   <td><span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></td>
-  <td>{{ u.diametro_mm or '' }}</td>
-  <td>{{ u.cam_sorgente or '' }}</td>
-  <td style="color:#888;font-size:12px">{{ u.codice_interno }}</td>
+  <td style="font-family:monospace">{{ u.diametro_mm if u.diametro_mm is not none else '—' }}</td>
+  <td style="font-family:monospace;color:#888">{{ u.raggio_punta_mm if u.raggio_punta_mm is not none else '—' }}</td>
+  <td><span style="padding:2px 7px;border-radius:8px;font-size:11px;font-weight:600;{% if u.cam_sorgente=='HyperMill' %}background:#d1fae5;color:#065f46{% elif u.cam_sorgente=='WorkNC' %}background:#dbeafe;color:#1e40af{% elif u.cam_sorgente=='Cimatron' %}background:#fef3c7;color:#92400e{% else %}background:#f3f4f6;color:#6b7280{% endif %}">{{ u.cam_sorgente or '?' }}</span></td>
+  <td>
+    <select onchange="assegnaFam(this,{{ u.id }})" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;max-width:120px">
+      <option value="">—</option>
+      {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if u.famiglia_id==f.id }}>{{ f.nome }}</option>{% endfor %}
+    </select>
+  </td>
   <td style="white-space:nowrap">
-    <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-s" style="padding:3px 10px;font-size:12px">Promuovi</a>
-    <button type="button" onclick="archivia({{ u.id }})" class="btn" style="padding:3px 8px;font-size:11px;color:#888">Archivia</button>
+    <a href="/utensile/{{ u.id }}/modifica" class="btn" style="padding:3px 8px;font-size:11px">&#9998;</a>
+    <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-s" style="padding:3px 10px;font-size:11px">Promuovi</a>
+    <button type="button" onclick="archivia({{ u.id }})" class="btn" style="padding:3px 8px;font-size:11px;color:#888">&#128465;</button>
   </td>
 </tr>
 {% endfor %}
-{% if not utensili %}<tr><td colspan="7" style="text-align:center;color:#aaa;padding:2rem">Nessun utensile in staging</td></tr>{% endif %}
+{% if not utensili %}<tr><td colspan="8" style="text-align:center;color:#aaa;padding:2rem">Nessun utensile in staging</td></tr>{% endif %}
 </tbody>
 </table>
 </div>
@@ -1891,39 +2222,18 @@ STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </select>
   <select id="bulk-imp" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
     <option value="">-- Impiego --</option>
-    <option value="sgrossatura">Sgrossatura</option>
-    <option value="semifinitura">Semifinitura</option>
-    <option value="finitura">Finitura</option>
-    <option value="sgrossatura,semifinitura">Sgr+Semi</option>
-    <option value="semifinitura,finitura">Semi+Fin</option>
-    <option value="sgrossatura,semifinitura,finitura">Tutti</option>
+    <option value="sgrossatura">Sgrossatura</option><option value="semifinitura">Semifinitura</option>
+    <option value="finitura">Finitura</option><option value="sgrossatura,semifinitura">Sgr+Semi</option>
+    <option value="semifinitura,finitura">Semi+Fin</option><option value="sgrossatura,semifinitura,finitura">Tutti</option>
   </select>
   <button type="button" id="bulk-btn" onclick="bulkPromuovi()" class="btn btn-s" disabled>Promuovi selezionati (0)</button>
 </div>
 </form>
 <script>
-function updSel(){
-  const n=document.querySelectorAll('.sel-cb:checked').length;
-  const b=document.getElementById('bulk-btn');
-  b.textContent='Promuovi selezionati ('+n+')';
-  b.disabled=n===0;
-}
-async function archivia(id){
-  if(!confirm('Archiviare questo utensile?'))return;
-  await fetch('/staging/archivia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[id]})});
-  location.reload();
-}
-async function bulkPromuovi(){
-  const ids=[...document.querySelectorAll('.sel-cb:checked')].map(c=>+c.value);
-  const fam=document.getElementById('bulk-fam').value;
-  const imp=document.getElementById('bulk-imp').value;
-  if(!ids.length)return;
-  const r=await fetch('/staging/promuovi-bulk',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ids:ids,famiglia_id:fam?+fam:null,impiego:imp||null})});
-  const d=await r.json();
-  alert('Promossi: '+d.promossi+' utensili');
-  location.reload();
-}
+function updSel(){const n=document.querySelectorAll('.sel-cb:checked').length;const b=document.getElementById('bulk-btn');b.textContent='Promuovi selezionati ('+n+')';b.disabled=n===0;}
+async function archivia(id){if(!confirm('Archiviare?'))return;await fetch('/staging/archivia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[id]})});location.reload();}
+async function bulkPromuovi(){const ids=[...document.querySelectorAll('.sel-cb:checked')].map(c=>+c.value);const fam=document.getElementById('bulk-fam').value;const imp=document.getElementById('bulk-imp').value;if(!ids.length)return;const r=await fetch('/staging/promuovi-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids,famiglia_id:fam?+fam:null,impiego:imp||null})});const d=await r.json();alert('Promossi: '+d.promossi);location.reload();}
+async function assegnaFam(sel,id){await fetch('/api/utensile/'+id+'/famiglia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({famiglia_id:sel.value||null})});}
 </script>
 """)
 
@@ -1943,7 +2253,7 @@ def staging_page():
         where+=" AND (u.alias LIKE ? OR u.codice_interno LIKE ?)"; params+=[f'%{q_f}%',f'%{q_f}%']
     utensili=[dict(r) for r in conn.execute(f"""
         SELECT u.id, u.codice_interno, u.alias, tu.codice as tipo_codice,
-               u.diametro_mm, u.cam_sorgente
+               u.diametro_mm, u.raggio_punta_mm, u.cam_sorgente, u.famiglia_id
         FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
         {where} ORDER BY u.cam_sorgente, tu.codice, u.diametro_mm LIMIT 200
     """, params)]
@@ -1992,9 +2302,117 @@ def staging_archivia():
     return jsonify({'archiviati': len(ids)})
 
 
+@app.route('/api/utensile/<int:uid>/famiglia', methods=['POST'])
+def api_utensile_famiglia(uid):
+    """Assegna famiglia a un utensile inline."""
+    data = request.get_json(silent=True) or {}
+    fam = data.get('famiglia_id')
+    conn = get_conn()
+    conn.execute("UPDATE utensile SET famiglia_id=? WHERE id=?", (int(fam) if fam else None, uid))
+    conn.commit(); conn.close()
+    return jsonify({'ok': True})
+
+
 # ---------------------------------------------------------------
 # PROMOZIONE SINGOLA
 # ---------------------------------------------------------------
+# ---------------------------------------------------------------
+# MODIFICA UTENSILE
+# ---------------------------------------------------------------
+MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" style="color:#888;text-decoration:none">{{ 'Master' if u.stato=='master' else 'Staging' }}</a> &rsaquo; Modifica
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Modifica utensile — {{ u.alias or u.codice_interno }}</h2>
+<form method="post">
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Identita</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Alias</label>
+      <input name="alias" value="{{ u.alias or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Tipo</label>
+      <select name="id_tipo" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for t in tipi %}<option value="{{ t.id }}" {{ 'selected' if t.id==u.id_tipo }}>{{ t.codice }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Stato</label>
+      <select name="stato" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for s in ['staging','master','archiviato'] %}<option value="{{ s }}" {{ 'selected' if s==u.stato }}>{{ s }}</option>{% endfor %}
+      </select></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Geometria</h3>
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diametro mm</label>
+      <input name="diametro_mm" type="number" step="0.001" value="{{ u.diametro_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Raggio punta mm</label>
+      <input name="raggio_punta_mm" type="number" step="0.001" value="{{ u.raggio_punta_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Fuori pinza mm</label>
+      <input name="fuori_pinza_mm" type="number" step="0.01" value="{{ u.fuori_pinza_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">L tagliente mm</label>
+      <input name="lunghezza_tagl_mm" type="number" step="0.01" value="{{ u.lunghezza_tagl_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">N taglienti</label>
+      <input name="num_taglienti" type="number" value="{{ u.num_taglienti or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Classificazione</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Famiglia</label>
+      <select name="famiglia_id" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        <option value="">-- Nessuna --</option>
+        {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if f.id==u.famiglia_id }}>{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Impiego</label>
+      <div style="display:flex;gap:.75rem;padding-top:4px;font-size:13px">
+        {% for imp in ['sgrossatura','semifinitura','finitura','foratura'] %}
+        <label style="cursor:pointer"><input type="checkbox" name="impiego" value="{{ imp }}" {{ 'checked' if u.impiego and imp in u.impiego }}> {{ imp|capitalize }}</label>
+        {% endfor %}
+      </div></div>
+  </div>
+</div>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Note</h3>
+  <textarea name="note" rows="2" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">{{ u.note or '' }}</textarea>
+</div>
+<div style="display:flex;gap:.75rem">
+  <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" class="btn">Annulla</a>
+  <button type="submit" class="btn btn-p">Salva modifiche</button>
+</div>
+</form>
+""")
+
+@app.route('/utensile/<int:uid>/modifica', methods=['GET','POST'])
+def modifica_utensile(uid):
+    conn = get_conn()
+    if request.method == 'POST':
+        f = request.form
+        fam = f.get('famiglia_id') or None
+        impiego = ','.join(f.getlist('impiego')) or None
+        stato_new = f.get('stato', 'staging')
+        conn.execute("""UPDATE utensile SET alias=?, id_tipo=?, stato=?,
+            diametro_mm=?, raggio_punta_mm=?, fuori_pinza_mm=?,
+            lunghezza_tagl_mm=?, num_taglienti=?, famiglia_id=?, impiego=?, note=?
+            WHERE id=?""", (
+            f.get('alias') or None, int(f.get('id_tipo',1)), stato_new,
+            float(f['diametro_mm']) if f.get('diametro_mm') else None,
+            float(f['raggio_punta_mm']) if f.get('raggio_punta_mm') else None,
+            float(f['fuori_pinza_mm']) if f.get('fuori_pinza_mm') else None,
+            float(f['lunghezza_tagl_mm']) if f.get('lunghezza_tagl_mm') else None,
+            int(f['num_taglienti']) if f.get('num_taglienti') else None,
+            int(fam) if fam else None, impiego, f.get('note') or None, uid))
+        conn.commit(); conn.close()
+        return redirect('/master' if stato_new == 'master' else '/staging')
+    row = conn.execute("SELECT * FROM utensile WHERE id=?", (uid,)).fetchone()
+    if not row:
+        conn.close(); return redirect('/staging')
+    tipi = [dict(r) for r in conn.execute("SELECT id, codice FROM tipo_utensile ORDER BY codice")]
+    famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, active='staging')
+
+
 PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
   <h2 style="margin:0;font-size:1.1rem">Promuovi utensile a Master</h2>
