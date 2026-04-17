@@ -281,7 +281,17 @@ def _nav_stats():
 BASE = """<!DOCTYPE html><html lang="it"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tool DB Manager</title>
-<link rel="stylesheet" href="/static/redesign.css"></head><body>
+<link rel="stylesheet" href="/static/redesign.css">
+<style>
+a.btn,button.btn{display:inline-block !important;padding:4px 12px !important;border-radius:5px !important;font-size:12px !important;text-decoration:none !important;cursor:pointer !important;font-weight:500 !important}
+a.btn.btn-p,button.btn.btn-p{background-color:#1a56db !important;color:#fff !important;border-color:#1a56db !important}
+a.btn.btn-s,button.btn.btn-s{background-color:#059669 !important;color:#fff !important;border-color:#059669 !important}
+a.btn.btn-ok,button.btn.btn-ok{background-color:#10b981 !important;color:#fff !important;border-color:#059669 !important}
+a.btn.btn-mod,button.btn.btn-mod{background-color:#f59e0b !important;color:#fff !important;border-color:#d97706 !important}
+a.btn.btn-d,button.btn.btn-d{background-color:#ef4444 !important;color:#fff !important;border-color:#dc2626 !important}
+a.btn.btn-sec,button.btn.btn-sec{background-color:#fff !important;color:#333 !important;border:1px solid #d1d5db !important}
+</style>
+</head><body>
 <div class="hdr">
   <h1>Tool DB Manager</h1>
   <a href="/" class="{{ 'active' if active=='home' }}">Dashboard</a>
