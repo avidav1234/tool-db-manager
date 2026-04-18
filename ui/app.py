@@ -1947,35 +1947,49 @@ PARAMETRI_HTML = BASE.replace('{% block content %}{% endblock %}', """
 </div>
 <h2 style="font-size:1.1rem;margin:0 0 1.25rem">Parametri — {{ fam.nome }}</h2>
 <form method="post">
-<div class="card">
-<table style="font-size:13px">
-<thead><tr><th>Materiale</th>
-  {% for sc in scopi %}<th colspan="2" style="text-align:center;background:#f8f8f6">{{ sc|capitalize }}<br><span style="font-size:10px;color:#999">Vc | fz/D</span></th>{% endfor %}
-</tr></thead>
-<tbody>
-{% for m in materiali %}
+<div class="card" style="overflow-x:auto">
+<table style="font-size:12px;table-layout:fixed">
+<thead>
 <tr>
-  <td><b>{{ m.nome }}</b></td>
-  {% for sc in scopi %}
-  {% set key = (m.id|string) + '_' + sc %}
-  <td><input name="vc_{{ key }}" type="number" step="0.1" value="{{ vals.get(key,{}).get('vc','') }}"
-    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="Vc"></td>
-  <td><input name="fz_{{ key }}" type="number" step="0.001" value="{{ vals.get(key,{}).get('fz','') }}"
-    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="fz/D"></td>
+  <th style="width:140px">Lavorazione</th>
+  <th style="width:50px;font-size:10px;color:#999">Scopo</th>
+  {% for m in materiali %}
+  <th colspan="2" style="text-align:center;background:#f8f8f6;width:130px">{{ m.nome }}<br><span style="font-size:10px;color:#999">k_vc | k_fz</span></th>
+  {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for lav in lavorazioni %}
+<tr>
+  <td><b>{{ lav.nome }}</b></td>
+  <td style="font-size:10px;color:#888">{{ lav.scopo[:4] }}</td>
+  {% for m in materiali %}
+  {% set key = (lav.id|string) + '_' + (m.id|string) %}
+  {% set v = vals.get(key, {}) %}
+  <td>
+    <input name="kvc_{{ key }}" type="number" step="0.01" value="{{ v.get('k_vc','1.00') }}"
+      style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:11px"
+      title="Vc={{ '%.0f'|format(lav.vc_base * (v.get('k_vc',1.0)|float)) }} m/min">
+  </td>
+  <td>
+    <input name="kfz_{{ key }}" type="number" step="0.01" value="{{ v.get('k_fz','1.00') }}"
+      style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:3px;font-size:11px"
+      title="fz/D={{ '%.4f'|format(lav.fz_D_ratio * (v.get('k_fz',1.0)|float)) }}">
+  </td>
   {% endfor %}
 </tr>
 {% endfor %}
-{% if not materiali %}<tr><td colspan="{{ 1 + scopi|length * 2 }}" style="text-align:center;color:#aaa;padding:1rem">Aggiungi materiali nella pagina <a href="/materiali">Materiali</a></td></tr>{% endif %}
 </tbody></table>
 </div>
-<p style="font-size:12px;color:#888;margin-top:.75rem;line-height:1.6">
-  <b>fz/D</b> = coefficiente avanzamento per dente / diametro (adimensionale).<br>
-  Valore reale: <b>fz = (fz/D) x diametro utensile</b>.<br>
-  Esempio: fz/D=0.040 con D10mm &rarr; fz=0.40 mm/dente | con D6mm &rarr; fz=0.24 | con D25mm &rarr; fz=1.00
+<p style="font-size:11px;color:#888;margin-top:.75rem;line-height:1.6">
+  <b>k_vc / k_fz</b> = fattori moltiplicativi per materiale (1.00 = nessuna correzione).<br>
+  <b>Vc reale</b> = Lavorazione.vc_base &times; k_vc &nbsp;&nbsp;|&nbsp;&nbsp;
+  <b>fz/D reale</b> = Lavorazione.fz_D_ratio &times; k_fz<br>
+  Hover su ogni cella per vedere il valore calcolato.
 </p>
 <div style="margin-top:1rem;display:flex;gap:.75rem">
   <a href="/famiglie" class="btn">&#8592; Famiglie</a>
-  <button type="submit" class="btn btn-p">&#128190; Salva tutto</button>
+  <button type="submit" class="btn btn-p">Salva tutto</button>
 </div>
 </form>
 """)
@@ -1986,37 +2000,31 @@ def famiglia_parametri(fid):
     fam = conn.execute("SELECT * FROM FamiglieUtensile WHERE id=?", (fid,)).fetchone()
     if not fam:
         conn.close(); return redirect('/famiglie')
-    scopi = ['sgrossatura', 'semifinitura', 'finitura']
-    # Assicura tabella ParametriBase esista
-    conn.execute("""CREATE TABLE IF NOT EXISTS ParametriBase (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        famiglia_id INTEGER NOT NULL REFERENCES FamiglieUtensile(id),
-        materiale_id INTEGER NOT NULL,
-        scopo TEXT NOT NULL,
-        vc_base REAL, fz_base REAL,
-        UNIQUE(famiglia_id, materiale_id, scopo))""")
-    conn.commit()
+    materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
+    lavorazioni = [dict(r) for r in conn.execute("SELECT id, nome, scopo, vc_base, fz_D_ratio FROM Lavorazioni ORDER BY scopo, nome")]
     if request.method == 'POST':
-        materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
-        for m in materiali:
-            for sc in scopi:
-                key = f"{m['id']}_{sc}"
-                vc = request.form.get(f'vc_{key}')
-                fz = request.form.get(f'fz_{key}')
-                if vc or fz:
-                    conn.execute("""INSERT OR REPLACE INTO ParametriBase (famiglia_id, materiale_id, scopo, vc_base, fz_D_ratio)
-                        VALUES (?,?,?,?,?)""", (fid, m['id'], sc,
-                            float(vc) if vc else None, float(fz) if fz else None))
+        for lav in lavorazioni:
+            for m in materiali:
+                key = f"{lav['id']}_{m['id']}"
+                kvc = request.form.get(f'kvc_{key}')
+                kfz = request.form.get(f'kfz_{key}')
+                if kvc or kfz:
+                    conn.execute("""UPDATE ParametriBase SET k_vc=?, k_fz=?
+                        WHERE famiglia_id=? AND materiale_id=? AND lavorazione_id=?""",
+                        (float(kvc) if kvc else 1.0, float(kfz) if kfz else 1.0,
+                         fid, m['id'], lav['id']))
         conn.commit(); conn.close()
         return redirect(f'/famiglie/{fid}/parametri')
-    materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
-    existing = conn.execute("SELECT materiale_id, scopo, vc_base, fz_D_ratio FROM ParametriBase WHERE famiglia_id=?", (fid,)).fetchall()
+    # Leggi valori esistenti
+    existing = conn.execute("""SELECT lavorazione_id, materiale_id, k_vc, k_fz
+        FROM ParametriBase WHERE famiglia_id=?""", (fid,)).fetchall()
     vals = {}
     for r in existing:
         key = f"{r[0]}_{r[1]}"
-        vals[key] = {'vc': r[2] or '', 'fz': r[3] or ''}
+        vals[key] = {'k_vc': r[2] if r[2] is not None else 1.0, 'k_fz': r[3] if r[3] is not None else 1.0}
     conn.close()
-    return render_template_string(PARAMETRI_HTML, fam=dict(fam), materiali=materiali, scopi=scopi, vals=vals, active='famiglie')
+    return render_template_string(PARAMETRI_HTML, fam=dict(fam), materiali=materiali,
+        lavorazioni=lavorazioni, vals=vals, active='famiglie')
 
 
 # ---------------------------------------------------------------
