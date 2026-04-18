@@ -4231,7 +4231,7 @@ async function send(){
     const jobId=start.job_id;
 
     // 2) Polling ogni 2s, max 10 minuti (300 tentativi)
-    let tries=0; const MAX=300;
+    let tries=0; const MAX=120;
     const poll=setInterval(async()=>{
       tries++;
       if(tries>MAX){
@@ -4251,7 +4251,12 @@ async function send(){
       }
       if(!pr.ok) return;
       const pj=await pr.json();
-      if(pj.status==='running') return;
+      if(pj.status==='running'||pj.status==='pending') return;
+      if(pj.status==='lost'){
+        clearInterval(poll); removeMsg(tid);
+        addMsg('error','&#9888; Job perso — il worker potrebbe non essere avviato. Verifica che agent_worker.py sia in esecuzione.');
+        btn.disabled=false; btn.innerHTML='Invia'; return;
+      }
       if(pj.status==='not_found'){
         clearInterval(poll); removeMsg(tid);
         addMsg('error','&#9888; Job non trovato — il server potrebbe essere stato riavviato. Riprova.');
@@ -4274,7 +4279,7 @@ async function send(){
         }
       }
       btn.disabled=false; btn.innerHTML='Invia';
-    },2000);
+    },1500);
   }catch(e){
     removeMsg(tid); addMsg('error','Errore: '+e.message);
     btn.disabled=false; btn.innerHTML='Invia';
@@ -4357,85 +4362,88 @@ def cam_agent_db_stats():
 
 
 
-#  Job asincrono per l'agente CAM 
-import threading as _threading, uuid as _uuid, time as _time
+# ── Job queue persistente su SQLite (agent_worker.py esegue i job) ──
+import uuid as _uuid, time as _time
 
-_JOBS = {}  # job_id -> {status, result, created_at}
+_DB_AGENT = os.path.join(os.path.dirname(__file__), '..', 'database', 'tool_master.db')
 
-def _run_job(job_id, messaggio, filepath, history):
-    """Esegue l'agente in un thread separato."""
-    try:
-        import sys as _sys
-        _root = os.path.join(os.path.dirname(__file__), '..')
-        _ui   = os.path.dirname(__file__)
-        for _p in [_root, _ui]:
-            if _p not in _sys.path: _sys.path.insert(0, _p)
-        import importlib, traceback as _tb
-        try:
-            if 'cam_agent' in _sys.modules:
-                try: importlib.reload(_sys.modules['cam_agent'])
-                except Exception: pass
-            import cam_agent as _ca
-        except Exception as e:
-            _JOBS[job_id] = {'status':'error','result':{'errore':f'Import cam_agent: {e}'}}
-            return
-        try:
-            result = _ca.esegui_agente(messaggio, filepath=filepath, history=history)
-        except Exception as e:
-            result = {'errore': f'Errore agente: {e}\n{_tb.format_exc()[-300:]}'}
-        _JOBS[job_id] = {'status':'done', 'result': result}
-    except Exception as e:
-        _JOBS[job_id] = {'status':'error', 'result': {'errore': str(e)}}
+def _agent_db():
+    c = sqlite3.connect(_DB_AGENT, timeout=10)
+    c.row_factory = sqlite3.Row
+    return c
 
-def _cleanup_jobs():
-    """Rimuove job vecchi > 10 minuti."""
-    now = _time.time()
-    old = [k for k,v in _JOBS.items() if now - v.get('created_at',now) > 600]
-    for k in old:
-        del _JOBS[k]
+def _init_agent_jobs():
+    """Crea tabella agent_jobs e segna lost i job pending al restart Flask."""
+    conn = _agent_db()
+    conn.execute('''CREATE TABLE IF NOT EXISTS agent_jobs (
+        job_id TEXT PRIMARY KEY, status TEXT DEFAULT 'pending',
+        messaggio TEXT, filepath TEXT, history_json TEXT,
+        result_json TEXT, created_at REAL, updated_at REAL, error_msg TEXT)''')
+    conn.execute("""UPDATE agent_jobs SET status='lost',
+        error_msg='Server Flask riavviato'
+        WHERE status IN ('running','pending') AND created_at < ?""",
+        (_time.time() - 30,))
+    conn.commit(); conn.close()
+
+try:
+    _init_agent_jobs()
+except Exception as _e:
+    print(f"Warning: init agent_jobs: {_e}")
 
 
 @app.route('/cam-agent/job', methods=['POST','OPTIONS'])
 def cam_agent_job_start():
-    """Avvia un job agente in background. Risponde subito con job_id."""
+    """Inserisce un job nella coda. Il worker lo eseguira."""
     if request.method == 'OPTIONS':
         return app.make_default_options_response()
-    _cleanup_jobs()
     data = request.get_json(silent=True) or {}
     messaggio = data.get('messaggio','').strip()
-    filepath  = data.get('filepath')
-    history   = [m for m in data.get('history',[]) if m.get('role') in ('user','assistant')]
+    filepath = data.get('filepath')
+    history = [m for m in data.get('history',[]) if m.get('role') in ('user','assistant')]
     if not messaggio:
         return json.dumps({'errore':'Messaggio vuoto'}), 400, {'Content-Type':'application/json'}
     job_id = str(_uuid.uuid4())[:8]
-    _JOBS[job_id] = {'status':'running','result':None,'created_at':_time.time()}
-    t = _threading.Thread(target=_run_job, args=(job_id, messaggio, filepath, history), daemon=True)
-    t.start()
+    now = _time.time()
+    conn = _agent_db()
+    conn.execute('''INSERT INTO agent_jobs
+        (job_id, status, messaggio, filepath, history_json, created_at, updated_at)
+        VALUES (?,?,?,?,?,?,?)''',
+        (job_id, 'pending', messaggio, filepath, json.dumps(history), now, now))
+    conn.commit(); conn.close()
     return json.dumps({'job_id': job_id}), 200, {'Content-Type':'application/json'}
 
 
 @app.route('/cam-agent/job/<job_id>', methods=['GET','OPTIONS'])
 def cam_agent_job_poll(job_id):
-    """Polling stato job. Ritorna {status: running|done|error, result: ...}"""
+    """Polling: legge stato job da SQLite."""
     if request.method == 'OPTIONS':
         return app.make_default_options_response()
-    job = _JOBS.get(job_id)
-    if not job:
+    conn = _agent_db()
+    row = conn.execute('SELECT status, result_json, error_msg FROM agent_jobs WHERE job_id=?',
+                       (job_id,)).fetchone()
+    conn.close()
+    if not row:
         return json.dumps({'status':'not_found'}), 404, {'Content-Type':'application/json'}
-    return json.dumps({'status': job['status'], 'result': job.get('result')},
-                      ensure_ascii=False, default=str), 200, {'Content-Type':'application/json'}
+    result = None
+    if row['result_json']:
+        try: result = json.loads(row['result_json'])
+        except Exception: result = {'raw': row['result_json']}
+    resp = {'status': row['status'], 'result': result}
+    if row['error_msg']:
+        resp['error_msg'] = row['error_msg']
+    return json.dumps(resp, ensure_ascii=False, default=str), 200, {'Content-Type':'application/json'}
+
 
 @app.route('/cam-agent/chat', methods=['POST','OPTIONS'])
 def cam_agent_chat():
+    """Fallback sincrono (senza worker). Usato raramente."""
     if request.method == 'OPTIONS':
-        resp = app.make_default_options_response()
-        return resp
+        return app.make_default_options_response()
     import sys as _sys
     _root = os.path.join(os.path.dirname(__file__), '..')
-    _ui   = os.path.dirname(__file__)
+    _ui = os.path.dirname(__file__)
     for _p in [_root, _ui]:
         if _p not in _sys.path: _sys.path.insert(0, _p)
-
     import importlib, traceback as _tb
     try:
         if 'cam_agent' in _sys.modules:
@@ -4444,55 +4452,18 @@ def cam_agent_chat():
         import cam_agent as _ca
     except Exception as e:
         return json.dumps({'errore': f'Import cam_agent fallito: {e}'}), 200, {'Content-Type':'application/json'}
-
     data = request.get_json(silent=True) or {}
     messaggio = data.get('messaggio','').strip()
-    filepath  = data.get('filepath')
-    history   = [m for m in data.get('history',[]) if m.get('role') in ('user','assistant')]
-
+    filepath = data.get('filepath')
+    history = [m for m in data.get('history',[]) if m.get('role') in ('user','assistant')]
     if not messaggio:
-        return json.dumps({'errore': 'Messaggio vuoto'}), 400, {'Content-Type': 'application/json'}
-
+        return json.dumps({'errore': 'Messaggio vuoto'}), 400, {'Content-Type':'application/json'}
     try:
         result = _ca.esegui_agente(messaggio, filepath=filepath, history=history)
     except Exception as e:
-        return json.dumps({'errore': f'Errore agente: {e}\n{_tb.format_exc()[-500:]}'},
+        return json.dumps({'errore': f'Errore: {e}\n{_tb.format_exc()[-500:]}'},
                           ensure_ascii=False), 200, {'Content-Type':'application/json'}
-    return json.dumps(result, ensure_ascii=False, default=str), 200, {'Content-Type': 'application/json'}
-
-
-@app.route('/cam-agent/supervisor', methods=['POST', 'OPTIONS'])
-def cam_agent_supervisor():
-    """Avvia il supervisore in background. Scompone task grandi in subtask."""
-    if request.method == 'OPTIONS':
-        return app.make_default_options_response()
-    data = request.get_json(silent=True) or {}
-    messaggio = data.get('messaggio', '').strip()
-    if not messaggio:
-        return json.dumps({'errore': 'Messaggio vuoto'}), 400, \
-               {'Content-Type': 'application/json'}
-    _cleanup_jobs()
-    job_id = str(_uuid.uuid4())[:8]
-    _JOBS[job_id] = {'status': 'running', 'result': None, 'created_at': _time.time()}
-
-    def _run_sup(jid, msg):
-        try:
-            import sys as _sys
-            _root = os.path.join(os.path.dirname(__file__), '..')
-            if _root not in _sys.path:
-                _sys.path.insert(0, _root)
-            if os.path.dirname(__file__) not in _sys.path:
-                _sys.path.insert(0, os.path.dirname(__file__))
-            import supervisor_agent as _sa
-            result = _sa.esegui_supervisore(msg)
-            _JOBS[jid] = {'status': 'done', 'result': result}
-        except Exception as e:
-            import traceback as _tb
-            _JOBS[jid] = {'status': 'error',
-                          'result': {'errore': f'{e}\n{_tb.format_exc()[-300:]}'}}
-
-    _threading.Thread(target=_run_sup, args=(job_id, messaggio), daemon=True).start()
-    return json.dumps({'job_id': job_id}), 200, {'Content-Type': 'application/json'}
+    return json.dumps(result, ensure_ascii=False, default=str), 200, {'Content-Type':'application/json'}
 
 
 @app.route('/version')

@@ -37,6 +37,12 @@ echo "Format Learner: Flask -> http://localhost:5001"
 nohup python3 learner/app_learner_prod.py > logs/app_learner.log 2>&1 &
 echo $! > .pid_learner
 
+# ── Agent Worker (processo dedicato) ─────────────────────────
+pkill -f "agent_worker.py" 2>/dev/null || true
+echo "Agent Worker: processo dedicato per CAM Agent"
+nohup python3 agent_worker.py > logs/agent_worker.log 2>&1 &
+echo $! > .pid_worker
+
 # ── Verifica ─────────────────────────────────────────────────
 sleep 2
 MAIN_OK=false; LEARNER_OK=false
@@ -53,6 +59,6 @@ $MAIN_OK   && echo "  OK App principale  -> http://localhost:5000" \
 $LEARNER_OK && echo "  OK Format Learner  -> http://localhost:5001" \
             || echo "  XX Format Learner non risponde (vedi logs/app_learner.log)"
 echo ""
-echo "  PID main=$(cat .pid_main) learner=$(cat .pid_learner)"
+echo "  PID main=$(cat .pid_main) learner=$(cat .pid_learner) worker=$(cat .pid_worker)"
 echo "  Per fermare: bash stop.sh"
 echo ""
