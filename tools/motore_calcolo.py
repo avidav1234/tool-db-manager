@@ -119,18 +119,9 @@ def calcola_parametri_nctool(db_path, utensile_id, lavorazione_id, materiale_id,
             passo = utensile['passo_mm'] or 0.0
             fxy = n * passo
         elif utensile['tipo_famiglia'] == 'THREAD':
-            # usa fz assoluto, non ratio.
-            # Immagino che in questo caso fz_D_ratio di Lavorazioni contenga un valore assoluto?
-            # O forse ParametriBase.fz_base?
-            # "usa fz assoluto, non ratio" -> fz = pb.fz_base (o simile) * pb.k_fz ...
-            # Rileggendo: fz = lav.fz_D_ratio * D ...
-            # Se è THREAD, usiamo fz = pb.fz_base (assumendo che pb.fz_base sia quello assoluto)
-            # Ma il task non specifica dove prendere l'fz assoluto.
-            # Spesso fz_base in ParametriBase è quello assoluto se non è un ratio.
-            # Vediamo cosa c'è in Lavorazioni: fz_D_ratio.
-            # Se "usa fz assoluto", forse intende fz = pb.fz_base * pb.k_fz * k_ld * k_h_fz?
-            # Proviamo a vedere se pb ha fz_base. Sì.
-            fz = pb['fz_base'] * pb['k_fz'] * k_ld_fz * k_h_fz
+            # Pettini: fz assoluto (non ratio al diametro)
+            # Usa fz_D_ratio della lavorazione come valore assoluto per THREAD
+            fz = pb['fz_D_ratio'] * pb['k_fz'] * k_ld_fz * k_h_fz
             fxy = calcola_fxy(fz, z, n)
 
         return {
