@@ -164,46 +164,65 @@ def import_xml(filepath, db_path, dry_run=False):
     }
 
     if dry_run:
-        # Mostra campione senza toccare DB
         print(f"Trovati: {len(tools_by_name)} tool, {len(nctool_list)} ncTool, {len(holders_by_name)} holder")
+        print(f"Tecset totali: {len(list(root.iter('tecset')))}")
         count = 0
         for nct in nctool_list[:5]:
             alias = nct.get('name', '?')
             fp = _float(_param(nct, 'clearanceLength'))
             gl = _float(_param(nct, 'gageLength'))
-            # Trova tool collegato
-            tool_name = None
+            k_vc = _param(nct, 'spindleSpeedFactor', '1')
+            k_fz = _param(nct, 'feedrateFactor', '1')
+            tool_name = holder_name = None
             for comp in nct.iter('component'):
-                if comp.get('type') == 'tool':
+                ct = comp.get('type', '')
+                if ct == 'tool':
                     tool_name = comp.get('name', '')
+                elif ct == 'holder':
+                    holder_name = comp.get('name', '')
             tool_el = tools_by_name.get(tool_name)
-            if tool_el is not None:
-                d = _float(_param(tool_el, 'toolDiameter'))
-                cr = _float(_param(tool_el, 'cornerRadius'))
-                z = _int(_param(tool_el, 'cuttingEdges'))
-                ttype = TIPO_MAP.get(tool_el.get('type', ''), 'UNKNOWN')
-                # Conta tecset
-                n_tec = len(list(tool_el.iter('tecset')))
-                # Holder
-                holder_name = None
-                for comp in nct.iter('component'):
-                    if comp.get('type') == 'holder':
-                        holder_name = comp.get('name', '')
-                count += 1
-                print(f"\n--- ncTool #{count}: {alias} ---")
-                print(f"  Tool: {tool_name} type={ttype} D={d} R={cr} Z={z}")
-                print(f"  fuori_pinza={fp} gage={gl} holder={holder_name}")
-                print(f"  tecset: {n_tec} condizioni di taglio")
-                # Mostra primi 2 tecset
-                for ts in list(tool_el.iter('tecset'))[:2]:
-                    mat = _param(ts, 'material', '?')
-                    purp = _param(ts, 'purpose', '?')
-                    vc = _param(ts, 'cuttingSpeed', '0')
-                    fz = _param(ts, 'feedratePerEdge', '0')
-                    ae = _param(ts, 'cuttingWidth', '0')
-                    ap = _param(ts, 'cuttingLength', '0')
-                    print(f"    [{mat}] {purp}: Vc={vc} fz={fz} ae={ae} ap={ap}")
+            if tool_el is None:
+                continue
+            d = _float(_param(tool_el, 'toolDiameter'))
+            cr = _float(_param(tool_el, 'cornerRadius'))
+            z = _int(_param(tool_el, 'cuttingEdges'))
+            l_tot = _float(_param(tool_el, 'toolTotalLength'))
+            l_tagl = _float(_param(tool_el, 'cuttingLength'))
+            stelo = _float(_param(tool_el, 'toolShaftDiameter'))
+            catalogo = _param(tool_el, 'orderingCode', '—')
+            fornitore_v = _param(tool_el, 'manufacturer', '—')
+            mat_tagl = _param(tool_el, 'cuttingMaterial', '—')
+            ttype = TIPO_MAP.get(tool_el.get('type', ''), 'UNKNOWN')
+            tecsets_validi = [ts for ts in tool_el.iter('tecset') if _param(ts, 'material')]
+            count += 1
+            print(f"\n--- ncTool #{count}: {alias} ---")
+            print(f"  Tool: {tool_name}")
+            print(f"    tipo={ttype}  D={d}  R={cr}  Z={z}")
+            print(f"    L_tot={l_tot}  L_tagl={l_tagl}  stelo={stelo}")
+            print(f"    catalogo={catalogo}  fornitore={fornitore_v}  mat_tagl={mat_tagl}")
+            print(f"  NCTool: fuori_pinza={fp}  gage={gl}  k_vc={k_vc}  k_fz={k_fz}")
+            print(f"  Holder: {holder_name or '(nessuno)'}")
+            print(f"  Tecset: {len(tecsets_validi)} condizioni valide (con materiale)")
+            for ts in tecsets_validi[:3]:
+                mat = _param(ts, 'material')
+                purp = _param(ts, 'purpose', '—')
+                vc = _param(ts, 'cuttingSpeed', '0')
+                fz = _param(ts, 'feedratePerEdge', '0')
+                rpm = _param(ts, 'spindleSpeed', '0')
+                feed = _param(ts, 'planeFeedrate', '0')
+                ae = _param(ts, 'cuttingWidth', '0')
+                ap = _param(ts, 'cuttingLength', '0')
+                print(f"    [{mat}] {purp}: Vc={vc} fz={fz} rpm={rpm} F={feed} ae={ae} ap={ap}")
+            # Campi mancanti
+            missing = []
+            if z is None: missing.append('cuttingEdges')
+            if l_tot is None: missing.append('toolTotalLength')
+            if stelo is None: missing.append('toolShaftDiameter')
+            if catalogo == '—': missing.append('orderingCode')
+            if missing:
+                print(f"  WARN: campi mancanti: {', '.join(missing)}")
         stats['nctools_importati'] = len(nctool_list)
+        stats['condizioni_importate'] = len(list(root.iter('tecset')))
         return stats
 
     # --- IMPORT REALE ---
