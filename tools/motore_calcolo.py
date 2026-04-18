@@ -30,7 +30,7 @@ def calcola_parametri_nctool(db_path, utensile_id, lavorazione_id, materiale_id,
     try:
         # 1. Recupera dati Utensile e Famiglia
         cursor.execute("""
-            SELECT u.*, tu.codice as tipo_famiglia
+            SELECT u.*, f.tipo as tipo_famiglia, tu.codice as tipo_codice, tu.nome as tipo_nome
             FROM utensile u
             LEFT JOIN FamiglieUtensile f ON u.famiglia_id = f.id
             LEFT JOIN tipo_utensile tu ON u.id_tipo = tu.id
