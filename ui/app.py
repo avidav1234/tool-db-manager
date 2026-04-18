@@ -1846,6 +1846,7 @@ HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <div><b>Speed factor:</b> {{ h.spindle_speed_factor or 1.0 }}</div>
     <div><b>Feedrate factor:</b> {{ h.feedrate_factor or 1.0 }}</div>
     {% if h.famiglia_nome %}<div><b>Famiglia:</b> {{ h.famiglia_nome }} (k_vc={{ h.fam_k_vc or 1.0 }} k_fz={{ h.fam_k_fz or 1.0 }})</div>{% endif %}
+    <div><b>Utensili associati:</b> {{ h.n_utensili or 0 }}</div>
   </div>
 </div>
 </div>
@@ -1874,10 +1875,12 @@ def holder_detail(hid):
     if not h:
         conn.close(); return redirect('/holders')
     segmenti = [dict(r) for r in conn.execute("SELECT * FROM portautensile_segmento WHERE id_portautensile=? ORDER BY numero_segmento", (hid,))]
+    n_utensili = conn.execute("SELECT COUNT(*) FROM utensile WHERE nome_pinza=?", (dict(h)['codice_interno'],)).fetchone()[0]
     conn.close()
     import json as _json
     svg_holder = ''
     hd = dict(h)
+    hd['n_utensili'] = n_utensili
     if hd.get('geometria_json'):
         try:
             from svg_holder import render_holder_svg
@@ -2803,11 +2806,15 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <table style="font-size:12px">
   <thead><tr><th>Lavorazione</th><th>Scopo</th><th>Materiale</th><th>Vc</th><th>n rpm</th><th>fz</th><th>Ap</th><th>Ae</th></tr></thead>
   <tbody>
+  {% set prev_mat = namespace(v='') %}
   {% for p in parametri_calc %}
+  {% if p.materiale != prev_mat.v %}{% set prev_mat.v = p.materiale %}
+  <tr style="background:#e8f0fd"><td colspan="8" style="font-weight:600;font-size:12px;color:#1a56db;padding:4px 12px">{{ p.materiale }}</td></tr>
+  {% endif %}
   <tr>
     <td><b>{{ p.lavorazione }}</b></td>
     <td style="color:#888;font-size:11px">{{ p.scopo[:4] }}</td>
-    <td>{{ p.materiale }}</td>
+    <td style="color:#888;font-size:11px">{{ p.materiale }}</td>
     <td style="font-family:monospace">{{ p.vc }}</td>
     <td style="font-family:monospace">{{ p.n_rpm|int }}</td>
     <td style="font-family:monospace">{{ p.fz }}</td>
