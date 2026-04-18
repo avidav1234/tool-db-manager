@@ -2555,7 +2555,7 @@ STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <td style="font-family:monospace;color:#888">{{ u.raggio_punta_mm if u.raggio_punta_mm is not none else '—' }}</td>
   <td style="text-align:center">{{ u.num_taglienti or '—' }}</td>
   <td style="font-family:monospace;color:#888">{{ u.lunghezza_totale_mm if u.lunghezza_totale_mm else '—' }}</td>
-  <td style="font-family:monospace">{{ u.fuori_pinza_mm if u.fuori_pinza_mm else '—' }}</td>
+  <td style="font-family:monospace">{{ '%.2f'|format(u.fuori_pinza_mm) if u.fuori_pinza_mm else '—' }}</td>
   <td style="font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ u.nome_pinza or '' }}">{{ (u.nome_pinza or '—')[:22] }}</td>
   <td style="font-size:10px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ u.materiali_cond or '' }}">{{ (u.materiali_cond or '—')[:25] }}</td>
   <td>
@@ -2752,7 +2752,7 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <div><span style="color:#888">L. totale:</span> <b>{{ u.lunghezza_totale_mm or '—' }}</b> mm</div>
     <div><span style="color:#888">L. tagliente:</span> <b>{{ u.lunghezza_tagl_mm or '—' }}</b> mm</div>
     <div><span style="color:#888">Stelo:</span> <b>{{ u.diam_stelo_mm or '—' }}</b> mm</div>
-    <div><span style="color:#888">Fuori pinza:</span> <b>{{ u.fuori_pinza_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">Fuori pinza:</span> <b>{{ '%.2f'|format(u.fuori_pinza_mm) if u.fuori_pinza_mm else '—' }}</b> mm</div>
     <div><span style="color:#888">Gage length:</span> <b>{{ u.gage_length_mm or '—' }}</b> mm</div>
     <div><span style="color:#888">Famiglia:</span> <b>{{ u.fam_nome or '— non assegnata —' }}</b></div>
   </div>
