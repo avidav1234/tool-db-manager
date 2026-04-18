@@ -25,3 +25,40 @@ config.local.json
 *.tmp
 *.bak
 .DS_Store
+# DB e backup
+*.db
+*.db-shm
+*.db-wal
+database/tool_master*.db
+database/tool_master_backup*.db
+
+# File temporanei e segreti
+token.rtf
+*.rtf
+config.json
+.pid_*
+0,
+
+# Checkpoint agente
+checkpoints/
+
+# Upload
+uploads_agent/
+uploads_learner/
+
+# Export generati
+exports/
+
+# File editor
+*.py~
+*.orig
+
+# Repository annidato
+tool-db-manager/
+
+# Test gitignore
+.gitignore_test
+fix.patch
+importers/import_hypermill_xml_LOCAL.py
+tools/dump_polyline.py
+.claude/

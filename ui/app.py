@@ -26,6 +26,15 @@ OUTPUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'output', 'manual')
 
 app = Flask(__name__)
 
+@app.context_processor
+def inject_nav_stats():
+    """Inietta nav_staging e nav_master in tutti i template."""
+    try:
+        ns, nm = _nav_stats()
+        return {'nav_staging': ns, 'nav_master': nm}
+    except Exception:
+        return {'nav_staging': 0, 'nav_master': 0}
+
 @app.after_request
 def set_charset(response):
     """Forza Content-Type charset=utf-8 su tutte le risposte HTML."""
@@ -209,10 +218,14 @@ tr:hover td{background:#fafaf8}
      border:1px solid #d0d0ce;cursor:pointer;font-size:13px;text-decoration:none;
      background:#fff;color:#333;font-weight:500;white-space:nowrap}
 .btn:hover{background:#f5f5f3}
-.btn-p{background:#0055cc;color:#fff;border-color:#0055cc}.btn-p:hover{background:#0047ad}
-.btn-s{background:#1a6e35;color:#fff;border-color:#1a6e35}.btn-s:hover{background:#155c2c}
-.btn-d{background:#b91c1c;color:#fff;border-color:#b91c1c}.btn-d:hover{background:#991515}
+.btn-p{background:#6366f1;color:#fff !important;border-color:#4f46e5}.btn-p:hover{background:#4f46e5}
+.btn-s{background:#10b981;color:#fff !important;border-color:#059669}.btn-s:hover{background:#059669}
+.btn-d{background:#ef4444;color:#fff !important;border-color:#dc2626}.btn-d:hover{background:#dc2626}
+.btn-mod{background:#f59e0b;color:#fff !important;border-color:#d97706}.btn-mod:hover{background:#d97706}
+.btn-ok{background:#10b981;color:#fff !important;border-color:#059669}.btn-ok:hover{background:#047857}
+.btn-sec{background:#fff;color:#333 !important;border:1px solid #d1d5db}.btn-sec:hover{background:#f3f4f6}
 .btn-lg{padding:10px 22px;font-size:14px}
+tr.clickable{cursor:pointer}tr.clickable:hover td{background:#f8f8f6 !important}
 .flash{padding:10px 14px;border-radius:6px;margin-bottom:1rem;font-size:13px;
        background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
 .flash.err{background:#fee2e2;color:#991b1b;border-color:#fecaca}
@@ -254,27 +267,78 @@ hr{border:none;border-top:1px solid #e2e2df;margin:1.25rem 0}
 .drop-zone:hover,.drop-zone.over{border-color:#0055cc;color:#0055cc;background:#f0f4ff}
 """
 
+def _nav_stats():
+    """Contatori per la navbar (staging/master)."""
+    try:
+        c = get_conn()
+        ns = c.execute("SELECT COUNT(*) FROM utensile WHERE stato='staging'").fetchone()[0]
+        nm = c.execute("SELECT COUNT(*) FROM utensile WHERE stato='master'").fetchone()[0]
+        c.close()
+        return ns, nm
+    except Exception:
+        return 0, 0
+
 BASE = """<!DOCTYPE html><html lang="it"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tool DB Manager</title>
-<link rel="stylesheet" href="/static/redesign.css"></head><body>
+<link rel="stylesheet" href="/static/redesign.css">
+<style>
+a.btn,button.btn{display:inline-block !important;padding:4px 12px !important;border-radius:5px !important;font-size:12px !important;text-decoration:none !important;cursor:pointer !important;font-weight:500 !important}
+a.btn.btn-p,button.btn.btn-p{background-color:#1a56db !important;color:#fff !important;border-color:#1a56db !important}
+a.btn.btn-s,button.btn.btn-s{background-color:#059669 !important;color:#fff !important;border-color:#059669 !important}
+a.btn.btn-ok,button.btn.btn-ok{background-color:#10b981 !important;color:#fff !important;border-color:#059669 !important}
+a.btn.btn-mod,button.btn.btn-mod{background-color:#f59e0b !important;color:#fff !important;border-color:#d97706 !important}
+a.btn.btn-d,button.btn.btn-d{background-color:#ef4444 !important;color:#fff !important;border-color:#dc2626 !important}
+a.btn.btn-sec,button.btn.btn-sec{background-color:#fff !important;color:#333 !important;border:1px solid #d1d5db !important}
+.nav-group{display:inline-flex;align-items:center;gap:0;padding:0 4px;border-left:1px solid #e2e2df}
+.nav-group-label{font-size:9px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.4px;padding:0 6px;white-space:nowrap}
+.nav-badge{font-size:10px;padding:1px 6px;border-radius:8px;font-weight:700;margin-left:2px}
+.nav-badge-amber{background:#fbbf24;color:#78350f}
+.nav-badge-green{background:#34d399;color:#064e3b}
+.dashboard-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:32px 0}
+.dash-card{background:#fff;border:1px solid #e2e2df;border-radius:12px;padding:28px;text-align:center}
+.dash-card .dc-icon{font-size:2.5rem;margin-bottom:4px}
+.dash-card .dc-count{font-size:48px;font-weight:700;margin:4px 0}
+.dash-card .dc-label{font-size:14px;font-weight:600;color:#555}
+.dash-card .dc-sub{font-size:12px;color:#999;margin-top:4px}
+.dash-card .dc-btn{display:inline-block;margin-top:16px;padding:8px 20px;background:#6366f1;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:500}
+.dc-staging .dc-count{color:#f59e0b}
+.dc-master .dc-count{color:#10b981}
+.dc-export .dc-count{color:#6366f1}
+.source-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f0f0ee}
+.source-name{font-weight:600;font-size:13px;min-width:100px}
+.source-bar{flex:1;background:#f0f0ee;border-radius:4px;height:14px;overflow:hidden}
+.source-fill{height:100%;border-radius:4px;transition:width .3s}
+.source-count{font-size:13px;font-weight:600;min-width:40px;text-align:right}
+.badge-staging{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.badge-master{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.quick-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+.action-btn{padding:10px 20px;background:#fff;border:1px solid #e2e2df;border-radius:8px;text-decoration:none;color:#333;font-size:13px;font-weight:500}
+.action-btn:hover{background:#f8f8f6;border-color:#ccc}
+</style>
+</head><body>
 <div class="hdr">
   <h1>Tool DB Manager</h1>
-  <a href="/" class="{{ 'active' if active=='home' }}">Utensili</a>
-  <a href="/export" class="{{ 'active' if active=='export' }}">Export</a>
-  <a href="/cam" class="{{ 'active' if active=='cam' }}">CAM</a>
-  <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
-  <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente CAM</a>
-  <a href="/impostazioni" class="{{ 'active' if active=='impostazioni' }}">Impostazioni</a>
-  <a href="/test-agente" {% if active=='test' %}class="active"{% endif %}
-       style="color:{% if active=='test' %}#fff{% else %}#fbbf24{% endif %}">&#129516; Test AI</a>
-    <a href="/verifica" class="{{ 'active' if active=='verifica' }}"
-     style="color:{% if active=='verifica' %}#fff{% else %}#4ade80{% endif %}">&#9989; Verifica</a>
-  <a href="/log" class="{{ 'active' if active=='log' }}">Log</a>
-  <span style="margin-left:auto">
-    <a href="http://localhost:5001" target="_blank" style="color:#555;font-size:12px">
-      Format Learner &#8599;</a>
-  </span>
+  <a href="/" class="{{ 'active' if active=='home' }}">Dashboard</a>
+  <div class="nav-group">
+    <span class="nav-group-label">Utensili</span>
+    <a href="/staging" class="{{ 'active' if active=='staging' }}">Staging <span class="nav-badge nav-badge-amber">{{ nav_staging }}</span></a>
+    <a href="/master" class="{{ 'active' if active=='master' }}">Master <span class="nav-badge nav-badge-green">{{ nav_master }}</span></a>
+  </div>
+  <div class="nav-group">
+    <span class="nav-group-label">Config</span>
+    <a href="/famiglie" class="{{ 'active' if active=='famiglie' }}">Famiglie</a>
+    <a href="/famiglie-holder" class="{{ 'active' if active=='fam-holder' }}">Holder</a>
+    <a href="/lavorazioni" class="{{ 'active' if active=='lavorazioni' }}">Lavorazioni</a>
+    <a href="/materiali" class="{{ 'active' if active=='materiali' }}">Materiali</a>
+    <a href="/fattori-ld" class="{{ 'active' if active=='fattori-ld' }}">L/D</a>
+  </div>
+  <div class="nav-group">
+    <span class="nav-group-label">Output</span>
+    <a href="/export" class="{{ 'active' if active=='export' }}">Export</a>
+    <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
+  </div>
+  <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente</a>
 </div>
 <div class="main">
 {% if msg %}<div class="flash {{ mtype }}">{{ msg }}</div>{% endif %}
@@ -285,23 +349,56 @@ BASE = """<!DOCTYPE html><html lang="it"><head>
 # HOME
 # ---------------------------------------------------------------
 HOME_HTML = BASE.replace('{% block content %}{% endblock %}', """
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
-  <div>
-    <h2 style="margin:0;font-size:1.1rem">Utensili</h2>
-    <p style="margin:4px 0 0;color:#888;font-size:13px">{{ n }} utensili nel database master</p>
+<div style="margin-bottom:1.5rem">
+  <h2 style="margin:0;font-size:1.2rem">Tool DB Manager</h2>
+  <p style="margin:4px 0 0;color:#888;font-size:13px">Vetimec — gestione utensili centralizzata per HyperMill, Cimatron, WorkNC</p>
+</div>
+
+<div class="dashboard-cards">
+  <div class="dash-card dc-staging">
+    <div class="dc-icon">&#128230;</div>
+    <div class="dc-count">{{ n_staging }}</div>
+    <div class="dc-label">Staging</div>
+    <div class="dc-sub">utensili da validare</div>
+    <a href="/staging" class="dc-btn">Vai allo Staging &#8594;</a>
   </div>
-  <div style="display:flex;gap:.5rem">
-    <a class="btn" href="/importa">&#8657; Importa</a>
-    <a class="btn btn-p" href="/utensile/nuovo">+ Nuovo</a>
-    <a class="btn btn-s btn-lg" href="/export">&#8659; Esporta tutti</a>
+  <div class="dash-card dc-master">
+    <div class="dc-icon">&#11088;</div>
+    <div class="dc-count">{{ n_master }}</div>
+    <div class="dc-label">Master</div>
+    <div class="dc-sub">utensili validati</div>
+    <a href="/master" class="dc-btn">Vai al Master &#8594;</a>
+  </div>
+  <div class="dash-card dc-export">
+    <div class="dc-icon">&#128228;</div>
+    <div class="dc-count">3</div>
+    <div class="dc-label">CAM pronti</div>
+    <div class="dc-sub">HyperMill &middot; Cimatron &middot; WorkNC</div>
+    <a href="/export" class="dc-btn">Esporta &#8594;</a>
   </div>
 </div>
 
-<div class="stats-hero">
-  <div class="stat-card stat-blue"><div class="stat-icon">&#128295;</div><div class="stat-num">{{ n }}</div><div class="stat-lbl">Utensili nel DB</div></div>
-  <div class="stat-card stat-purple"><div class="stat-icon">&#128208;</div><div class="stat-num">{{ n_tipi }}</div><div class="stat-lbl">Tipi diversi</div></div>
-  <div class="stat-card stat-green"><div class="stat-icon">&#128228;</div><div class="stat-num">{{ n_profili }}</div><div class="stat-lbl">Profili export</div></div>
-  <div class="stat-card stat-amber"><div class="stat-icon">&#9889;</div><div class="stat-num">{{ n_attivi }}</div><div class="stat-lbl">Formati attivi</div></div>
+<h3 style="font-size:.95rem;color:#555;margin:2rem 0 .75rem">Sorgenti dati importate</h3>
+<div class="card" style="padding:1rem 1.25rem">
+{% for s in sorgenti %}
+<div class="source-row">
+  <span class="source-name">{{ s.cam_sorgente }}</span>
+  <div class="source-bar">
+    <div class="source-fill" style="width:{{ s.pct }}%;background:{% if s.cam_sorgente=='HyperMill' %}#10b981{% elif s.cam_sorgente=='WorkNC' %}#3b82f6{% elif s.cam_sorgente=='Cimatron' %}#f59e0b{% else %}#94a3b8{% endif %}"></div>
+  </div>
+  <span class="source-count">{{ s.n }}</span>
+  <span class="badge-{{ s.stato }}">{{ s.stato }}</span>
+</div>
+{% endfor %}
+{% if not sorgenti %}<div style="color:#aaa;font-size:13px;text-align:center;padding:.75rem">Nessun dato importato. <a href="/importa">Importa un file CAM.</a></div>{% endif %}
+</div>
+
+<h3 style="font-size:.95rem;color:#555;margin:2rem 0 .75rem">Azioni rapide</h3>
+<div class="quick-actions">
+  <a href="/importa" class="action-btn">&#8657; Importa file CAM</a>
+  <a href="/staging" class="action-btn">&#128203; Valida utensili</a>
+  <a href="/export" class="action-btn">&#128228; Genera export</a>
+  <a href="/cam-agent" class="action-btn">&#129302; Agente CAM</a>
 </div>
 
 <div class="card">
@@ -469,69 +566,26 @@ def api_utensili():
 
 @app.route('/')
 def home():
-    def arrotonda(v, dec=3):
-        if v is None: return v
-        try:
-            f = float(v)
-            return round(f, 1) if abs(f - round(f)) < 0.0001 else round(f, dec)
-        except: return v
-
-    q_filter = request.args.get('q', '').strip().lower()
-    tipo_filter = request.args.get('tipo', '').strip()
-    pinza_filter = request.args.get('pinza', '').strip()
+    ns, nm = _nav_stats()
+    # Sorgenti dati raggruppate per cam_sorgente + stato
+    sorgenti = []
     try:
-        conn=get_conn()
-        rows=conn.execute("SELECT * FROM utensile_completo WHERE attivo=1 ORDER BY tipo,diametro_mm,codice_interno").fetchall()
-        total=conn.execute("SELECT COUNT(*) FROM utensile_completo WHERE attivo=1").fetchone()[0]
-        tipi_lista=sorted(set(r['tipo'] for r in conn.execute("SELECT DISTINCT tipo FROM utensile_completo WHERE attivo=1 AND tipo IS NOT NULL")))
-        pinze_lista=sorted(set(r['nome_pinza'] for r in conn.execute("SELECT DISTINCT nome_pinza FROM utensile_completo WHERE attivo=1 AND nome_pinza IS NOT NULL")))
+        conn = get_conn()
+        total = conn.execute("SELECT COUNT(*) FROM utensile").fetchone()[0] or 1
+        for r in conn.execute("""SELECT cam_sorgente, stato, COUNT(*) as n
+            FROM utensile WHERE cam_sorgente IS NOT NULL
+            GROUP BY cam_sorgente, stato ORDER BY cam_sorgente"""):
+            sorgenti.append({
+                'cam_sorgente': r[0], 'stato': r[1], 'n': r[2],
+                'pct': round(r[2] / total * 100)
+            })
         conn.close()
-        utensili=[]
-        for row in rows:
-            u=dict(row)
-            # Filtro tipo da URL (?tipo=BALL)
-            if tipo_filter and u.get('tipo') != tipo_filter:
-                continue
-            # Filtro pinza da URL (?pinza=TSF...)
-            if pinza_filter and u.get('nome_pinza') != pinza_filter:
-                continue
-            # Filtro testo da URL (?q=D10)
-            if q_filter:
-                searchable = ' '.join(str(v) for v in u.values() if v).lower()
-                if q_filter not in searchable:
-                    continue
-            for campo in ['diametro_mm','raggio_punta_mm','lunghezza_totale_mm','lunghezza_tagl_mm','fuori_pinza_mm','lungh_presa_mm']:
-                if u.get(campo) is not None: u[campo]=arrotonda(u[campo])
-            utensili.append(u)
-    except Exception: utensili=[]; total=0; tipi_lista=[]; pinze_lista=[]
-    cfg=carica_config()
-    try:
-        _conn2=get_conn()
-        profili=_conn2.execute("SELECT COUNT(DISTINCT profilo_export) FROM utensile_completo WHERE attivo=1 AND profilo_export IS NOT NULL").fetchone()[0]
-        _conn2.close()
-    except Exception: profili=0
-    n_worknc=0; n_parametri=0
-    try:
-        _c3=get_conn()
-        n_worknc=_c3.execute(
-            "SELECT COUNT(*) FROM utensile WHERE cam_sorgente='WorkNC'"
-        ).fetchone()[0]
-        n_parametri=_c3.execute(
-            "SELECT COUNT(*) FROM condizioni_taglio WHERE cam_sorgente='WorkNC'"
-        ).fetchone()[0]
-        _c3.close()
-    except Exception: pass
+    except Exception:
+        pass
     return render_template_string(HOME_HTML,
-        utensili=utensili,n=total,
-        n_tipi=len(tipi_lista),
-        n_profili=profili,
-        n_attivi=len(cfg.get('formati_attivi',[])),
-        n_worknc=n_worknc,
-        n_parametri=n_parametri,
-        tipi_lista=tipi_lista,
-        pinze_lista=pinze_lista,
-        msg=request.args.get('msg',''),
-        mtype=request.args.get('mtype',''))
+        n_staging=ns, n_master=nm, sorgenti=sorgenti,
+        nav_staging=ns, nav_master=nm, active='home',
+        msg=request.args.get('msg',''), mtype=request.args.get('mtype',''))
 
 def _get_lookup():
     """Ritorna le liste per i dropdown: tipi, materiali, fornitori."""
@@ -1174,8 +1228,8 @@ def copy_importer():
         importlib.reload(sys.modules['hypermill_importer'])
     return jsonify({'ok': True, 'msg': 'Copiato e ricaricato: ' + dst})
 
-@app.route('/utensile/<int:uid>')
-def utensile_dettaglio(uid):
+@app.route('/utensile-old/<int:uid>')
+def utensile_dettaglio_old(uid):
     conn = get_conn()
     try:
         u = conn.execute("SELECT * FROM utensile_completo WHERE id=?", (uid,)).fetchone()
@@ -1711,6 +1765,656 @@ def importa_template():
 # ---------------------------------------------------------------
 # EXPORT
 # ---------------------------------------------------------------
+# ---------------------------------------------------------------
+# HOLDERS
+# ---------------------------------------------------------------
+HOLDERS_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Holders
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">&#128295; Portautensili — {{ holders|length }} holder</h2>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <select onchange="location.href='?attacco='+this.value+'&q={{ q_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti gli attacchi</option>
+    {% for a in attacchi %}<option value="{{ a }}" {{ 'selected' if a==att_f }}>{{ a }}</option>{% endfor %}
+  </select>
+  <input type="text" placeholder="Cerca nome..." value="{{ q_f }}"
+    onkeyup="if(event.key==='Enter')location.href='?q='+this.value+'&attacco={{ att_f }}'"
+    style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:180px">
+</div>
+<div class="card" style="padding:.5rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Codice</th><th>Tipo attacco</th><th>Segmenti</th><th>Speed factor</th><th>Azioni</th></tr></thead>
+<tbody>
+{% for h in holders %}
+<tr class="clickable" onclick="location.href='/holders/{{ h.id }}'">
+  <td>{{ h.id }}</td>
+  <td><b>{{ h.codice_interno }}</b></td>
+  <td>{{ h.tipo_attacco or '—' }}</td>
+  <td>{{ h.num_segmenti or 0 }}</td>
+  <td>{{ h.spindle_speed_factor or 1.0 }}</td>
+  <td><a href="/holders/{{ h.id }}" class="btn btn-p" style="padding:3px 10px;font-size:12px">Dettaglio &#8594;</a></td>
+</tr>
+{% endfor %}
+{% if not holders %}<tr><td colspan="6" style="text-align:center;color:#aaa;padding:2rem">Nessun holder nel database</td></tr>{% endif %}
+</tbody></table>
+</div>
+""")
+
+@app.route('/holders')
+def holders_page():
+    conn = get_conn()
+    att_f = request.args.get('attacco', '')
+    q_f = request.args.get('q', '')
+    where = "WHERE 1=1"
+    params = []
+    if att_f:
+        where += " AND tipo_attacco=?"; params.append(att_f)
+    if q_f:
+        where += " AND codice_interno LIKE ?"; params.append(f'%{q_f}%')
+    holders = [dict(r) for r in conn.execute(f"""
+        SELECT id, codice_interno, tipo_attacco, num_segmenti, spindle_speed_factor
+        FROM portautensile {where} ORDER BY codice_interno""", params)]
+    attacchi = [r[0] for r in conn.execute("SELECT DISTINCT tipo_attacco FROM portautensile WHERE tipo_attacco IS NOT NULL ORDER BY tipo_attacco")]
+    conn.close()
+    return render_template_string(HOLDERS_HTML, holders=holders, attacchi=attacchi, att_f=att_f, q_f=q_f, active='holders')
+
+
+HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/holders" style="color:#888;text-decoration:none">Holders</a> &rsaquo; {{ h.codice_interno }}
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Holder — {{ h.codice_interno }}</h2>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Info base</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:13px">
+    <div><b>Codice:</b> {{ h.codice_interno }}</div>
+    <div><b>Descrizione:</b> {{ h.descrizione or '—' }}</div>
+    <div><b>Tipo attacco:</b> {{ h.tipo_attacco or '—' }}</div>
+    <div><b>N segmenti:</b> {{ h.num_segmenti or 0 }}</div>
+    <div><b>Speed factor:</b> {{ h.spindle_speed_factor or 1.0 }}</div>
+    <div><b>Feedrate factor:</b> {{ h.feedrate_factor or 1.0 }}</div>
+  </div>
+</div>
+{% if segmenti %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Segmenti geometria</h3>
+  <table style="font-size:13px">
+  <thead><tr><th>Seq</th><th>D inf mm</th><th>D sup mm</th><th>Lunghezza mm</th></tr></thead>
+  <tbody>
+  {% for s in segmenti %}
+  <tr><td>{{ s.numero_segmento }}</td><td>{{ s.diametro_inf_mm or '—' }}</td><td>{{ s.diametro_sup_mm or '—' }}</td><td>{{ s.lunghezza_mm or '—' }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
+<a href="/holders" class="btn">&#8592; Torna ai Holder</a>
+""")
+
+@app.route('/holders/<int:hid>')
+def holder_detail(hid):
+    conn = get_conn()
+    h = conn.execute("SELECT * FROM portautensile WHERE id=?", (hid,)).fetchone()
+    if not h:
+        conn.close(); return redirect('/holders')
+    segmenti = [dict(r) for r in conn.execute("SELECT * FROM portautensile_segmento WHERE id_portautensile=? ORDER BY numero_segmento", (hid,))]
+    conn.close()
+    return render_template_string(HOLDER_DETAIL_HTML, h=dict(h), segmenti=segmenti, active='holders')
+
+
+# ---------------------------------------------------------------
+# FAMIGLIE UTENSILE
+# ---------------------------------------------------------------
+FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Famiglie
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">&#128193; Famiglie Utensile</h2>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>N taglienti</th><th>Utensili</th><th>Azioni</th></tr></thead>
+<tbody>
+{% for f in famiglie %}
+<tr class="clickable" onclick="location.href='/famiglie/{{ f.id }}/parametri'">
+  <td>{{ f.id }}</td>
+  <td><b>{{ f.nome }}</b></td>
+  <td>{{ f.tipo or '—' }}</td>
+
+  <td>{{ f.n_taglienti_default or '—' }}</td>
+  <td><span class="badge b-ok">{{ f.n_utensili }}</span></td>
+  <td style="white-space:nowrap">
+    <a href="/famiglie/{{ f.id }}/parametri" class="btn btn-p" style="padding:3px 10px;font-size:11px">Parametri</a>
+  </td>
+</tr>
+{% endfor %}
+{% if not famiglie %}<tr><td colspan="7" style="text-align:center;color:#aaa;padding:2rem">Nessuna famiglia definita</td></tr>{% endif %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Nuova famiglia</h3>
+  <form method="post" action="/famiglie/nuova" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome</label>
+      <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Tipo</label>
+      <input name="tipo" placeholder="es. BULL" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:80px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/famiglie')
+def famiglie_page():
+    conn = get_conn()
+    famiglie = [dict(r) for r in conn.execute("""
+        SELECT f.*, COALESCE(cnt.n, 0) as n_utensili
+        FROM FamiglieUtensile f
+        LEFT JOIN (SELECT famiglia_id, COUNT(*) as n FROM utensile WHERE famiglia_id IS NOT NULL GROUP BY famiglia_id) cnt
+          ON cnt.famiglia_id = f.id
+        ORDER BY f.nome""")]
+    conn.close()
+    return render_template_string(FAMIGLIE_HTML, famiglie=famiglie, active='famiglie')
+
+@app.route('/famiglie/nuova', methods=['POST'])
+def famiglia_nuova():
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return redirect('/famiglie')
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO FamiglieUtensile (nome, tipo) VALUES (?,?)",
+            (nome, request.form.get('tipo') or None))
+        conn.commit()
+    except Exception:
+        pass
+    conn.close()
+    return redirect('/famiglie')
+
+
+# ---------------------------------------------------------------
+# PARAMETRI FAMIGLIA (griglia materiale x scopo)
+# ---------------------------------------------------------------
+PARAMETRI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/famiglie" style="color:#888;text-decoration:none">Famiglie</a> &rsaquo; {{ fam.nome }} &rsaquo; Parametri
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Parametri — {{ fam.nome }}</h2>
+<form method="post">
+<div class="card">
+<table style="font-size:13px">
+<thead><tr><th>Materiale</th>
+  {% for sc in scopi %}<th colspan="2" style="text-align:center;background:#f8f8f6">{{ sc|capitalize }}<br><span style="font-size:10px;color:#999">Vc | fz/D</span></th>{% endfor %}
+</tr></thead>
+<tbody>
+{% for m in materiali %}
+<tr>
+  <td><b>{{ m.nome }}</b></td>
+  {% for sc in scopi %}
+  {% set key = (m.id|string) + '_' + sc %}
+  <td><input name="vc_{{ key }}" type="number" step="0.1" value="{{ vals.get(key,{}).get('vc','') }}"
+    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="Vc"></td>
+  <td><input name="fz_{{ key }}" type="number" step="0.001" value="{{ vals.get(key,{}).get('fz','') }}"
+    style="width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:3px;font-size:12px" placeholder="fz/D"></td>
+  {% endfor %}
+</tr>
+{% endfor %}
+{% if not materiali %}<tr><td colspan="{{ 1 + scopi|length * 2 }}" style="text-align:center;color:#aaa;padding:1rem">Aggiungi materiali nella pagina <a href="/materiali">Materiali</a></td></tr>{% endif %}
+</tbody></table>
+</div>
+<p style="font-size:12px;color:#888;margin-top:.75rem;line-height:1.6">
+  <b>fz/D</b> = coefficiente avanzamento per dente / diametro (adimensionale).<br>
+  Valore reale: <b>fz = (fz/D) x diametro utensile</b>.<br>
+  Esempio: fz/D=0.040 con D10mm &rarr; fz=0.40 mm/dente | con D6mm &rarr; fz=0.24 | con D25mm &rarr; fz=1.00
+</p>
+<div style="margin-top:1rem;display:flex;gap:.75rem">
+  <a href="/famiglie" class="btn">&#8592; Famiglie</a>
+  <button type="submit" class="btn btn-p">&#128190; Salva tutto</button>
+</div>
+</form>
+""")
+
+@app.route('/famiglie/<int:fid>/parametri', methods=['GET','POST'])
+def famiglia_parametri(fid):
+    conn = get_conn()
+    fam = conn.execute("SELECT * FROM FamiglieUtensile WHERE id=?", (fid,)).fetchone()
+    if not fam:
+        conn.close(); return redirect('/famiglie')
+    scopi = ['sgrossatura', 'semifinitura', 'finitura']
+    # Assicura tabella ParametriBase esista
+    conn.execute("""CREATE TABLE IF NOT EXISTS ParametriBase (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        famiglia_id INTEGER NOT NULL REFERENCES FamiglieUtensile(id),
+        materiale_id INTEGER NOT NULL,
+        scopo TEXT NOT NULL,
+        vc_base REAL, fz_base REAL,
+        UNIQUE(famiglia_id, materiale_id, scopo))""")
+    conn.commit()
+    if request.method == 'POST':
+        materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
+        for m in materiali:
+            for sc in scopi:
+                key = f"{m['id']}_{sc}"
+                vc = request.form.get(f'vc_{key}')
+                fz = request.form.get(f'fz_{key}')
+                if vc or fz:
+                    conn.execute("""INSERT OR REPLACE INTO ParametriBase (famiglia_id, materiale_id, scopo, vc_base, fz_D_ratio)
+                        VALUES (?,?,?,?,?)""", (fid, m['id'], sc,
+                            float(vc) if vc else None, float(fz) if fz else None))
+        conn.commit(); conn.close()
+        return redirect(f'/famiglie/{fid}/parametri')
+    materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
+    existing = conn.execute("SELECT materiale_id, scopo, vc_base, fz_D_ratio FROM ParametriBase WHERE famiglia_id=?", (fid,)).fetchall()
+    vals = {}
+    for r in existing:
+        key = f"{r[0]}_{r[1]}"
+        vals[key] = {'vc': r[2] or '', 'fz': r[3] or ''}
+    conn.close()
+    return render_template_string(PARAMETRI_HTML, fam=dict(fam), materiali=materiali, scopi=scopi, vals=vals, active='famiglie')
+
+
+# ---------------------------------------------------------------
+# MATERIALI
+# ---------------------------------------------------------------
+MATERIALI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Materiali
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">Materiali pezzo</h2>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Nome master</th><th>HyperMill</th><th>Cimatron</th><th>WorkNC</th><th>HRC</th><th>Azioni</th></tr></thead>
+<tbody>
+{% for m in materiali %}
+<tr>
+  <td>{{ m.id }}</td>
+  <td><b>{{ m.nome_master }}</b></td>
+  <td style="color:#888;font-size:12px">{{ m.nome_hypermill or '—' }}</td>
+  <td style="color:#888;font-size:12px">{{ m.nome_cimatron or '—' }}</td>
+  <td style="color:#888;font-size:12px">{{ m.nome_worknc or '—' }}</td>
+  <td>{{ m.durezza_hrc or '—' }}</td>
+  <td style="white-space:nowrap">
+    <form method="post" action="/materiali/{{ m.id }}/elimina" style="display:inline">
+      <button class="btn btn-d" style="padding:2px 8px;font-size:11px" onclick="return confirm('Eliminare {{ m.nome_master }}?')">Elimina</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+{% if not materiali %}<tr><td colspan="7" style="text-align:center;color:#aaa;padding:2rem">Nessun materiale definito</td></tr>{% endif %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Aggiungi materiale</h3>
+  <form method="post" action="/materiali/nuovo" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome master</label>
+      <input name="nome_master" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:120px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">HyperMill</label>
+      <input name="nome_hypermill" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Cimatron</label>
+      <input name="nome_cimatron" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">WorkNC</label>
+      <input name="nome_worknc" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">HRC</label>
+      <input name="durezza_hrc" type="number" step="0.1" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/materiali')
+def materiali_page():
+    conn = get_conn()
+    materiali = [dict(r) for r in conn.execute(
+        "SELECT id, nome_master, nome_hypermill, nome_cimatron, nome_worknc, durezza_hrc FROM Materiali ORDER BY nome_master")]
+    conn.close()
+    return render_template_string(MATERIALI_HTML, materiali=materiali, active='materiali')
+
+@app.route('/materiali/nuovo', methods=['POST'])
+def materiale_nuovo():
+    nome = request.form.get('nome_master', '').strip()
+    if not nome: return redirect('/materiali')
+    f = request.form
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO Materiali (nome_master, nome_hypermill, nome_cimatron, nome_worknc, durezza_hrc) VALUES (?,?,?,?,?)",
+            (nome, f.get('nome_hypermill') or None, f.get('nome_cimatron') or None,
+             f.get('nome_worknc') or None, float(f['durezza_hrc']) if f.get('durezza_hrc') else None))
+        conn.commit()
+    except Exception: pass
+    conn.close()
+    return redirect('/materiali')
+
+@app.route('/materiali/<int:mid>/modifica', methods=['POST'])
+def materiale_modifica(mid):
+    f = request.form
+    conn = get_conn()
+    conn.execute("UPDATE Materiali SET nome_master=?, nome_hypermill=?, nome_cimatron=?, nome_worknc=?, durezza_hrc=? WHERE id=?",
+        (f.get('nome_master'), f.get('nome_hypermill'), f.get('nome_cimatron'),
+         f.get('nome_worknc'), float(f['durezza_hrc']) if f.get('durezza_hrc') else None, mid))
+    conn.commit(); conn.close()
+    return redirect('/materiali')
+
+@app.route('/materiali/<int:mid>/elimina', methods=['POST'])
+def materiale_elimina(mid):
+    conn = get_conn()
+    in_use = conn.execute("SELECT COUNT(*) FROM ParametriBase WHERE materiale_id=?", (mid,)).fetchone()[0]
+    if in_use:
+        conn.close()
+        return redirect('/materiali?msg=Materiale+in+uso&mtype=err')
+    conn.execute("DELETE FROM Materiali WHERE id=?", (mid,))
+    conn.commit(); conn.close()
+    return redirect('/materiali')
+
+
+# ---------------------------------------------------------------
+# FAMIGLIE HOLDER
+# ---------------------------------------------------------------
+FAM_HOLDER_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Famiglie Holder
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Famiglie Holder</h2>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Nome</th><th>k_Vc</th><th>k_fz</th><th>k_ap</th><th>Descrizione</th><th>N holders</th><th>Azioni</th></tr></thead>
+<tbody>
+{% for f in famiglie %}
+<tr class="clickable" onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='BUTTON'&&event.target.tagName!=='A')location.href='/famiglie-holder/{{ f.id }}/holders'">
+  <td>{{ f.id }}</td><td><b>{{ f.nome }}</b></td>
+  <td>{{ f.k_vc }}</td><td>{{ f.k_fz }}</td><td>{{ f.k_ap }}</td>
+  <td style="color:#888;font-size:12px">{{ f.descrizione or '—' }}</td>
+  <td><span class="badge b-ok">{{ f.n_holders }}</span></td>
+  <td style="white-space:nowrap">
+    <a href="/famiglie-holder/{{ f.id }}/holders" class="btn btn-p" style="padding:3px 10px;font-size:11px">Holders</a>
+    <button class="btn btn-mod" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();document.getElementById('edit-fh-{{ f.id }}').style.display=document.getElementById('edit-fh-{{ f.id }}').style.display==='none'?'table-row':'none'">&#9998;</button>
+  </td>
+</tr>
+<tr id="edit-fh-{{ f.id }}" style="display:none"><td colspan="8">
+  <form method="post" action="/famiglie-holder/{{ f.id }}/modifica" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:end;padding:6px">
+    <input name="nome" value="{{ f.nome }}" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:120px">
+    <input name="k_vc" type="number" step="0.01" value="{{ f.k_vc }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="k_fz" type="number" step="0.01" value="{{ f.k_fz }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="k_ap" type="number" step="0.01" value="{{ f.k_ap }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="descrizione" value="{{ f.descrizione or '' }}" placeholder="descrizione" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:140px">
+    <button class="btn btn-s" style="padding:3px 10px;font-size:11px">Salva</button>
+  </form>
+</td></tr>
+{% endfor %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Nuova famiglia holder</h3>
+  <form method="post" action="/famiglie-holder/nuova" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome</label>
+      <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">k_Vc</label>
+      <input name="k_vc" type="number" step="0.01" value="1.00" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">k_fz</label>
+      <input name="k_fz" type="number" step="0.01" value="1.00" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">k_ap</label>
+      <input name="k_ap" type="number" step="0.01" value="1.00" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/famiglie-holder')
+def famiglie_holder_page():
+    conn = get_conn()
+    famiglie = [dict(r) for r in conn.execute("""
+        SELECT fh.*, COALESCE(cnt.n, 0) as n_holders
+        FROM FamiglieHolder fh
+        LEFT JOIN (SELECT famiglia_holder_id, COUNT(*) as n FROM portautensile
+                   WHERE famiglia_holder_id IS NOT NULL GROUP BY famiglia_holder_id) cnt
+          ON cnt.famiglia_holder_id = fh.id
+        ORDER BY fh.nome""")]
+    conn.close()
+    return render_template_string(FAM_HOLDER_HTML, famiglie=famiglie, active='fam-holder')
+
+@app.route('/famiglie-holder/nuova', methods=['POST'])
+def famiglia_holder_nuova():
+    nome = request.form.get('nome', '').strip()
+    if not nome: return redirect('/famiglie-holder')
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO FamiglieHolder (nome, k_vc, k_fz, k_ap) VALUES (?,?,?,?)",
+            (nome, float(request.form.get('k_vc', 1)), float(request.form.get('k_fz', 1)),
+             float(request.form.get('k_ap', 1))))
+        conn.commit()
+    except Exception: pass
+    conn.close()
+    return redirect('/famiglie-holder')
+
+@app.route('/famiglie-holder/<int:fid>/modifica', methods=['POST'])
+def famiglia_holder_modifica(fid):
+    f = request.form
+    conn = get_conn()
+    conn.execute("UPDATE FamiglieHolder SET nome=?, k_vc=?, k_fz=?, k_ap=?, descrizione=? WHERE id=?",
+        (f['nome'], float(f.get('k_vc', 1)), float(f.get('k_fz', 1)),
+         float(f.get('k_ap', 1)), f.get('descrizione') or None, fid))
+    conn.commit(); conn.close()
+    return redirect('/famiglie-holder')
+
+
+FAM_HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/famiglie-holder" style="color:#888;text-decoration:none">Famiglie Holder</a> &rsaquo; {{ fam.nome }}
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 .5rem">{{ fam.nome }}</h2>
+<p style="color:#888;font-size:13px;margin:0 0 1.25rem">k_Vc={{ fam.k_vc }} &middot; k_fz={{ fam.k_fz }} &middot; k_ap={{ fam.k_ap }}</p>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Holders assegnati ({{ assegnati|length }})</h3>
+  {% if assegnati %}
+  <table style="font-size:13px"><thead><tr><th>Codice</th><th>Tipo attacco</th><th>Azioni</th></tr></thead>
+  <tbody>{% for h in assegnati %}
+  <tr><td><b>{{ h.codice_interno }}</b></td><td>{{ h.tipo_attacco or '---' }}</td>
+  <td><form method="post" action="/famiglie-holder/{{ fam.id }}/rimuovi" style="display:inline"><input type="hidden" name="holder_id" value="{{ h.id }}"><button class="btn btn-sec" style="padding:2px 8px;font-size:11px">Rimuovi</button></form></td></tr>
+  {% endfor %}</tbody></table>
+  {% else %}<p style="color:#aaa;font-size:13px">Nessun holder assegnato</p>{% endif %}
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Holders non assegnati ({{ liberi|length }})</h3>
+  {% if liberi %}
+  <table style="font-size:13px"><thead><tr><th>Codice</th><th>Tipo attacco</th><th>Azioni</th></tr></thead>
+  <tbody>{% for h in liberi %}
+  <tr><td>{{ h.codice_interno }}</td><td>{{ h.tipo_attacco or (h.codice_interno[:20] if h.codice_interno else '---') }}</td>
+  <td><form method="post" action="/famiglie-holder/{{ fam.id }}/assegna" style="display:inline"><input type="hidden" name="holder_id" value="{{ h.id }}"><button class="btn btn-ok" style="padding:2px 8px;font-size:11px">Assegna</button></form></td></tr>
+  {% endfor %}</tbody></table>
+  {% else %}<p style="color:#aaa;font-size:13px">Tutti i holder sono assegnati</p>{% endif %}
+</div>
+<a href="/famiglie-holder" class="btn" style="margin-top:1rem">&#8592; Famiglie Holder</a>
+""")
+
+@app.route('/famiglie-holder/<int:fid>/holders')
+def famiglia_holder_detail(fid):
+    conn = get_conn()
+    fam = conn.execute("SELECT * FROM FamiglieHolder WHERE id=?", (fid,)).fetchone()
+    if not fam: conn.close(); return redirect('/famiglie-holder')
+    assegnati = [dict(r) for r in conn.execute("SELECT id, codice_interno, tipo_attacco FROM portautensile WHERE famiglia_holder_id=? ORDER BY codice_interno", (fid,))]
+    liberi = [dict(r) for r in conn.execute("SELECT id, codice_interno, tipo_attacco FROM portautensile WHERE famiglia_holder_id IS NULL ORDER BY codice_interno")]
+    conn.close()
+    return render_template_string(FAM_HOLDER_DETAIL_HTML, fam=dict(fam), assegnati=assegnati, liberi=liberi, active='fam-holder')
+
+@app.route('/famiglie-holder/<int:fid>/assegna', methods=['POST'])
+def famiglia_holder_assegna(fid):
+    hid = request.form.get('holder_id')
+    conn = get_conn()
+    conn.execute("UPDATE portautensile SET famiglia_holder_id=? WHERE id=?", (fid, hid))
+    conn.commit(); conn.close()
+    return redirect(f'/famiglie-holder/{fid}/holders')
+
+@app.route('/famiglie-holder/<int:fid>/rimuovi', methods=['POST'])
+def famiglia_holder_rimuovi(fid):
+    hid = request.form.get('holder_id')
+    conn = get_conn()
+    conn.execute("UPDATE portautensile SET famiglia_holder_id=NULL WHERE id=?", (hid,))
+    conn.commit(); conn.close()
+    return redirect(f'/famiglie-holder/{fid}/holders')
+
+
+# ---------------------------------------------------------------
+# LAVORAZIONI
+# ---------------------------------------------------------------
+LAVORAZIONI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Lavorazioni
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Lavorazioni</h2>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>ID</th><th>Nome</th><th>Vc base</th><th>fz/D</th><th>Ap/D</th><th>Ae/D</th><th>Scopo</th><th style="font-size:11px;color:#999">D10 esempio</th><th></th></tr></thead>
+<tbody>
+{% for l in lavorazioni %}
+<tr>
+  <td>{{ l.id }}</td><td><b>{{ l.nome }}</b></td>
+  <td>{{ l.vc_base }}</td><td>{{ l.fz_D_ratio }}</td><td>{{ l.ap_D_ratio }}</td><td>{{ l.ae_D_ratio }}</td>
+  <td><span class="badge b-ok">{{ l.scopo }}</span></td>
+  <td style="font-size:11px;color:#888">fz={{ '%.3f'|format(l.fz_D_ratio * 10) }} Ap={{ '%.3f'|format(l.ap_D_ratio * 10) }} Ae={{ '%.1f'|format(l.ae_D_ratio * 10) }}</td>
+  <td><button class="btn btn-mod" style="padding:2px 8px;font-size:11px" onclick="document.getElementById('edit-lav-{{ l.id }}').style.display=document.getElementById('edit-lav-{{ l.id }}').style.display==='none'?'table-row':'none'">&#9998;</button></td>
+</tr>
+<tr id="edit-lav-{{ l.id }}" style="display:none"><td colspan="9">
+  <form method="post" action="/lavorazioni/{{ l.id }}/modifica" style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:end;padding:6px">
+    <input name="nome" value="{{ l.nome }}" style="padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:120px">
+    <input name="vc_base" type="number" step="0.1" value="{{ l.vc_base }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <input name="fz_D_ratio" type="number" step="0.001" value="{{ l.fz_D_ratio }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:60px">
+    <input name="ap_D_ratio" type="number" step="0.001" value="{{ l.ap_D_ratio }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:60px">
+    <input name="ae_D_ratio" type="number" step="0.01" value="{{ l.ae_D_ratio }}" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px;width:55px">
+    <select name="scopo" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+      {% for s in ['sgrossatura','semifinitura','finitura','foratura'] %}<option value="{{ s }}" {{ 'selected' if s==l.scopo }}>{{ s }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-s" style="padding:3px 10px;font-size:11px">Salva</button>
+  </form>
+</td></tr>
+{% endfor %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Nuova lavorazione</h3>
+  <form method="post" action="/lavorazioni/nuova" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Nome</label>
+      <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:140px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Vc base</label>
+      <input name="vc_base" type="number" step="0.1" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">fz/D</label>
+      <input name="fz_D_ratio" type="number" step="0.001" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Ap/D</label>
+      <input name="ap_D_ratio" type="number" step="0.001" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Ae/D</label>
+      <input name="ae_D_ratio" type="number" step="0.01" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Scopo</label>
+      <select name="scopo" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        <option value="sgrossatura">Sgrossatura</option><option value="semifinitura">Semifinitura</option>
+        <option value="finitura">Finitura</option><option value="foratura">Foratura</option>
+      </select></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/lavorazioni')
+def lavorazioni_page():
+    conn = get_conn()
+    lavorazioni = [dict(r) for r in conn.execute("SELECT * FROM Lavorazioni ORDER BY scopo, nome")]
+    conn.close()
+    return render_template_string(LAVORAZIONI_HTML, lavorazioni=lavorazioni, active='lavorazioni')
+
+@app.route('/lavorazioni/nuova', methods=['POST'])
+def lavorazione_nuova():
+    f = request.form
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO Lavorazioni (nome, vc_base, fz_D_ratio, ap_D_ratio, ae_D_ratio, scopo) VALUES (?,?,?,?,?,?)",
+            (f['nome'], float(f['vc_base']), float(f['fz_D_ratio']), float(f['ap_D_ratio']),
+             float(f['ae_D_ratio']), f['scopo']))
+        conn.commit()
+    except Exception: pass
+    conn.close()
+    return redirect('/lavorazioni')
+
+@app.route('/lavorazioni/<int:lid>/modifica', methods=['POST'])
+def lavorazione_modifica(lid):
+    f = request.form
+    conn = get_conn()
+    conn.execute("UPDATE Lavorazioni SET nome=?, vc_base=?, fz_D_ratio=?, ap_D_ratio=?, ae_D_ratio=?, scopo=? WHERE id=?",
+        (f['nome'], float(f['vc_base']), float(f['fz_D_ratio']),
+         float(f['ap_D_ratio']), float(f['ae_D_ratio']), f['scopo'], lid))
+    conn.commit(); conn.close()
+    return redirect('/lavorazioni')
+
+
+# ---------------------------------------------------------------
+# FATTORI L/D
+# ---------------------------------------------------------------
+FATTORI_LD_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Fattori L/D
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Fattori correzione L/D</h2>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>L/D min</th><th>L/D max</th><th>k_Vc</th><th>k_fz</th><th>k_Ap</th><th>Note</th></tr></thead>
+<tbody>
+{% for f in fattori %}
+<tr>
+  <td>{{ f.range_min }}</td><td>{{ f.range_max }}</td>
+  <td>{{ f.k_vc }}</td><td>{{ f.k_fz }}</td><td>{{ f.k_ap }}</td>
+  <td style="color:#888;font-size:12px">{{ f.note or '' }}</td>
+</tr>
+{% endfor %}
+{% if not fattori %}<tr><td colspan="6" style="text-align:center;color:#aaa;padding:2rem">Nessun fattore L/D definito</td></tr>{% endif %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Nuovo range L/D</h3>
+  <form method="post" action="/fattori-ld/nuovo" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">L/D min</label>
+      <input name="range_min" type="number" step="0.1" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">L/D max</label>
+      <input name="range_max" type="number" step="0.1" required style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">k_Vc</label>
+      <input name="k_vc" type="number" step="0.01" value="1.00" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">k_fz</label>
+      <input name="k_fz" type="number" step="0.01" value="1.00" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">k_Ap</label>
+      <input name="k_ap" type="number" step="0.01" value="1.00" style="padding:5px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:60px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Note</label>
+      <input name="note" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:120px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/fattori-ld')
+def fattori_ld_page():
+    conn = get_conn()
+    fattori = [dict(r) for r in conn.execute("SELECT * FROM FattoriCorrezione WHERE tipo_fattore='lunghezza_diametro' ORDER BY range_min")]
+    conn.close()
+    return render_template_string(FATTORI_LD_HTML, fattori=fattori, active='fattori-ld')
+
+@app.route('/fattori-ld/nuovo', methods=['POST'])
+def fattore_ld_nuovo():
+    f = request.form
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO FattoriCorrezione (tipo_fattore, range_min, range_max, k_vc, k_fz, k_ap, note) VALUES ('lunghezza_diametro',?,?,?,?,?,?)",
+            (float(f['range_min']), float(f['range_max']), float(f.get('k_vc', 1)),
+             float(f.get('k_fz', 1)), float(f.get('k_ap', 1)), f.get('note') or None))
+        conn.commit()
+    except Exception: pass
+    conn.close()
+    return redirect('/fattori-ld')
+
+
 EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <h2 style="margin:0 0 1.25rem;font-size:1.1rem">Export CAM</h2>
 <div class="grid2">
@@ -1800,6 +2504,631 @@ EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </div>
 </div>
 """)
+
+# ---------------------------------------------------------------
+# STAGING — utensili da validare
+# ---------------------------------------------------------------
+STAGING_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Staging
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">&#128230; Staging — {{ n_staging }} utensili da validare</h2>
+  </div>
+  <a href="/" class="btn">&#8592; Dashboard</a>
+</div>
+
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <select onchange="location.href='?tipo='+this.value+'&cam={{ cam_f }}&q={{ q_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti i tipi</option>
+    {% for t in tipi %}<option value="{{ t }}" {{ 'selected' if t==tipo_f }}>{{ t }}</option>{% endfor %}
+  </select>
+  <select onchange="location.href='?cam='+this.value+'&tipo={{ tipo_f }}&q={{ q_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti i CAM</option>
+    {% for c in cams %}<option value="{{ c }}" {{ 'selected' if c==cam_f }}>{{ c }}</option>{% endfor %}
+  </select>
+  <input type="text" placeholder="Cerca alias..." value="{{ q_f }}"
+    onkeyup="if(event.key==='Enter')location.href='?q='+this.value+'&tipo={{ tipo_f }}&cam={{ cam_f }}'"
+    style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:180px">
+</div>
+
+<form id="bulk-form">
+<div class="card" style="padding:.5rem">
+<div style="overflow-x:auto">
+<table style="font-size:12px;table-layout:fixed;width:100%">
+<thead><tr>
+  <th style="width:28px"><input type="checkbox" onclick="document.querySelectorAll('.sel-cb').forEach(c=>c.checked=this.checked);updSel()"></th>
+  <th style="width:15%">Alias</th><th style="width:50px">Tipo</th>
+  <th style="width:45px">D</th><th style="width:40px">R</th><th style="width:30px">Z</th>
+  <th style="width:45px">L tot</th><th style="width:50px">Fuori</th>
+  <th style="width:14%">Holder</th><th style="width:14%">Materiali</th>
+  <th style="width:10%">Famiglia</th><th style="width:35px">Cond</th><th style="width:100px">Azioni</th>
+</tr></thead>
+<tbody>
+{% for u in utensili %}
+<tr class="clickable" onclick="if(!['INPUT','SELECT','A','BUTTON'].includes(event.target.tagName))location.href='/utensile/{{ u.id }}'">
+  <td><input type="checkbox" class="sel-cb" value="{{ u.id }}" onchange="updSel()"></td>
+  <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>{{ u.alias or u.codice_interno }}</b></td>
+  <td><span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></td>
+  <td style="font-family:monospace">{{ u.diametro_mm if u.diametro_mm is not none else '—' }}</td>
+  <td style="font-family:monospace;color:#888">{{ u.raggio_punta_mm if u.raggio_punta_mm is not none else '—' }}</td>
+  <td style="text-align:center">{{ u.num_taglienti or '—' }}</td>
+  <td style="font-family:monospace;color:#888">{{ u.lunghezza_totale_mm if u.lunghezza_totale_mm else '—' }}</td>
+  <td style="font-family:monospace">{{ '%.2f'|format(u.fuori_pinza_mm) if u.fuori_pinza_mm else '—' }}</td>
+  <td style="font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ u.nome_pinza or '' }}">{{ (u.nome_pinza or '—')[:22] }}</td>
+  <td style="font-size:10px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ u.materiali_cond or '' }}">{{ (u.materiali_cond or '—')[:25] }}</td>
+  <td>
+    <select onchange="assegnaFam(this,{{ u.id }})" style="padding:1px 4px;border:1px solid #ddd;border-radius:3px;font-size:10px;max-width:100%;width:100%">
+      <option value="">—</option>
+      {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if u.famiglia_id==f.id }}>{{ f.nome }}</option>{% endfor %}
+    </select>
+  </td>
+  <td style="text-align:center">{% if u.n_condizioni %}<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600">{{ u.n_condizioni }}</span>{% else %}<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600">0</span>{% endif %}</td>
+  <td style="white-space:nowrap">
+    <a href="/utensile/{{ u.id }}/modifica" class="btn btn-mod" style="padding:2px 6px;font-size:10px">&#9998;</a>
+    <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-ok" style="padding:2px 6px;font-size:10px">&#11088;</a>
+    <button type="button" onclick="event.stopPropagation();archivia({{ u.id }})" class="btn btn-sec" style="padding:2px 5px;font-size:10px">&#128465;</button>
+  </td>
+</tr>
+{% endfor %}
+{% if not utensili %}<tr><td colspan="13" style="text-align:center;color:#aaa;padding:2rem">Nessun utensile in staging</td></tr>{% endif %}
+</tbody>
+</table>
+</div>
+</div>
+<div style="margin-top:1rem;display:flex;gap:.75rem;align-items:center">
+  <select id="bulk-fam" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">-- Famiglia --</option>
+    {% for f in famiglie %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+  </select>
+  <select id="bulk-imp" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">-- Impiego --</option>
+    <option value="sgrossatura">Sgrossatura</option><option value="semifinitura">Semifinitura</option>
+    <option value="finitura">Finitura</option><option value="sgrossatura,semifinitura">Sgr+Semi</option>
+    <option value="semifinitura,finitura">Semi+Fin</option><option value="sgrossatura,semifinitura,finitura">Tutti</option>
+  </select>
+  <button type="button" id="bulk-btn" onclick="bulkPromuovi()" class="btn btn-s" disabled>Promuovi selezionati (0)</button>
+</div>
+</form>
+<script>
+function updSel(){const n=document.querySelectorAll('.sel-cb:checked').length;const b=document.getElementById('bulk-btn');b.textContent='Promuovi selezionati ('+n+')';b.disabled=n===0;}
+async function archivia(id){if(!confirm('Archiviare?'))return;await fetch('/staging/archivia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[id]})});location.reload();}
+async function bulkPromuovi(){const ids=[...document.querySelectorAll('.sel-cb:checked')].map(c=>+c.value);const fam=document.getElementById('bulk-fam').value;const imp=document.getElementById('bulk-imp').value;if(!ids.length)return;const r=await fetch('/staging/promuovi-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids,famiglia_id:fam?+fam:null,impiego:imp||null})});const d=await r.json();alert('Promossi: '+d.promossi);location.reload();}
+async function assegnaFam(sel,id){await fetch('/api/utensile/'+id+'/famiglia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({famiglia_id:sel.value||null})});}
+</script>
+""")
+
+@app.route('/staging')
+def staging_page():
+    conn=get_conn()
+    tipo_f=request.args.get('tipo','')
+    cam_f=request.args.get('cam','')
+    q_f=request.args.get('q','')
+    where="WHERE u.stato='staging'"
+    params=[]
+    if tipo_f:
+        where+=" AND tu.codice=?"; params.append(tipo_f)
+    if cam_f:
+        where+=" AND u.cam_sorgente=?"; params.append(cam_f)
+    if q_f:
+        where+=" AND (u.alias LIKE ? OR u.codice_interno LIKE ?)"; params+=[f'%{q_f}%',f'%{q_f}%']
+    utensili=[dict(r) for r in conn.execute(f"""
+        SELECT u.id, u.codice_interno, u.alias, tu.codice as tipo_codice,
+               u.diametro_mm, u.raggio_punta_mm, u.cam_sorgente, u.famiglia_id,
+               u.num_taglienti, u.lunghezza_totale_mm, u.fuori_pinza_mm,
+               u.nome_pinza,
+               (SELECT COUNT(*) FROM condizioni_taglio WHERE id_utensile=u.id) as n_condizioni,
+               (SELECT GROUP_CONCAT(DISTINCT materiale_pezzo) FROM condizioni_taglio WHERE id_utensile=u.id) as materiali_cond
+        FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
+        {where} ORDER BY u.cam_sorgente, tu.codice, u.diametro_mm LIMIT 200
+    """, params)]
+    n_staging=conn.execute("SELECT COUNT(*) FROM utensile WHERE stato='staging'").fetchone()[0]
+    tipi=[r[0] for r in conn.execute("SELECT DISTINCT tu.codice FROM utensile u JOIN tipo_utensile tu ON u.id_tipo=tu.id WHERE u.stato='staging' AND tu.codice IS NOT NULL ORDER BY tu.codice")]
+    cams=[r[0] for r in conn.execute("SELECT DISTINCT cam_sorgente FROM utensile WHERE stato='staging' AND cam_sorgente IS NOT NULL ORDER BY cam_sorgente")]
+    famiglie=[dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(STAGING_HTML, utensili=utensili, n_staging=n_staging,
+        tipi=tipi, cams=cams, famiglie=famiglie, tipo_f=tipo_f, cam_f=cam_f, q_f=q_f, active='staging')
+
+
+@app.route('/staging/promuovi-bulk', methods=['POST'])
+def staging_promuovi_bulk():
+    """Promozione bulk: promuove N utensili a master in un colpo."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    famiglia_id = data.get('famiglia_id')
+    impiego = data.get('impiego')
+    if not ids:
+        return jsonify({'errore': 'Nessun ID', 'promossi': 0})
+    conn = get_conn()
+    promossi = 0
+    errori = []
+    for uid in ids:
+        try:
+            conn.execute("""UPDATE utensile SET stato='master', famiglia_id=?, impiego=?,
+                promosso_da='operatore', promosso_il=datetime('now') WHERE id=? AND stato='staging'""",
+                (famiglia_id, impiego, uid))
+            if conn.total_changes: promossi += 1
+        except Exception as e:
+            errori.append(f'id {uid}: {e}')
+    conn.commit(); conn.close()
+    return jsonify({'promossi': promossi, 'errori': errori})
+
+
+@app.route('/staging/archivia', methods=['POST'])
+def staging_archivia():
+    """Archivia utensili dallo staging."""
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids', [])
+    conn = get_conn()
+    for uid in ids:
+        conn.execute("UPDATE utensile SET stato='archiviato' WHERE id=?", (uid,))
+    conn.commit(); conn.close()
+    return jsonify({'archiviati': len(ids)})
+
+
+@app.route('/api/utensile/<int:uid>/famiglia', methods=['POST'])
+def api_utensile_famiglia(uid):
+    """Assegna famiglia a un utensile inline."""
+    data = request.get_json(silent=True) or {}
+    fam = data.get('famiglia_id')
+    conn = get_conn()
+    conn.execute("UPDATE utensile SET famiglia_id=? WHERE id=?", (int(fam) if fam else None, uid))
+    conn.commit(); conn.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/holder/<int:hid>/geometria')
+def api_holder_geometria(hid):
+    """Ritorna geometria cont2D di un holder."""
+    conn = get_conn()
+    row = conn.execute("SELECT codice_interno, geometria_json, lunghezza_totale_mm, diametro_attacco_mm FROM portautensile WHERE id=?", (hid,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'errore': 'Holder non trovato'}), 404
+    import json as _json
+    return jsonify({
+        'codice': row[0],
+        'lunghezza_mm': row[2],
+        'diametro_mm': row[3],
+        'elementi': _json.loads(row[1]) if row[1] else [],
+    })
+
+
+@app.route('/api/utensile/<int:uid>/geometria')
+def api_utensile_geometria(uid):
+    """Ritorna geometria cont2D profili fresa."""
+    conn = get_conn()
+    u = conn.execute("SELECT alias, diametro_mm FROM utensile WHERE id=?", (uid,)).fetchone()
+    if not u:
+        conn.close(); return jsonify({'errore': 'Utensile non trovato'}), 404
+    rows = conn.execute("SELECT tipo, elementi_json FROM geometria_fresa WHERE utensile_id=?", (uid,)).fetchall()
+    conn.close()
+    import json as _json
+    profili = [{'tipo': r[0], 'elementi': _json.loads(r[1])} for r in rows]
+    return jsonify({
+        'alias': u[0],
+        'diametro_mm': u[1],
+        'profili': profili,
+    })
+
+
+# ---------------------------------------------------------------
+# PROMOZIONE SINGOLA
+# ---------------------------------------------------------------
+# ---------------------------------------------------------------
+# MODIFICA UTENSILE
+# ---------------------------------------------------------------
+# ---------------------------------------------------------------
+# DETTAGLIO UTENSILE
+# ---------------------------------------------------------------
+DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" style="color:#888;text-decoration:none">{{ 'Master' if u.stato=='master' else 'Staging' }}</a> &rsaquo; {{ u.alias or u.codice_interno }}
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.2rem">{{ u.alias or u.codice_interno }}
+      <span class="badge b-ok" style="font-size:12px;vertical-align:middle;margin-left:6px">{{ u.tipo_codice or '?' }}</span>
+      <span style="font-size:12px;vertical-align:middle;margin-left:4px;padding:2px 8px;border-radius:8px;{% if u.stato=='master' %}background:#d1fae5;color:#065f46{% elif u.stato=='staging' %}background:#fef3c7;color:#92400e{% else %}background:#f3f4f6;color:#6b7280{% endif %}">{{ u.stato }}</span>
+    </h2>
+    <p style="margin:4px 0 0;color:#888;font-size:13px">
+      {% if u.fornitore %}{{ u.fornitore }} &middot; {% endif %}
+      {% if u.codice_catalogo %}{{ u.codice_catalogo }} &middot; {% endif %}
+      {{ u.cam_sorgente or '' }}
+    </p>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Geometria</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem .75rem;font-size:13px">
+    <div><span style="color:#888">Diametro:</span> <b>{{ u.diametro_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">Raggio punta:</span> <b>{{ u.raggio_punta_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">N. taglienti:</span> <b>{{ u.num_taglienti or '—' }}</b></div>
+    <div><span style="color:#888">L. totale:</span> <b>{{ u.lunghezza_totale_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">L. tagliente:</span> <b>{{ u.lunghezza_tagl_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">Stelo:</span> <b>{{ u.diam_stelo_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">Fuori pinza:</span> <b>{{ '%.2f'|format(u.fuori_pinza_mm) if u.fuori_pinza_mm else '—' }}</b> mm</div>
+    <div><span style="color:#888">Gage length:</span> <b>{{ u.gage_length_mm or '—' }}</b> mm</div>
+    <div><span style="color:#888">Famiglia:</span> <b>{{ u.fam_nome or '— non assegnata —' }}</b></div>
+  </div>
+</div>
+
+{% if condizioni %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Condizioni di taglio ({{ condizioni|length }})</h3>
+  {% for mat, rows in cond_grouped.items() %}
+  <div style="margin-bottom:1rem">
+    <h4 style="font-size:13px;font-weight:600;margin:0 0 .4rem;color:#333">{{ mat }}</h4>
+    <table style="font-size:12px">
+    <thead><tr><th>Applicazione</th><th>Vc</th><th>RPM</th><th>Fz</th><th>F mm/min</th><th>Ae</th><th>Ap</th></tr></thead>
+    <tbody>
+    {% for c in rows %}
+    <tr>
+      <td>{{ c.applicazione or '—' }}</td>
+      <td style="font-family:monospace">{{ c.vc_m_min or '—' }}</td>
+      <td style="font-family:monospace">{{ c.rotazione_rpm|round|int if c.rotazione_rpm else '—' }}</td>
+      <td style="font-family:monospace">{{ c.fz_mm_z or '—' }}</td>
+      <td style="font-family:monospace">{{ c.avanzamento_mm_min|round|int if c.avanzamento_mm_min else '—' }}</td>
+      <td style="font-family:monospace">{{ c.ae_mm or '—' }}</td>
+      <td style="font-family:monospace">{{ c.ap_mm or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="margin-bottom:1rem;text-align:center;color:#aaa;padding:1.5rem">
+  Nessuna condizione di taglio importata per questo utensile.
+</div>
+{% endif %}
+
+{% if holder %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Holder</h3>
+  <div style="font-size:13px">
+    <div><span style="color:#888">Nome:</span> <b>{{ holder.codice_interno }}</b></div>
+    {% if holder.tipo_attacco %}<div><span style="color:#888">Tipo attacco:</span> {{ holder.tipo_attacco }}</div>{% endif %}
+    {% if holder.fam_holder %}<div><span style="color:#888">Famiglia holder:</span> {{ holder.fam_holder }}</div>{% endif %}
+  </div>
+</div>
+{% elif u.nome_pinza %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Holder</h3>
+  <div style="font-size:13px"><span style="color:#888">Nome:</span> <b>{{ u.nome_pinza }}</b> <span style="color:#aaa;font-size:11px">(non trovato in portautensile)</span></div>
+</div>
+{% endif %}
+
+<div style="display:flex;gap:.75rem;align-items:center">
+  <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" class="btn">&#8592; {{ 'Master' if u.stato=='master' else 'Staging' }}</a>
+  <a href="/utensile/{{ u.id }}/modifica" class="btn btn-mod">&#9998; Modifica</a>
+  {% if u.stato == 'staging' %}
+  <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-ok" style="margin-left:auto">&#11088; Promuovi a Master &#8594;</a>
+  {% endif %}
+</div>
+""")
+
+@app.route('/utensile/<int:uid>')
+def dettaglio_utensile(uid):
+    conn = get_conn()
+    row = conn.execute("""SELECT u.*, tu.codice as tipo_codice,
+        COALESCE(f.nome, '') as fam_nome
+        FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
+        LEFT JOIN FamiglieUtensile f ON u.famiglia_id=f.id
+        WHERE u.id=?""", (uid,)).fetchone()
+    if not row:
+        conn.close(); return redirect('/staging')
+    u = dict(row)
+    # Condizioni di taglio raggruppate per materiale
+    condizioni = [dict(r) for r in conn.execute("""SELECT materiale_pezzo, applicazione,
+        vc_m_min, rotazione_rpm, fz_mm_z, avanzamento_mm_min, ae_mm, ap_mm
+        FROM condizioni_taglio WHERE id_utensile=?
+        ORDER BY materiale_pezzo, applicazione""", (uid,))]
+    from itertools import groupby
+    cond_grouped = {}
+    for k, grp in groupby(condizioni, key=lambda r: r['materiale_pezzo']):
+        cond_grouped[k] = list(grp)
+    # Holder
+    holder = None
+    if u.get('nome_pinza'):
+        h = conn.execute("""SELECT p.codice_interno, p.tipo_attacco,
+            COALESCE(fh.nome, '') as fam_holder
+            FROM portautensile p LEFT JOIN FamiglieHolder fh ON p.famiglia_holder_id=fh.id
+            WHERE p.codice_interno=?""", (u['nome_pinza'],)).fetchone()
+        if h:
+            holder = dict(h)
+    conn.close()
+    return render_template_string(DETTAGLIO_HTML, u=u, condizioni=condizioni,
+        cond_grouped=cond_grouped, holder=holder, active='staging' if u['stato']=='staging' else 'master')
+
+
+MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo;
+  <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" style="color:#888;text-decoration:none">{{ 'Master' if u.stato=='master' else 'Staging' }}</a> &rsaquo; Modifica
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Modifica utensile — {{ u.alias or u.codice_interno }}</h2>
+<form method="post">
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Identita</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Alias</label>
+      <input name="alias" value="{{ u.alias or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Codice interno</label>
+      <input value="{{ u.codice_interno or '' }}" readonly style="width:100%;padding:6px 10px;border:1px solid #eee;border-radius:5px;font-size:13px;background:#f8f8f6;color:#888"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Codice catalogo</label>
+      <input name="codice_catalogo" value="{{ u.codice_catalogo or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Descrizione</label>
+      <input name="descrizione" value="{{ u.descrizione or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">CAM sorgente</label>
+      <input value="{{ u.cam_sorgente or '' }}" readonly style="width:100%;padding:6px 10px;border:1px solid #eee;border-radius:5px;font-size:13px;background:#f8f8f6;color:#888"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Geometria</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Tipo</label>
+      <select name="id_tipo" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for t in tipi %}<option value="{{ t.id }}" {{ 'selected' if t.id==u.id_tipo }}>{{ t.codice }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diametro [mm]</label>
+      <input name="diametro_mm" type="number" step="0.001" value="{{ u.diametro_mm or '' }}" required style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Raggio punta [mm]</label>
+      <input name="raggio_punta_mm" type="number" step="0.001" value="{{ u.raggio_punta_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">N taglienti</label>
+      <input name="num_taglienti" type="number" min="1" value="{{ u.num_taglienti or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Lunghezza totale [mm]</label>
+      <input name="lunghezza_totale_mm" type="number" step="0.01" value="{{ u.lunghezza_totale_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Lunghezza tagliente [mm]</label>
+      <input name="lunghezza_tagl_mm" type="number" step="0.01" value="{{ u.lunghezza_tagl_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Angolo punta [gradi]</label>
+      <input name="angolo_punta_gradi" type="number" step="0.1" value="{{ u.angolo_punta_gradi or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Passo filetto [mm]</label>
+      <input name="passo_mm" type="number" step="0.01" value="{{ u.passo_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Classificazione</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Famiglia</label>
+      <select name="famiglia_id" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        <option value="">-- non assegnata --</option>
+        {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if f.id==u.famiglia_id }}>{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Stato</label>
+      <select name="stato" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for s in ['staging','master','archiviato'] %}<option value="{{ s }}" {{ 'selected' if s==u.stato }}>{{ s }}</option>{% endfor %}
+      </select></div>
+    <div style="grid-column:1/-1"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Impiego</label>
+      <div style="display:flex;gap:1rem;padding-top:4px;font-size:13px">
+        {% for imp in ['sgrossatura','semifinitura','finitura','foratura'] %}
+        <label style="cursor:pointer"><input type="checkbox" name="impiego" value="{{ imp }}" {{ 'checked' if u.impiego and imp in u.impiego }}> {{ imp|capitalize }}</label>
+        {% endfor %}
+      </div></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Note</h3>
+  <textarea name="note" rows="3" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">{{ u.note or '' }}</textarea>
+</div>
+
+<div style="display:flex;gap:.75rem;align-items:center">
+  <a href="/{{ 'master' if u.stato=='master' else 'staging' }}" class="btn">Annulla</a>
+  <button type="submit" class="btn btn-p">&#10003; Salva modifiche</button>
+  {% if u.stato == 'staging' %}
+  <a href="/utensile/{{ u.id }}/promuovi" class="btn btn-ok" style="margin-left:auto">Promuovi a Master &#8594;</a>
+  {% endif %}
+</div>
+</form>
+""")
+
+@app.route('/utensile/<int:uid>/modifica', methods=['GET','POST'])
+def modifica_utensile(uid):
+    conn = get_conn()
+    if request.method == 'POST':
+        f = request.form
+        fam = f.get('famiglia_id') or None
+        impiego = ','.join(f.getlist('impiego')) or None
+        stato_new = f.get('stato', 'staging')
+        conn.execute("""UPDATE utensile SET alias=?, codice_catalogo=?, descrizione=?,
+            id_tipo=?, diametro_mm=?, raggio_punta_mm=?,
+            num_taglienti=?, lunghezza_totale_mm=?, lunghezza_tagl_mm=?,
+            angolo_punta_gradi=?, passo_mm=?,
+            famiglia_id=?, impiego=?, stato=?, note=?
+            WHERE id=?""", (
+            f.get('alias') or None, f.get('codice_catalogo') or None,
+            f.get('descrizione') or None,
+            int(f.get('id_tipo', 1)),
+            float(f['diametro_mm']) if f.get('diametro_mm') else None,
+            float(f['raggio_punta_mm']) if f.get('raggio_punta_mm') else None,
+            int(f['num_taglienti']) if f.get('num_taglienti') else None,
+            float(f['lunghezza_totale_mm']) if f.get('lunghezza_totale_mm') else None,
+            float(f['lunghezza_tagl_mm']) if f.get('lunghezza_tagl_mm') else None,
+            float(f['angolo_punta_gradi']) if f.get('angolo_punta_gradi') else None,
+            float(f['passo_mm']) if f.get('passo_mm') else None,
+            int(fam) if fam else None, impiego, stato_new, f.get('note') or None, uid))
+        conn.commit(); conn.close()
+        return redirect('/master' if stato_new == 'master' else '/staging')
+    row = conn.execute("SELECT * FROM utensile WHERE id=?", (uid,)).fetchone()
+    if not row:
+        conn.close(); return redirect('/staging')
+    tipi = [dict(r) for r in conn.execute("SELECT id, codice FROM tipo_utensile ORDER BY codice")]
+    famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, active='staging')
+
+
+PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h2 style="margin:0;font-size:1.1rem">Promuovi utensile a Master</h2>
+  <a href="/staging" class="btn">&#8592; Staging</a>
+</div>
+<div class="card">
+  <div style="margin-bottom:1.25rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;font-size:13px">
+      <div><b>Codice:</b> {{ u.codice_interno }}</div>
+      <div><b>Alias:</b> {{ u.alias or '-' }}</div>
+      <div><b>Tipo:</b> <span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></div>
+      <div><b>Diametro:</b> {{ u.diametro_mm }} mm</div>
+      <div><b>CAM:</b> {{ u.cam_sorgente or '-' }}</div>
+      <div><b>Raggio punta:</b> {{ u.raggio_punta_mm or 0 }} mm</div>
+    </div>
+  </div>
+  <form method="post">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Famiglia utensile</label>
+        <select name="famiglia_id" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px">
+          <option value="">-- Nessuna --</option>
+          {% for f in famiglie %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Impiego</label>
+        <div style="display:flex;flex-wrap:wrap;gap:.75rem;font-size:13px">
+          {% for imp in ['sgrossatura','semifinitura','finitura','foratura'] %}
+          <label style="cursor:pointer"><input type="checkbox" name="impiego" value="{{ imp }}"> {{ imp|capitalize }}</label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Note operatore</label>
+      <textarea name="note" rows="2" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px" placeholder="(opzionale)"></textarea>
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <a href="/staging" class="btn">Annulla</a>
+      <button type="submit" class="btn btn-s">Promuovi a Master &#10003;</button>
+    </div>
+  </form>
+</div>
+""")
+
+@app.route('/utensile/<int:uid>/promuovi', methods=['GET','POST'])
+def promuovi_utensile(uid):
+    conn=get_conn()
+    if request.method=='POST':
+        fam=request.form.get('famiglia_id') or None
+        impiego=','.join(request.form.getlist('impiego')) or None
+        note=request.form.get('note','').strip() or None
+        conn.execute("""UPDATE utensile SET stato='master', famiglia_id=?, impiego=?,
+            promosso_da='operatore', promosso_il=datetime('now'), note=COALESCE(note||' | ','')||?
+            WHERE id=?""", (fam, impiego, note or '', uid))
+        conn.commit(); conn.close()
+        return redirect('/master')
+    row=conn.execute("""SELECT u.*, tu.codice as tipo_codice FROM utensile u
+        LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id WHERE u.id=?""", (uid,)).fetchone()
+    if not row:
+        conn.close()
+        return redirect('/staging')
+    famiglie=[dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(PROMUOVI_HTML, u=dict(row), famiglie=famiglie, active='staging')
+
+
+# ---------------------------------------------------------------
+# MASTER — utensili validati
+# ---------------------------------------------------------------
+MASTER_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <div>
+    <h2 style="margin:0;font-size:1.1rem">&#11088; DB Master — Utensili validati</h2>
+    <span style="color:#888;font-size:.85rem">{{ n_master }} utensili nel master</span>
+  </div>
+  <div style="display:flex;gap:.5rem">
+    <a href="/export" class="btn btn-s" style="padding:6px 14px;font-size:13px">&#128228; Esporta tutti</a>
+    <a href="/staging" class="btn" style="padding:6px 14px;font-size:13px">&#128230; Staging</a>
+  </div>
+</div>
+
+<div style="display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+  <select onchange="location.href='?famiglia='+this.value+'&tipo={{ tipo_f }}&impiego={{ imp_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutte le famiglie</option>
+    {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if f.id|string==fam_f }}>{{ f.nome }}</option>{% endfor %}
+  </select>
+  <select onchange="location.href='?tipo='+this.value+'&famiglia={{ fam_f }}&impiego={{ imp_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti i tipi</option>
+    {% for t in tipi %}<option value="{{ t }}" {{ 'selected' if t==tipo_f }}>{{ t }}</option>{% endfor %}
+  </select>
+  <select onchange="location.href='?impiego='+this.value+'&famiglia={{ fam_f }}&tipo={{ tipo_f }}'" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+    <option value="">Tutti gli impieghi</option>
+    {% for i in ['sgrossatura','semifinitura','finitura','foratura'] %}<option value="{{ i }}" {{ 'selected' if i==imp_f }}>{{ i }}</option>{% endfor %}
+  </select>
+</div>
+
+{% for grp in gruppi %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="margin:0 0 .75rem;font-size:.95rem;color:#555">
+    {{ grp.nome or 'Senza famiglia' }}
+    <span style="background:#e9ecef;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:400;margin-left:.4rem">{{ grp.utensili|length }}</span>
+  </h3>
+  <table style="font-size:13px">
+  <thead><tr><th>Alias</th><th>Tipo</th><th>D mm</th><th>R mm</th><th>Impiego</th><th>CAM</th><th>Promosso</th><th>Azioni</th></tr></thead>
+  <tbody>
+  {% for u in grp.utensili %}
+  <tr>
+    <td><b>{{ u.alias or u.codice_interno }}</b></td>
+    <td><span class="badge b-ok">{{ u.tipo_codice or '?' }}</span></td>
+    <td>{{ u.diametro_mm or '' }}</td>
+    <td>{{ u.raggio_punta_mm or '' }}</td>
+    <td style="font-size:12px">{{ u.impiego or '' }}</td>
+    <td style="font-size:12px;color:#888">{{ u.cam_sorgente or '' }}</td>
+    <td style="font-size:11px;color:#aaa">{{ (u.promosso_il or '')[:10] }}</td>
+    <td>
+      <a href="/utensile/{{ u.id }}" class="btn" style="padding:2px 8px;font-size:11px">Dettaglio</a>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+{% endfor %}
+{% if not gruppi %}<div class="card" style="text-align:center;color:#aaa;padding:2rem">Nessun utensile nel master. <a href="/staging">Promuovine alcuni dallo staging.</a></div>{% endif %}
+""")
+
+@app.route('/master')
+def master_page():
+    conn=get_conn()
+    fam_f=request.args.get('famiglia','')
+    tipo_f=request.args.get('tipo','')
+    imp_f=request.args.get('impiego','')
+    where="WHERE u.stato='master'"
+    params=[]
+    if fam_f:
+        where+=" AND u.famiglia_id=?"; params.append(int(fam_f))
+    if tipo_f:
+        where+=" AND tu.codice=?"; params.append(tipo_f)
+    if imp_f:
+        where+=" AND u.impiego LIKE ?"; params.append(f'%{imp_f}%')
+    rows=[dict(r) for r in conn.execute(f"""
+        SELECT u.id, u.codice_interno, u.alias, tu.codice as tipo_codice,
+               u.diametro_mm, u.raggio_punta_mm, u.cam_sorgente,
+               u.impiego, u.promosso_il, u.famiglia_id,
+               COALESCE(f.nome, 'Senza famiglia') as fam_nome
+        FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
+        LEFT JOIN FamiglieUtensile f ON u.famiglia_id=f.id
+        {where} ORDER BY f.nome, tu.codice, u.diametro_mm
+    """, params)]
+    n_master=conn.execute("SELECT COUNT(*) FROM utensile WHERE stato='master'").fetchone()[0]
+    tipi=[r[0] for r in conn.execute("SELECT DISTINCT tu.codice FROM utensile u JOIN tipo_utensile tu ON u.id_tipo=tu.id WHERE u.stato='master' AND tu.codice IS NOT NULL")]
+    famiglie=[dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    # Raggruppa per famiglia
+    from itertools import groupby
+    gruppi=[]
+    for k, grp in groupby(rows, key=lambda r: r['fam_nome']):
+        gruppi.append({'nome': k, 'utensili': list(grp)})
+    return render_template_string(MASTER_HTML, gruppi=gruppi, n_master=n_master,
+        tipi=tipi, famiglie=famiglie, fam_f=fam_f, tipo_f=tipo_f, imp_f=imp_f, active='master')
+
 
 @app.route('/export')
 def export_page():
