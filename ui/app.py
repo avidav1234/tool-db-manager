@@ -1879,14 +1879,14 @@ FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 </div>
 <div class="card" style="margin-bottom:1rem">
 <table style="font-size:13px">
-<thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Mat. tagliente</th><th>N taglienti</th><th>Utensili</th><th>Azioni</th></tr></thead>
+<thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>N taglienti</th><th>Utensili</th><th>Azioni</th></tr></thead>
 <tbody>
 {% for f in famiglie %}
 <tr class="clickable" onclick="location.href='/famiglie/{{ f.id }}/parametri'">
   <td>{{ f.id }}</td>
   <td><b>{{ f.nome }}</b></td>
   <td>{{ f.tipo or '—' }}</td>
-  <td>{{ f.materiale_tagliente or '—' }}</td>
+
   <td>{{ f.n_taglienti_default or '—' }}</td>
   <td><span class="badge b-ok">{{ f.n_utensili }}</span></td>
   <td style="white-space:nowrap">
@@ -1904,8 +1904,6 @@ FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <input name="nome" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
     <div><label style="font-size:12px;display:block;margin-bottom:3px">Tipo</label>
       <input name="tipo" placeholder="es. BULL" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:80px"></div>
-    <div><label style="font-size:12px;display:block;margin-bottom:3px">Mat. tagliente</label>
-      <input name="materiale_tagliente" placeholder="es. HM" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:80px"></div>
     <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
   </form>
 </div>
@@ -1930,8 +1928,8 @@ def famiglia_nuova():
         return redirect('/famiglie')
     conn = get_conn()
     try:
-        conn.execute("INSERT INTO FamiglieUtensile (nome, tipo, materiale_tagliente) VALUES (?,?,?)",
-            (nome, request.form.get('tipo') or None, request.form.get('materiale_tagliente') or None))
+        conn.execute("INSERT INTO FamiglieUtensile (nome, tipo) VALUES (?,?)",
+            (nome, request.form.get('tipo') or None))
         conn.commit()
     except Exception:
         pass
@@ -2880,10 +2878,6 @@ MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <select name="id_tipo" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
         {% for t in tipi %}<option value="{{ t.id }}" {{ 'selected' if t.id==u.id_tipo }}>{{ t.codice }}</option>{% endfor %}
       </select></div>
-    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Materiale tagliente</label>
-      <select name="id_materiale" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
-        {% for m in mat_utensile %}<option value="{{ m.id }}" {{ 'selected' if m.id==u.id_materiale }}>{{ m.codice }}</option>{% endfor %}
-      </select></div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diametro [mm]</label>
       <input name="diametro_mm" type="number" step="0.001" value="{{ u.diametro_mm or '' }}" required style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Raggio punta [mm]</label>
@@ -2946,14 +2940,14 @@ def modifica_utensile(uid):
         impiego = ','.join(f.getlist('impiego')) or None
         stato_new = f.get('stato', 'staging')
         conn.execute("""UPDATE utensile SET alias=?, codice_catalogo=?, descrizione=?,
-            id_tipo=?, id_materiale=?, diametro_mm=?, raggio_punta_mm=?,
+            id_tipo=?, diametro_mm=?, raggio_punta_mm=?,
             num_taglienti=?, lunghezza_totale_mm=?, lunghezza_tagl_mm=?,
             angolo_punta_gradi=?, passo_mm=?,
             famiglia_id=?, impiego=?, stato=?, note=?
             WHERE id=?""", (
             f.get('alias') or None, f.get('codice_catalogo') or None,
             f.get('descrizione') or None,
-            int(f.get('id_tipo', 1)), int(f.get('id_materiale', 1)),
+            int(f.get('id_tipo', 1)),
             float(f['diametro_mm']) if f.get('diametro_mm') else None,
             float(f['raggio_punta_mm']) if f.get('raggio_punta_mm') else None,
             int(f['num_taglienti']) if f.get('num_taglienti') else None,
@@ -2969,9 +2963,8 @@ def modifica_utensile(uid):
         conn.close(); return redirect('/staging')
     tipi = [dict(r) for r in conn.execute("SELECT id, codice FROM tipo_utensile ORDER BY codice")]
     famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
-    mat_utensile = [dict(r) for r in conn.execute("SELECT id, codice FROM materiale_utensile ORDER BY codice")]
     conn.close()
-    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, mat_utensile=mat_utensile, active='staging')
+    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, active='staging')
 
 
 PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
