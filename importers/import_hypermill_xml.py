@@ -231,15 +231,39 @@ def import_xml(filepath, db_path, dry_run=False):
     _ensure_columns(conn)
     id_mat_default = _get_materiale_id(conn)
 
-    # A) Importa holders
+    # A) Importa holders con tutti i campi
     for h_name, h_el in holders_by_name.items():
-        cod = _param(h_el, 'orderingCode', h_name)
+        h_cod_ord = _param(h_el, 'orderingCode')
+        h_produttore = _param(h_el, 'manufacturer')
+        h_coolant = _param(h_el, 'coolantThrough')
+        h_ssf = _float(_param(h_el, 'spindleSpeedFactor'), 1.0)
+        h_ff = _float(_param(h_el, 'feedrateFactor'), 1.0)
+        h_clf = _float(_param(h_el, 'cuttingLengthFactor'), 1.0)
+        h_cwf = _float(_param(h_el, 'cuttingWidthFactor'), 1.0)
+        h_max_rpm = _float(_param(h_el, 'maxSpindleSpeed'))
+        h_max_feed = _float(_param(h_el, 'maxFeedrate'))
+        refrig_int = 1 if h_coolant in ('yes', 'through') else 0
         existing = conn.execute("SELECT id FROM portautensile WHERE codice_interno=?", (h_name,)).fetchone()
         if existing:
+            conn.execute("""UPDATE portautensile SET codice_ordinazione=?, produttore=?,
+                refrigerante_interno=?, spindle_speed_factor=?, feedrate_factor=?,
+                cutting_length_factor=?, cutting_width_factor=?,
+                max_rpm=?, max_feedrate=?, cam_sorgente=?
+                WHERE id=?""", (h_cod_ord, h_produttore, refrig_int, h_ssf, h_ff,
+                h_clf, h_cwf, h_max_rpm, h_max_feed, 'HyperMill', existing[0]))
+            stats['holders_importati'] += 1
             continue
         try:
-            conn.execute("""INSERT INTO portautensile (codice_interno, descrizione, cam_sorgente, id_originale_cam)
-                VALUES (?,?,?,?)""", (h_name, cod, 'HyperMill', _param(h_el, 'objGuid')))
+            conn.execute("""INSERT INTO portautensile (codice_interno, descrizione,
+                codice_ordinazione, produttore, refrigerante_interno,
+                spindle_speed_factor, feedrate_factor,
+                cutting_length_factor, cutting_width_factor,
+                max_rpm, max_feedrate,
+                cam_sorgente, id_originale_cam)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (h_name, h_cod_ord or h_name, h_cod_ord, h_produttore, refrig_int,
+                 h_ssf, h_ff, h_clf, h_cwf, h_max_rpm, h_max_feed,
+                 'HyperMill', _param(h_el, 'objGuid')))
             stats['holders_importati'] += 1
         except Exception as e:
             stats['errori'].append(f"holder {h_name}: {e}")
@@ -267,7 +291,7 @@ def import_xml(filepath, db_path, dry_run=False):
 
         folder_path = _folder_path(nct)
 
-        # Dati tool (geometria)
+        # Dati tool (geometria) — estrazione COMPLETA
         ttype_xml = tool_el.get('type', '')
         tipo_codice = TIPO_MAP.get(ttype_xml, _tipo_from_folder(folder_path))
         id_tipo = _get_tipo_id(conn, tipo_codice)
@@ -284,55 +308,102 @@ def import_xml(filepath, db_path, dry_run=False):
         fornitore = _param(tool_el, 'manufacturer')
         mat_tagl = _param(tool_el, 'cuttingMaterial')
         tool_guid = _param(tool_el, 'objGuid', alias)
+        dir_rot = _param(tool_el, 'spindleRotation')
+        commento_tool = _param(tool_el, 'comment')
+        # Campi geometria avanzati
+        taper_height = _float(_param(tool_el, 'taperHeight'))
+        taper_angle = _float(_param(tool_el, 'taperAngle'))
+        tapered = _param(tool_el, 'tapered')
+        tip_diameter = _float(_param(tool_el, 'tipDiameter'))
+        core_diameter = _float(_param(tool_el, 'coreDiameter'))
+        core_height = _float(_param(tool_el, 'coreHeight'))
+        collar = _param(tool_el, 'collar')
+        shaft_ch_len = _float(_param(tool_el, 'toolShaftChamferLength'))
+        shaft_ch_pos = _float(_param(tool_el, 'toolShaftChamferAbsPos'))
+        shaft_ch_ang = _float(_param(tool_el, 'toolShaftChamferAngle'))
+        # Maschi/pettini/alesatori
+        nominal_diam = _float(_param(tool_el, 'nominalDiameter'))
+        minor_thread_d = _float(_param(tool_el, 'minorThreadDiameter'))
+        passo_max = _float(_param(tool_el, 'maxPitch'))
+        passo_min = _float(_param(tool_el, 'minPitch'))
+        tol_inf = _float(_param(tool_el, 'lowerFitTol'))
+        tol_sup = _float(_param(tool_el, 'upperFitTol'))
+        chamfer_angle = _float(_param(tool_el, 'chamferAngle'))
+        cone_angle = _float(_param(tool_el, 'coneAngle'))
+        # Derivati
+        lunghezza_utile = taper_height
+        dir_rotazione_val = 'CW' if dir_rot == 'clockwise' else ('CCW' if dir_rot == 'counterclockwise' else None)
+        ha_scarico_val = 1 if tapered in ('1', 'true', 'True') else 0
+        ha_collare_val = 1 if collar in ('1', 'true', 'True') else 0
+        angolo_punta = chamfer_angle or cone_angle
 
-        # Dati ncTool (assemblaggio)
+        # Dati ncTool (assemblaggio) — tutti i campi
         fuori_pinza = _float(_param(nct, 'clearanceLength'))
         gage_length = _float(_param(nct, 'gageLength'))
         k_vc = _float(_param(nct, 'spindleSpeedFactor'), 1.0)
         k_fz = _float(_param(nct, 'feedrateFactor'), 1.0)
+        cut_len_factor = _float(_param(nct, 'cuttingLengthFactor'), 1.0)
+        cut_wid_factor = _float(_param(nct, 'cuttingWidthFactor'), 1.0)
+        max_rpm_nct = _float(_param(nct, 'maxSpindleSpeed'))
+        max_feed_nct = _float(_param(nct, 'maxFeedrate'))
+        note_asm = _param(nct, 'comment')
         nctool_guid = _param(nct, 'objGuid', '')
 
-        # Codice interno = alias ncTool (unico per assemblaggio)
         codice_interno = alias
 
-        # Inserisci/aggiorna utensile
+        # Tutti i valori per INSERT/UPDATE
+        # 44 valori che corrispondono alle 44 colonne dopo codice_interno nell'INSERT
+        # (id_fornitore e stato sono aggiunti separatamente)
+        u_vals = (alias, id_tipo, id_mat_default,
+            diametro or 0, raggio or 0, taglienti,
+            l_tot or 0, l_tagl or 0, diam_stelo, cod_catalogo,
+            fuori_pinza, gage_length, k_vc, k_fz, holder_name,
+            lunghezza_utile, taper_height, taper_angle, ha_scarico_val,
+            tip_diameter, core_diameter, core_height, ha_collare_val,
+            shaft_ch_len, shaft_ch_pos, shaft_ch_ang,
+            cut_len_factor, cut_wid_factor, max_rpm_nct, max_feed_nct, note_asm,
+            nominal_diam, minor_thread_d, passo_max, passo_min, tol_inf, tol_sup,
+            dir_rotazione_val, angolo_punta, commento_tool,
+            'HyperMill', nctool_guid, tool_name)
+
         existing = conn.execute("SELECT id FROM utensile WHERE codice_interno=?", (codice_interno,)).fetchone()
         if existing:
             uid = existing[0]
             conn.execute("""UPDATE utensile SET alias=?, id_tipo=?, id_materiale=?,
                 diametro_mm=?, raggio_punta_mm=?, num_taglienti=?,
-                lunghezza_totale_mm=?, lunghezza_tagl_mm=?, diam_stelo_mm=?,
-                codice_catalogo=?, fuori_pinza_mm=?, gage_length_mm=?,
-                fattore_s=?, fattore_f=?, nome_pinza=?,
+                lunghezza_totale_mm=?, lunghezza_tagl_mm=?, diam_stelo_mm=?, codice_catalogo=?,
+                fuori_pinza_mm=?, gage_length_mm=?, fattore_s=?, fattore_f=?, nome_pinza=?,
+                lunghezza_utile_mm=?, taper_height_mm=?, taper_angle_gradi=?, ha_scarico=?,
+                tip_diameter_mm=?, core_diameter_mm=?, core_height_mm=?, ha_collare=?,
+                shaft_chamfer_length_mm=?, shaft_chamfer_pos_mm=?, shaft_chamfer_angle_gradi=?,
+                cutting_length_factor=?, cutting_width_factor=?, max_rpm=?, max_feedrate=?, note_assemblaggio=?,
+                nominal_diameter_mm=?, minor_thread_diameter_mm=?, passo_max_mm=?, passo_min_mm=?,
+                tolleranza_inf_mm=?, tolleranza_sup_mm=?,
+                dir_rotazione=?, angolo_punta_gradi=?, note=?,
                 cam_sorgente=?, id_originale_cam=?, descrizione=?
-                WHERE id=?""", (
-                alias, id_tipo, id_mat_default,
-                diametro or 0, raggio or 0, taglienti,
-                l_tot or 0, l_tagl or 0, diam_stelo,
-                cod_catalogo, fuori_pinza, gage_length,
-                k_vc, k_fz, holder_name,
-                'HyperMill', nctool_guid, tool_name, uid))
+                WHERE id=?""", u_vals + (uid,))
         else:
             cur = conn.execute("""INSERT INTO utensile (
                 codice_interno, alias, id_tipo, id_materiale,
                 diametro_mm, raggio_punta_mm, num_taglienti,
-                lunghezza_totale_mm, lunghezza_tagl_mm, diam_stelo_mm,
-                codice_catalogo, fuori_pinza_mm, gage_length_mm,
-                fattore_s, fattore_f, nome_pinza,
+                lunghezza_totale_mm, lunghezza_tagl_mm, diam_stelo_mm, codice_catalogo,
+                fuori_pinza_mm, gage_length_mm, fattore_s, fattore_f, nome_pinza,
+                lunghezza_utile_mm, taper_height_mm, taper_angle_gradi, ha_scarico,
+                tip_diameter_mm, core_diameter_mm, core_height_mm, ha_collare,
+                shaft_chamfer_length_mm, shaft_chamfer_pos_mm, shaft_chamfer_angle_gradi,
+                cutting_length_factor, cutting_width_factor, max_rpm, max_feedrate, note_assemblaggio,
+                nominal_diameter_mm, minor_thread_diameter_mm, passo_max_mm, passo_min_mm,
+                tolleranza_inf_mm, tolleranza_sup_mm,
+                dir_rotazione, angolo_punta_gradi, note,
                 cam_sorgente, id_originale_cam, descrizione, stato)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
-                codice_interno, alias, id_tipo, id_mat_default,
-                diametro or 0, raggio or 0, taglienti,
-                l_tot or 0, l_tagl or 0, diam_stelo,
-                cod_catalogo, fuori_pinza, gage_length,
-                k_vc, k_fz, holder_name,
-                'HyperMill', nctool_guid, tool_name, 'staging'))
+                VALUES (""" + ','.join(['?'] * 45) + ")",
+                (codice_interno,) + u_vals + ('staging',))
             uid = cur.lastrowid
             stats['utensili_importati'] += 1
 
         stats['nctools_importati'] += 1
 
-        # C) Importa condizioni di taglio (tecset del tool collegato)
+        # C) Importa condizioni di taglio — tutti i campi tecset
         for ts in tool_el.iter('tecset'):
             materiale = _param(ts, 'material')
             if not materiale:
@@ -340,20 +411,26 @@ def import_xml(filepath, db_path, dry_run=False):
             purpose = _param(ts, 'purpose', '')
             vc = _float(_param(ts, 'cuttingSpeed'))
             if not vc:
-                continue  # skip tecset vuoti/template
+                continue
             fz = _float(_param(ts, 'feedratePerEdge'))
             avanzamento = _float(_param(ts, 'planeFeedrate'))
             rpm = _float(_param(ts, 'spindleSpeed'))
             ae = _float(_param(ts, 'cuttingWidth'))
             ap = _float(_param(ts, 'cuttingLength'))
+            f_ridotta = _float(_param(ts, 'reducedFeedrate'))
+            z_feed = _float(_param(ts, 'zFeedrate'))
+            plunge_ang = _float(_param(ts, 'plungeAngle'))
+            coolant_code = _param(ts, 'coolants')
 
             try:
                 conn.execute("""INSERT OR REPLACE INTO condizioni_taglio
                     (id_utensile, materiale_pezzo, applicazione, cam_sorgente,
-                     vc_m_min, rotazione_rpm, fz_mm_z, avanzamento_mm_min, ae_mm, ap_mm)
-                    VALUES (?,?,?,?,?,?,?,?,?,?)""", (
+                     vc_m_min, rotazione_rpm, fz_mm_z, avanzamento_mm_min, ae_mm, ap_mm,
+                     f_ridotta_mm_min, z_feedrate_mm_min, plunge_angle_gradi, refrigerante_code)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
                     uid, materiale, purpose, 'HyperMill',
-                    vc, rpm, fz, avanzamento, ae, ap))
+                    vc, rpm, fz, avanzamento, ae, ap,
+                    f_ridotta, z_feed, plunge_ang, coolant_code))
                 stats['condizioni_importate'] += 1
             except Exception as e:
                 stats['errori'].append(f"tecset {codice_interno}/{materiale}/{purpose}: {e}")
