@@ -718,8 +718,8 @@ def utensile_nuovo():
         u={}, tipi=tipi, materiali=materiali, fornitori=fornitori,
         modifica=False, active='home', msg='', mtype='')
 
-@app.route('/utensile/<int:uid>/modifica', methods=['GET','POST'])
-def utensile_modifica(uid):
+@app.route('/utensile-old/<int:uid>/modifica', methods=['GET','POST'])
+def utensile_modifica_old(uid):
     if request.method == 'POST':
         return _salva_utensile(uid)
     conn = get_conn()
