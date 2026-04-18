@@ -2681,6 +2681,41 @@ def api_utensile_famiglia(uid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/holder/<int:hid>/geometria')
+def api_holder_geometria(hid):
+    """Ritorna geometria cont2D di un holder."""
+    conn = get_conn()
+    row = conn.execute("SELECT codice_interno, geometria_json, lunghezza_totale_mm, diametro_attacco_mm FROM portautensile WHERE id=?", (hid,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({'errore': 'Holder non trovato'}), 404
+    import json as _json
+    return jsonify({
+        'codice': row[0],
+        'lunghezza_mm': row[2],
+        'diametro_mm': row[3],
+        'elementi': _json.loads(row[1]) if row[1] else [],
+    })
+
+
+@app.route('/api/utensile/<int:uid>/geometria')
+def api_utensile_geometria(uid):
+    """Ritorna geometria cont2D profili fresa."""
+    conn = get_conn()
+    u = conn.execute("SELECT alias, diametro_mm FROM utensile WHERE id=?", (uid,)).fetchone()
+    if not u:
+        conn.close(); return jsonify({'errore': 'Utensile non trovato'}), 404
+    rows = conn.execute("SELECT tipo, elementi_json FROM geometria_fresa WHERE utensile_id=?", (uid,)).fetchall()
+    conn.close()
+    import json as _json
+    profili = [{'tipo': r[0], 'elementi': _json.loads(r[1])} for r in rows]
+    return jsonify({
+        'alias': u[0],
+        'diametro_mm': u[1],
+        'profili': profili,
+    })
+
+
 # ---------------------------------------------------------------
 # PROMOZIONE SINGOLA
 # ---------------------------------------------------------------
