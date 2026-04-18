@@ -1829,7 +1829,14 @@ HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <a href="/holders" style="color:#888;text-decoration:none">Holders</a> &rsaquo; {{ h.codice_interno }}
 </div>
 <h2 style="font-size:1.1rem;margin:0 0 1.25rem">Holder — {{ h.codice_interno }}</h2>
-<div class="card" style="margin-bottom:1rem">
+<div style="display:flex;gap:1.25rem;margin-bottom:1rem;align-items:flex-start">
+{% if svg_holder %}
+<div style="width:300px;min-width:200px;border:1px solid #e2e2df;border-radius:8px;padding:8px;background:#fafaf8;text-align:center">
+  {{ svg_holder|safe }}
+  <div style="font-size:10px;color:#aaa;margin-top:4px">Profilo 2D &mdash; L={{ h.lunghezza_totale_mm or '?' }}mm D={{ h.diametro_attacco_mm or '?' }}mm</div>
+</div>
+{% endif %}
+<div class="card" style="margin-bottom:0;flex:1">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Info base</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;font-size:13px">
     <div><b>Codice:</b> {{ h.codice_interno }}</div>
@@ -1838,7 +1845,9 @@ HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <div><b>N segmenti:</b> {{ h.num_segmenti or 0 }}</div>
     <div><b>Speed factor:</b> {{ h.spindle_speed_factor or 1.0 }}</div>
     <div><b>Feedrate factor:</b> {{ h.feedrate_factor or 1.0 }}</div>
+    {% if h.famiglia_nome %}<div><b>Famiglia:</b> {{ h.famiglia_nome }} (k_vc={{ h.fam_k_vc or 1.0 }} k_fz={{ h.fam_k_fz or 1.0 }})</div>{% endif %}
   </div>
+</div>
 </div>
 {% if segmenti %}
 <div class="card" style="margin-bottom:1rem">
@@ -1858,12 +1867,25 @@ HOLDER_DETAIL_HTML = BASE.replace('{% block content %}{% endblock %}', """
 @app.route('/holders/<int:hid>')
 def holder_detail(hid):
     conn = get_conn()
-    h = conn.execute("SELECT * FROM portautensile WHERE id=?", (hid,)).fetchone()
+    h = conn.execute("""SELECT p.*, COALESCE(fh.nome,'') as famiglia_nome,
+        fh.k_vc as fam_k_vc, fh.k_fz as fam_k_fz
+        FROM portautensile p LEFT JOIN FamiglieHolder fh ON p.famiglia_holder_id=fh.id
+        WHERE p.id=?""", (hid,)).fetchone()
     if not h:
         conn.close(); return redirect('/holders')
     segmenti = [dict(r) for r in conn.execute("SELECT * FROM portautensile_segmento WHERE id_portautensile=? ORDER BY numero_segmento", (hid,))]
     conn.close()
-    return render_template_string(HOLDER_DETAIL_HTML, h=dict(h), segmenti=segmenti, active='holders')
+    import json as _json
+    svg_holder = ''
+    hd = dict(h)
+    if hd.get('geometria_json'):
+        try:
+            from svg_holder import render_holder_svg
+            svg_holder = render_holder_svg(_json.loads(hd['geometria_json']))
+        except Exception:
+            pass
+    return render_template_string(HOLDER_DETAIL_HTML, h=hd, segmenti=segmenti,
+        svg_holder=svg_holder, active='holders')
 
 
 # ---------------------------------------------------------------
@@ -2751,7 +2773,14 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
   </div>
 </div>
 
-<div class="card" style="margin-bottom:1rem">
+<div style="display:flex;gap:1.25rem;margin-bottom:1rem;align-items:flex-start">
+{% if svg_fresa %}
+<div style="width:200px;min-width:200px;border:1px solid #e2e2df;border-radius:8px;padding:8px;background:#fafaf8;text-align:center">
+  {{ svg_fresa|safe }}
+  <div style="font-size:10px;color:#aaa;margin-top:4px">Profilo 2D</div>
+</div>
+{% endif %}
+<div class="card" style="margin-bottom:0;flex:1">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Geometria</h3>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem .75rem;font-size:13px">
     <div><span style="color:#888">Diametro:</span> <b>{{ u.diametro_mm or '—' }}</b> mm</div>
@@ -2765,6 +2794,31 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <div><span style="color:#888">Famiglia:</span> <b>{{ u.fam_nome or '— non assegnata —' }}</b></div>
   </div>
 </div>
+</div>
+
+{% if parametri_calc %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Parametri calcolati (dalla famiglia {{ u.fam_nome }})</h3>
+  <div style="overflow-x:auto">
+  <table style="font-size:12px">
+  <thead><tr><th>Lavorazione</th><th>Scopo</th><th>Materiale</th><th>Vc</th><th>n rpm</th><th>fz</th><th>Ap</th><th>Ae</th></tr></thead>
+  <tbody>
+  {% for p in parametri_calc %}
+  <tr>
+    <td><b>{{ p.lavorazione }}</b></td>
+    <td style="color:#888;font-size:11px">{{ p.scopo[:4] }}</td>
+    <td>{{ p.materiale }}</td>
+    <td style="font-family:monospace">{{ p.vc }}</td>
+    <td style="font-family:monospace">{{ p.n_rpm|int }}</td>
+    <td style="font-family:monospace">{{ p.fz }}</td>
+    <td style="font-family:monospace">{{ p.ap }}</td>
+    <td style="font-family:monospace">{{ p.ae }}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  </div>
+</div>
+{% endif %}
 
 {% if condizioni %}
 <div class="card" style="margin-bottom:1rem">
@@ -2850,9 +2904,50 @@ def dettaglio_utensile(uid):
             WHERE p.codice_interno=?""", (u['nome_pinza'],)).fetchone()
         if h:
             holder = dict(h)
+    # SVG fresa
+    import json as _json
+    svg_fresa = ''
+    try:
+        from svg_holder import render_fresa_svg
+        geos = conn.execute("SELECT tipo, elementi_json FROM geometria_fresa WHERE utensile_id=? ORDER BY tipo", (uid,)).fetchall()
+        profilo = taglio = None
+        for g in geos:
+            if g[0] == 'profilo_esterno': profilo = _json.loads(g[1])
+            elif g[0] == 'area_taglio': taglio = _json.loads(g[1])
+        svg_fresa = render_fresa_svg(
+            elementi_profilo=profilo or [],
+            elementi_taglio=taglio,
+            diametro_mm=u.get('diametro_mm'),
+            lunghezza_mm=u.get('lunghezza_totale_mm'),
+            tipo=u.get('tipo_codice', 'FLAT'),
+            raggio_mm=u.get('raggio_punta_mm') or 0)
+    except Exception:
+        pass
+    # Parametri calcolati dalla famiglia
+    parametri_calc = []
+    if u.get('famiglia_id') and u.get('diametro_mm'):
+        try:
+            parametri_calc = [dict(r) for r in conn.execute("""
+                SELECT l.nome as lavorazione, l.scopo,
+                    m.nome_master as materiale,
+                    ROUND(l.vc_base * pb.k_vc, 1) as vc,
+                    ROUND(l.vc_base * pb.k_vc * 1000 / (3.14159 * ?), 0) as n_rpm,
+                    ROUND(l.fz_D_ratio * ? * pb.k_fz, 3) as fz,
+                    ROUND(l.ap_D_ratio * ? * pb.k_ap, 3) as ap,
+                    ROUND(l.ae_D_ratio * ? * pb.k_ae, 3) as ae
+                FROM ParametriBase pb
+                JOIN Lavorazioni l ON pb.lavorazione_id = l.id
+                JOIN Materiali m ON pb.materiale_id = m.id
+                WHERE pb.famiglia_id = ?
+                ORDER BY m.nome_master, l.scopo, l.nome""",
+                (u['diametro_mm'], u['diametro_mm'], u['diametro_mm'], u['diametro_mm'], u['famiglia_id']))]
+        except Exception:
+            pass
     conn.close()
     return render_template_string(DETTAGLIO_HTML, u=u, condizioni=condizioni,
-        cond_grouped=cond_grouped, holder=holder, active='staging' if u['stato']=='staging' else 'master')
+        cond_grouped=cond_grouped, holder=holder, svg_fresa=svg_fresa,
+        parametri_calc=parametri_calc,
+        active='staging' if u['stato']=='staging' else 'master')
 
 
 MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
