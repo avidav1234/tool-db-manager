@@ -92,21 +92,21 @@ def _tipo_from_folder(path):
 
 def _ensure_columns(conn):
     """Aggiunge colonne mancanti per compat con DB vecchi."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(utensile)")}
     for col, decl in [
         ('stato', "TEXT DEFAULT 'staging'"),
         ('famiglia_id', 'INTEGER'),
         ('impiego', 'TEXT'),
         ('promosso_da', 'TEXT'),
         ('promosso_il', 'TEXT'),
+        ('gage_length_mm', 'REAL'),
         ('fattore_s', 'REAL DEFAULT 1.0'),
         ('fattore_f', 'REAL DEFAULT 1.0'),
         ('fattore_ae', 'REAL DEFAULT 1.0'),
         ('fattore_ap', 'REAL DEFAULT 1.0'),
     ]:
-        try:
+        if col not in existing:
             conn.execute(f"ALTER TABLE utensile ADD COLUMN {col} {decl}")
-        except sqlite3.OperationalError:
-            pass
     conn.commit()
 
 
