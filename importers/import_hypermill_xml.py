@@ -23,9 +23,11 @@ _BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 TIPO_MAP = {
     'radiusMill': 'BULL', 'ballMill': 'BALL', 'flatMill': 'FLAT',
-    'drill': 'DRILL', 'tap': 'TAP', 'reamer': 'REAM',
-    'chamferMill': 'SPOT', 'threadMill': 'THREAD', 'lollipopMill': 'LOLLIPOP',
-    'formMill': 'FORM',
+    'endMill': 'FLAT', 'drill': 'DRILL', 'drilTool': 'DRILL',
+    'tap': 'TAP', 'reamer': 'REAM',
+    'chamferMill': 'SPOT', 'chamferedcutter': 'BULL',
+    'threadMill': 'THREAD', 'lollipopMill': 'LOLLIPOP', 'lollipop': 'LOLLIPOP',
+    'woodruff': 'LOLLIPOP', 'formMill': 'FORM',
 }
 
 # Fallback tipo da percorso cartella
@@ -162,6 +164,8 @@ def import_xml(filepath, db_path, dry_run=False):
         'holders_importati': 0,
         'errori': [],
     }
+    from collections import Counter
+    _tipi_counter = Counter()
 
     if dry_run:
         print(f"Trovati: {len(tools_by_name)} tool, {len(nctool_list)} ncTool, {len(holders_by_name)} holder")
@@ -294,6 +298,7 @@ def import_xml(filepath, db_path, dry_run=False):
         # Dati tool (geometria) — estrazione COMPLETA
         ttype_xml = tool_el.get('type', '')
         tipo_codice = TIPO_MAP.get(ttype_xml, _tipo_from_folder(folder_path))
+        _tipi_counter[tipo_codice] += 1
         id_tipo = _get_tipo_id(conn, tipo_codice)
 
         diametro = _float(_param(tool_el, 'toolDiameter'))
@@ -487,6 +492,8 @@ def import_xml(filepath, db_path, dry_run=False):
           f"{stats['condizioni_importate']} condizioni, "
           f"{stats['holders_importati']} holders, "
           f"{len(stats['errori'])} errori")
+    print(f"  Tipi XML trovati: {_tipi_counter.most_common()}")
+    stats['tipi'] = dict(_tipi_counter)
     return stats
 
 
