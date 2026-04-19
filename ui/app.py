@@ -2916,12 +2916,13 @@ def dettaglio_utensile(uid):
     svg_fresa = ''
     try:
         from ui.svg_holder import render_fresa_svg
-        geos = conn.execute("SELECT tipo, elementi_json FROM geometria_fresa WHERE utensile_id=? ORDER BY tipo", (uid,)).fetchall()
-        profilo = taglio = None
+        geos = conn.execute("SELECT tipo, elementi_json FROM geometria_fresa WHERE utensile_id=? AND tipo IN ('profilo_esterno','profilo_gambo','profilo_taglio','area_taglio') ORDER BY tipo", (uid,)).fetchall()
+        _profilo_e = _profilo_g = _profilo_t = _area_t = None
         for g in geos:
-            if g[0] == 'profilo_esterno': profilo = _json.loads(g[1])
-            elif g[0] == 'area_taglio': taglio = _json.loads(g[1])
-        # Carica profilo prolunga se extension_contour presente
+            if g[0] == 'profilo_esterno': _profilo_e = _json.loads(g[1])
+            elif g[0] == 'profilo_gambo': _profilo_g = _json.loads(g[1])
+            elif g[0] == 'profilo_taglio': _profilo_t = _json.loads(g[1])
+            elif g[0] == 'area_taglio': _area_t = _json.loads(g[1])
         _ext_prof = None
         if u.get('extension_contour'):
             _ext_row = conn.execute("SELECT elementi_json FROM geometria_extension WHERE nome=?",
@@ -2929,8 +2930,6 @@ def dettaglio_utensile(uid):
             if _ext_row:
                 _ext_prof = _json.loads(_ext_row[0])
         svg_fresa = render_fresa_svg(
-            elementi_profilo=profilo or [],
-            elementi_taglio=taglio,
             diametro_mm=u.get('diametro_mm') or 0,
             lunghezza_totale_mm=u.get('lunghezza_totale_mm') or 0,
             lunghezza_tagl_mm=u.get('lunghezza_tagl_mm'),
@@ -2939,15 +2938,22 @@ def dettaglio_utensile(uid):
             diam_stelo_mm=u.get('diam_stelo_mm'),
             raggio_punta_mm=u.get('raggio_punta_mm') or 0,
             tipo=u.get('tipo_codice', 'FLAT'),
+            angolo_punta_gradi=u.get('angolo_punta_gradi'),
             shaft_chamfer_len=u.get('shaft_chamfer_length_mm'),
             shaft_chamfer_pos=u.get('shaft_chamfer_pos_mm'),
             shaft_chamfer_angle=u.get('shaft_chamfer_angle_gradi'),
+            shaft_type=u.get('shaft_type'), collar=u.get('collar') or 0,
+            chamfer_angle_gradi=u.get('chamfer_angle_gradi'),
+            chamfer_height_mm=u.get('chamfer_height_mm'),
+            disc_height_mm=u.get('disc_height_mm'),
             reach_tool_mm=u.get('reach_tool_mm'),
             reach_extension_mm=u.get('reach_extension_mm'),
             extension_name=u.get('extension_name'),
             extension_profilo=_ext_prof,
-            d_gola_mm=u.get('d_gola_mm'),
-            h_gola_mm=u.get('h_gola_mm'))
+            d_gola_mm=u.get('d_gola_mm'), h_gola_mm=u.get('h_gola_mm'),
+            tip_diameter_mm=u.get('tip_diameter_mm'),
+            elementi_profilo=_profilo_e, elementi_gambo=_profilo_g,
+            elementi_taglio=_profilo_t, alias=u.get('alias'))
     except Exception as e:
         print(f"SVG fresa error: {e}", flush=True)
     # Parametri calcolati dalla famiglia
