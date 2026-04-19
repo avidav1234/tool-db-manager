@@ -402,7 +402,7 @@ def import_xml(filepath, db_path, dry_run=False):
                 elif ctype == 'extension':
                     reach_ext = creach
                     ext_name = cname
-                    ext_contour = comp.get('contour', '') or cname
+                    ext_contour = cname  # usa il name (corrisponde a geometria_extension.nome)
                 elif ctype == 'holder':
                     holder_name_val = cname
                     holder_reach = creach

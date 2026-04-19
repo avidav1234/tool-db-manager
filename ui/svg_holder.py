@@ -105,7 +105,10 @@ def render_fresa_svg(
     if L_utile < L_tagl:
         L_utile = L_tagl
     if shaft_type == 'none' or not diam_stelo_mm or diam_stelo_mm <= 0:
-        D_stelo = D if shaft_type == 'none' else D
+        D_stelo = D
+    elif D > 0 and diam_stelo_mm > 0 and D > diam_stelo_mm * 1.2:
+        # Fresa a inserti: Dst e' il filetto interno, non il corpo esterno.
+        D_stelo = tip_diameter_mm if (tip_diameter_mm and tip_diameter_mm > diam_stelo_mm) else D
     else:
         D_stelo = diam_stelo_mm
     FP = fuori_pinza_mm or lunghezza_totale_mm or 60
