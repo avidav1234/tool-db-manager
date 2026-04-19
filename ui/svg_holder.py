@@ -116,7 +116,7 @@ def render_fresa_svg(
     # Gola coerenza
     D_gola = d_gola_mm or 0
     H_gola = h_gola_mm or 0
-    if D_gola > 0 and not (min(D, D_stelo) * 0.5 < D_gola < D):
+    if D_gola > 0 and not (0 < D_gola < D):
         D_gola = 0; H_gola = 0
     tip_D = tip_diameter_mm or 0
 
@@ -177,7 +177,7 @@ def render_fresa_svg(
     elif tipo_r == 'BALL':
         arc_r = r_tagl * scala
         y_arc = yz(R)
-        parts.append(f'<path d="M {xl(r_tagl):.1f},{y_arc:.1f} A {arc_r:.1f},{arc_r:.1f} 0 1 0 {xr(r_tagl):.1f},{y_arc:.1f} Z" fill="#1e3a8a" stroke="#1e40af" stroke-width="1"/>')
+        parts.append(f'<path d="M {xl(r_tagl):.1f},{y_arc:.1f} A {arc_r:.1f},{arc_r:.1f} 0 0 1 {xr(r_tagl):.1f},{y_arc:.1f} Z" fill="#1e3a8a" stroke="#1e40af" stroke-width="1"/>')
         if L_tagl > R:
             parts.append(trap(R, L_tagl, r_tagl, r_tagl, '#1e3a8a', '#1e40af'))
     elif tipo_r == 'BULL' and R > 0:
@@ -195,9 +195,9 @@ def render_fresa_svg(
     if D_gola > 0 and H_gola > 0.5:
         r_gola = D_gola / 2
         z_gola_end = L_tagl + H_gola
-        parts.append(trap(L_tagl, L_tagl + H_gola * 0.15, r_tagl, r_gola, '#7c3aed', '#6d28d9', 0.4))
-        parts.append(trap(L_tagl + H_gola * 0.15, z_gola_end - H_gola * 0.15, r_gola, r_gola, '#7c3aed', '#6d28d9', 0.4))
-        parts.append(trap(z_gola_end - H_gola * 0.15, z_gola_end, r_gola, r_stelo, '#7c3aed', '#6d28d9', 0.4))
+        parts.append(trap(L_tagl, L_tagl + H_gola * 0.15, r_tagl, r_gola, '#7c3aed', '#6d28d9', 0.85))
+        parts.append(trap(L_tagl + H_gola * 0.15, z_gola_end - H_gola * 0.15, r_gola, r_gola, '#7c3aed', '#6d28d9', 0.85))
+        parts.append(trap(z_gola_end - H_gola * 0.15, z_gola_end, r_gola, r_stelo, '#7c3aed', '#6d28d9', 0.85))
         z_post = z_gola_end
     elif L_utile > L_tagl:
         # Zona utile (scaricata)
@@ -208,7 +208,8 @@ def render_fresa_svg(
     # ── GAMBO (z_post → r_tool) ──
     z_gambo_end = r_tool if r_ext > 0 else FP
     if z_gambo_end > z_post:
-        r_bot = D_gola / 2 if D_gola > 0 else r_tagl
+        r_u_eff = r_tagl - 0.2 if r_tagl > 1 else r_tagl
+        r_bot = D_gola / 2 if D_gola > 0 else (r_u_eff if L_utile > L_tagl else r_tagl)
         if shaft_chamfer_pos and shaft_chamfer_pos > z_post:
             z_ch = min(shaft_chamfer_pos, z_gambo_end)
             parts.append(trap(z_post, z_ch, r_bot, r_stelo, '#e5e7eb', '#9ca3af'))
@@ -241,11 +242,11 @@ def render_fresa_svg(
                 prev = (ex_e, ey_e)
             pl = []
             for e in reversed(extension_profilo):
-                sx_e = float(e.get('sx', 0)); sy_e = float(e.get('sy', 0))
-                xm, ym = ext_svg(-sx_e, sy_e); pl.append(f'L {xm:.1f},{ym:.1f}')
-            parts.append(f'<path d="{" ".join(pr)} {" ".join(pl)} Z" fill="#c4b5fd" fill-opacity="0.3" stroke="#8b5cf6" stroke-width="1"/>')
+                ex_e = float(e.get('ex', 0)); ey_e = float(e.get('ey', 0))
+                xm, ym = ext_svg(-ex_e, ey_e); pl.append(f'L {xm:.1f},{ym:.1f}')
+            parts.append(f'<path d="{" ".join(pr)} {" ".join(pl)} Z" fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1"/>')
         else:
-            parts.append(trap(r_tool, r_tool + r_ext, r_stelo, r_p, '#c4b5fd', '#8b5cf6', 0.5))
+            parts.append(trap(r_tool, r_tool + r_ext, r_stelo, r_p, '#c4b5fd', '#8b5cf6'))
         if extension_name:
             yl = yz(r_tool + r_ext / 2)
             parts.append(f'<text x="{xr(r_p) + 4:.0f}" y="{yl + 3:.1f}" font-size="8" fill="#8b5cf6" font-family="sans-serif">{extension_name[:25]}</text>')
