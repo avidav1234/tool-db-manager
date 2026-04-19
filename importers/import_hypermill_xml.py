@@ -338,7 +338,6 @@ def import_xml(filepath, db_path, dry_run=False):
         angolo_punta = chamfer_angle or cone_angle
 
         # Dati ncTool (assemblaggio) — tutti i campi
-        fuori_pinza = _float(_param(nct, 'clearanceLength'))
         gage_length = _float(_param(nct, 'gageLength'))
         k_vc = _float(_param(nct, 'spindleSpeedFactor'), 1.0)
         k_fz = _float(_param(nct, 'feedrateFactor'), 1.0)
@@ -349,11 +348,38 @@ def import_xml(filepath, db_path, dry_run=False):
         note_asm = _param(nct, 'comment')
         nctool_guid = _param(nct, 'objGuid', '')
 
+        # Estrai components: reach di tool, extension, holder
+        reach_tool = 0.0
+        reach_ext = 0.0
+        ext_name = None
+        holder_name_val = None
+        holder_reach = 0.0
+        comp_el = nct.find('components')
+        if comp_el is not None:
+            for comp in comp_el.findall('component'):
+                ctype = comp.get('type', '')
+                cname = comp.get('name', '')
+                creach = float(comp.get('reach', 0) or 0)
+                if ctype == 'tool':
+                    reach_tool = creach
+                    if not tool_name:
+                        tool_name = cname
+                elif ctype == 'extension':
+                    reach_ext = creach
+                    ext_name = cname
+                elif ctype == 'holder':
+                    holder_name_val = cname
+                    holder_reach = creach
+        # Se holder_name non trovato dai components, usa quello dalle iterazioni precedenti
+        if holder_name_val:
+            holder_name = holder_name_val
+
+        # Fuori pinza vero = reach_tool + reach_extension
+        fuori_pinza = reach_tool + reach_ext if (reach_tool or reach_ext) else _float(_param(nct, 'clearanceLength'))
+
         codice_interno = alias
 
-        # Tutti i valori per INSERT/UPDATE
-        # 44 valori che corrispondono alle 44 colonne dopo codice_interno nell'INSERT
-        # (id_fornitore e stato sono aggiunti separatamente)
+        # 49 valori per INSERT/UPDATE (44 originali + 5 nuovi reach/extension/holder)
         u_vals = (alias, id_tipo, id_mat_default,
             diametro or 0, raggio or 0, taglienti,
             l_tot or 0, l_tagl or 0, diam_stelo, cod_catalogo,
@@ -364,6 +390,7 @@ def import_xml(filepath, db_path, dry_run=False):
             cut_len_factor, cut_wid_factor, max_rpm_nct, max_feed_nct, note_asm,
             nominal_diam, minor_thread_d, passo_max, passo_min, tol_inf, tol_sup,
             dir_rotazione_val, angolo_punta, commento_tool,
+            reach_tool, reach_ext, ext_name, holder_name, holder_reach,
             'HyperMill', nctool_guid, tool_name)
 
         existing = conn.execute("SELECT id FROM utensile WHERE codice_interno=?", (codice_interno,)).fetchone()
@@ -380,6 +407,7 @@ def import_xml(filepath, db_path, dry_run=False):
                 nominal_diameter_mm=?, minor_thread_diameter_mm=?, passo_max_mm=?, passo_min_mm=?,
                 tolleranza_inf_mm=?, tolleranza_sup_mm=?,
                 dir_rotazione=?, angolo_punta_gradi=?, note=?,
+                reach_tool_mm=?, reach_extension_mm=?, extension_name=?, holder_name=?, holder_reach_mm=?,
                 cam_sorgente=?, id_originale_cam=?, descrizione=?
                 WHERE id=?""", u_vals + (uid,))
         else:
@@ -395,8 +423,9 @@ def import_xml(filepath, db_path, dry_run=False):
                 nominal_diameter_mm, minor_thread_diameter_mm, passo_max_mm, passo_min_mm,
                 tolleranza_inf_mm, tolleranza_sup_mm,
                 dir_rotazione, angolo_punta_gradi, note,
+                reach_tool_mm, reach_extension_mm, extension_name, holder_name, holder_reach_mm,
                 cam_sorgente, id_originale_cam, descrizione, stato)
-                VALUES (""" + ','.join(['?'] * 45) + ")",
+                VALUES (""" + ','.join(['?'] * 50) + ")",
                 (codice_interno,) + u_vals + ('staging',))
             uid = cur.lastrowid
             stats['utensili_importati'] += 1
