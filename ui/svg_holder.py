@@ -86,219 +86,173 @@ def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
                      raggio_punta_mm=0, tipo='BULL',
                      shaft_chamfer_len=None, shaft_chamfer_pos=None,
                      shaft_chamfer_angle=None,
-                     width=200, height=350):
-    """Genera SVG del profilo fresa.
+                     reach_tool_mm=None, reach_extension_mm=None, extension_name=None,
+                     d_gola_mm=None, h_gola_mm=None,
+                     width=220, height=400):
+    """Genera SVG del profilo fresa con zone colorate + prolunga + gola.
 
-    Se elementi_profilo disponibile: usa cont2D reale.
-    Altrimenti: fallback parametrico con 3 zone colorate.
-    Orientamento: punta in basso, gambo in alto.
+    Orientamento: punta in basso, gambo/prolunga in alto.
+    Altezza disegnata = fuori_pinza_mm (solo parte che sporge dal holder).
     """
-    # ── BRANCH A: cont2D reale ──
-    if elementi_profilo and len(elementi_profilo) > 3:
-        all_r = [abs(float(e.get('ex', e.get('sx', 0)))) for e in elementi_profilo]
-        all_z = [abs(float(e.get('ey', e.get('sy', 0)))) for e in elementi_profilo]
-        max_r = max(all_r) if all_r else (diametro_mm or 10) / 2
-        max_z = max(all_z) if all_z else (lunghezza_totale_mm or 60)
-        if max_r <= 0: max_r = 1
-        if max_z <= 0: max_z = 1
-        mg = 25
-        lab = 40
-        sc_r = (width / 2 - mg - lab) / max_r
-        sc_z = (height - 2 * mg) / max_z
-        cvx = width / 2 - lab / 2
-        path = _cont2d_to_svg_path(elementi_profilo, cvx, height, mg, sc_r, sc_z)
-        if path:
-            fp_line = ''
-            if fuori_pinza_mm and fuori_pinza_mm > 0:
-                y_fp = (height - mg) - fuori_pinza_mm * sc_z
-                if mg < y_fp < height - mg:
-                    fp_line = (f'<line x1="{mg}" y1="{y_fp:.1f}" x2="{cvx + max_r * sc_r + 5:.0f}" y2="{y_fp:.1f}" '
-                               f'stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>'
-                               f'<text x="{cvx + max_r * sc_r + 8:.0f}" y="{y_fp + 4:.1f}" '
-                               f'font-size="9" fill="#f59e0b" font-family="monospace">{fuori_pinza_mm:.1f}</text>')
-            d_label = f'D{diametro_mm}'
-            if raggio_punta_mm and raggio_punta_mm > 0:
-                d_label += f'R{raggio_punta_mm}'
-            return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-                    f'viewBox="0 0 {width} {height}" style="background:transparent">'
-                    f'<line x1="{cvx}" y1="{mg}" x2="{cvx}" y2="{height - mg}" '
-                    f'stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="3,3"/>'
-                    f'<path d="{path}" fill="#1e3a8a" fill-opacity="0.15" stroke="#1e3a8a" stroke-width="1.2"/>'
-                    f'{fp_line}'
-                    f'<text x="{mg}" y="{height - 5}" font-size="9" fill="#666" font-family="sans-serif">{d_label}</text>'
-                    f'</svg>')
-
-    # ── BRANCH B: fallback parametrico ──
     D = diametro_mm or 10
     R = raggio_punta_mm or 0
-    L_tot = lunghezza_totale_mm or 60
-    L_tagl = lunghezza_tagl_mm or L_tot * 0.25
+    L_tagl = lunghezza_tagl_mm or (lunghezza_totale_mm or 60) * 0.25
     L_utile = lunghezza_utile_mm or L_tagl
     if L_utile < L_tagl:
         L_utile = L_tagl
     D_stelo = diam_stelo_mm or D
-    margin = 20
-    label_w = 50  # spazio per label a destra
+    FP = fuori_pinza_mm or lunghezza_totale_mm or 60
+    r_ext = reach_extension_mm or 0
+    r_tool = reach_tool_mm or FP
+    D_gola = d_gola_mm or 0
+    H_gola = h_gola_mm or 0
 
-    # Scala: l'intero utensile deve stare in (height - 2*margin)
-    max_r = max(D / 2, D_stelo / 2)
-    scala_y = (height - 2 * margin) / L_tot if L_tot > 0 else 1
-    scala_x = (width / 2 - margin - label_w / 2) / max_r if max_r > 0 else 1
-    scala = min(scala_x, scala_y)
-    cx = width / 2  # asse centrale
+    # Altezza totale disegnata = fuori_pinza (solo parte che sporge)
+    H_tot = FP
+    margin = 25
+    label_w = 55
+    max_r = max(D / 2, D_stelo / 2, D * 0.65 if r_ext > 0 else 0)
+    if max_r <= 0:
+        max_r = 5
 
-    def ty(z_from_top):
-        """z=0 in alto (gambo), z=L_tot in basso (punta)."""
-        return margin + z_from_top * scala
+    scala = min((height - 2 * margin) / H_tot if H_tot > 0 else 1,
+                (width / 2 - margin - label_w / 2) / max_r)
+    cx = (width - label_w) / 2
 
-    def tx_r(r):
-        return cx + r * scala
+    def ty(z_mm):
+        """z=0 punta (basso), z=H_tot sommita (alto). Ritorna y SVG."""
+        return (height - margin) - z_mm * scala
 
-    def tx_l(r):
-        return cx - r * scala
-
-    # Coordinate Y delle zone (z misurata dall'alto)
-    y_top = margin                          # top gambo
-    y_chamfer = ty(L_tot - L_utile) if L_utile < L_tot else y_top
-    y_utile_top = ty(L_tot - L_utile)       # inizio zona utile
-    y_tagl_top = ty(L_tot - L_tagl)         # inizio zona tagliente
-    y_bottom = ty(L_tot)                    # punta (in basso)
+    def txr(r): return cx + r * scala
+    def txl(r): return cx - r * scala
 
     r_tagl = D / 2
     r_stelo = D_stelo / 2
+    r_gola = D_gola / 2 if D_gola > 0 else 0
+    r_prolunga = D * 0.65 if r_ext > 0 else 0
 
     parts = []
 
-    # ── ZONA 3: GAMBO (in alto) ──
-    if L_utile < L_tot:
-        h_gambo = (L_tot - L_utile) * scala
-        if h_gambo > 0.5:
-            # Transizione (shaft chamfer) dal gambo all'utile
-            if shaft_chamfer_pos and shaft_chamfer_angle and shaft_chamfer_angle > 0:
-                # Il chamfer e' a shaft_chamfer_pos mm dalla punta
-                y_ch_start = ty(L_tot - shaft_chamfer_pos)
-                y_ch_end = y_utile_top
-                # Gambo sopra il chamfer
-                parts.append(f'<rect x="{tx_l(r_stelo):.1f}" y="{y_top:.1f}" '
-                    f'width="{r_stelo*2*scala:.1f}" height="{y_ch_start - y_top:.1f}" '
-                    f'fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>')
-                # Trapezio chamfer
-                pts = (f'{tx_l(r_stelo):.1f},{y_ch_start:.1f} '
-                       f'{tx_r(r_stelo):.1f},{y_ch_start:.1f} '
-                       f'{tx_r(r_tagl):.1f},{y_ch_end:.1f} '
-                       f'{tx_l(r_tagl):.1f},{y_ch_end:.1f}')
-                parts.append(f'<polygon points="{pts}" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>')
-            else:
-                # Gambo semplice con transizione diretta
-                if abs(r_stelo - r_tagl) > 0.1:
-                    # Trapezio per la transizione
-                    mid_y = y_utile_top - min(3 * scala, (y_utile_top - y_top) * 0.3)
-                    pts = (f'{tx_l(r_stelo):.1f},{y_top:.1f} '
-                           f'{tx_r(r_stelo):.1f},{y_top:.1f} '
-                           f'{tx_r(r_stelo):.1f},{mid_y:.1f} '
-                           f'{tx_r(r_tagl):.1f},{y_utile_top:.1f} '
-                           f'{tx_l(r_tagl):.1f},{y_utile_top:.1f} '
-                           f'{tx_l(r_stelo):.1f},{mid_y:.1f}')
-                    parts.append(f'<polygon points="{pts}" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>')
-                else:
-                    parts.append(f'<rect x="{tx_l(r_stelo):.1f}" y="{y_top:.1f}" '
-                        f'width="{r_stelo*2*scala:.1f}" height="{y_utile_top - y_top:.1f}" '
-                        f'fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>')
+    # ═══ BRANCH A: cont2D reale per la fresa ═══
+    use_cont2d = elementi_profilo and len(elementi_profilo) > 3
 
-    # ── ZONA 2: UTILE/SCARICO (tra tagliente e gambo) ──
-    h_utile = (L_utile - L_tagl) * scala
-    if h_utile > 0.5:
-        parts.append(f'<rect x="{tx_l(r_tagl):.1f}" y="{y_utile_top:.1f}" '
-            f'width="{r_tagl*2*scala:.1f}" height="{h_utile:.1f}" '
-            f'fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>')
-
-    # ── ZONA 1: TAGLIENTE (in basso) ──
-    h_tagl = L_tagl * scala
-    if tipo == 'BALL':
-        # Semicerchio in basso + cilindro sopra
-        arc_r = r_tagl * scala
-        cyl_h = h_tagl - arc_r
-        if cyl_h > 0:
-            parts.append(f'<rect x="{tx_l(r_tagl):.1f}" y="{y_tagl_top:.1f}" '
-                f'width="{r_tagl*2*scala:.1f}" height="{cyl_h:.1f}" '
-                f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-        # Arco punta
-        arc_top = y_bottom - arc_r
-        parts.append(f'<path d="M {tx_l(r_tagl):.1f},{arc_top:.1f} '
-            f'A {arc_r:.1f},{arc_r:.1f} 0 0 0 {tx_r(r_tagl):.1f},{arc_top:.1f} '
-            f'L {tx_r(r_tagl):.1f},{arc_top:.1f} Z" '
-            f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-        # Fill il semicerchio separatamente per chiudere
-        parts.append(f'<path d="M {tx_l(r_tagl):.1f},{arc_top:.1f} '
-            f'A {arc_r:.1f},{arc_r:.1f} 0 1 0 {tx_r(r_tagl):.1f},{arc_top:.1f} Z" '
-            f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-
-    elif tipo == 'BULL':
-        # Cilindro con raccordo R agli angoli inferiori
-        cr = min(R, r_tagl) * scala
-        cyl_h = h_tagl - cr
-        if cyl_h > 0:
-            parts.append(f'<rect x="{tx_l(r_tagl):.1f}" y="{y_tagl_top:.1f}" '
-                f'width="{r_tagl*2*scala:.1f}" height="{cyl_h:.1f}" '
-                f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-        # Raccordo + base
-        y_arc = y_bottom - cr
-        r_inner = (r_tagl - R) * scala
-        if R > 0 and cr > 1:
-            path = (f'M {tx_l(r_tagl):.1f},{y_arc:.1f} '
-                    f'L {tx_l(r_tagl):.1f},{y_arc:.1f} '
-                    f'A {cr:.1f},{cr:.1f} 0 0 0 {cx - r_inner:.1f},{y_bottom:.1f} '
-                    f'L {cx + r_inner:.1f},{y_bottom:.1f} '
-                    f'A {cr:.1f},{cr:.1f} 0 0 0 {tx_r(r_tagl):.1f},{y_arc:.1f} Z')
-            parts.append(f'<path d="{path}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-        else:
-            parts.append(f'<rect x="{tx_l(r_tagl):.1f}" y="{y_arc:.1f}" '
-                f'width="{r_tagl*2*scala:.1f}" height="{cr:.1f}" '
-                f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-
-    elif tipo == 'DRILL':
-        # Cono punta + cilindro
-        punta_h = r_tagl * 0.6 * scala
-        cyl_h = h_tagl - punta_h / scala * scala
-        if cyl_h > 0:
-            parts.append(f'<rect x="{tx_l(r_tagl):.1f}" y="{y_tagl_top:.1f}" '
-                f'width="{r_tagl*2*scala:.1f}" height="{cyl_h:.1f}" '
-                f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-        pts = (f'{tx_l(r_tagl):.1f},{y_bottom - punta_h:.1f} '
-               f'{tx_r(r_tagl):.1f},{y_bottom - punta_h:.1f} '
-               f'{cx:.1f},{y_bottom:.1f}')
-        parts.append(f'<polygon points="{pts}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
-
+    if use_cont2d:
+        all_r_c = [abs(float(e.get('ex', e.get('sx', 0)))) for e in elementi_profilo]
+        all_z_c = [abs(float(e.get('ey', e.get('sy', 0)))) for e in elementi_profilo]
+        max_r_c = max(all_r_c) if all_r_c else r_tagl
+        max_z_c = max(all_z_c) if all_z_c else r_tool
+        if max_r_c <= 0: max_r_c = 1
+        if max_z_c <= 0: max_z_c = 1
+        # Riscala per far stare il cont2D nella zona fresa (da 0 a r_tool)
+        sc_r = (width / 2 - margin - label_w / 2) / max(max_r_c, r_prolunga or 1)
+        sc_z = (r_tool * scala) / max_z_c if max_z_c > 0 else scala
+        path = _cont2d_to_svg_path(elementi_profilo, cx, height, margin, sc_r, sc_z)
+        if path:
+            parts.append(f'<path d="{path}" fill="#1e3a8a" fill-opacity="0.2" stroke="#1e3a8a" stroke-width="1.2"/>')
     else:
-        # FLAT / TAP / THREAD / REAM — cilindro semplice
-        parts.append(f'<rect x="{tx_l(r_tagl):.1f}" y="{y_tagl_top:.1f}" '
-            f'width="{r_tagl*2*scala:.1f}" height="{h_tagl:.1f}" '
-            f'fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+        # ═══ BRANCH B: parametrico con zone ═══
+        # Zone dal basso verso l'alto
 
-    # ── ASSE CENTRALE ──
-    parts.append(f'<line x1="{cx}" y1="{y_top - 5:.1f}" x2="{cx}" y2="{y_bottom + 5:.1f}" '
+        # Z1: Tagliente (0 → L_tagl)
+        h1 = L_tagl * scala
+        y1_top = ty(L_tagl)
+        y1_bot = ty(0)
+        if tipo == 'BALL':
+            arc_r = r_tagl * scala
+            cyl_h = h1 - arc_r
+            if cyl_h > 0:
+                parts.append(f'<rect x="{txl(r_tagl):.1f}" y="{y1_top:.1f}" width="{r_tagl*2*scala:.1f}" height="{cyl_h:.1f}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+            parts.append(f'<path d="M {txl(r_tagl):.1f},{y1_bot - arc_r:.1f} A {arc_r:.1f},{arc_r:.1f} 0 1 0 {txr(r_tagl):.1f},{y1_bot - arc_r:.1f} Z" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+        elif tipo == 'BULL' and R > 0:
+            cr = min(R, r_tagl) * scala
+            cyl_h = h1 - cr
+            if cyl_h > 0:
+                parts.append(f'<rect x="{txl(r_tagl):.1f}" y="{y1_top:.1f}" width="{r_tagl*2*scala:.1f}" height="{cyl_h:.1f}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+            ri = (r_tagl - R) * scala
+            parts.append(f'<path d="M {txl(r_tagl):.1f},{y1_bot - cr:.1f} A {cr:.1f},{cr:.1f} 0 0 0 {cx - ri:.1f},{y1_bot:.1f} L {cx + ri:.1f},{y1_bot:.1f} A {cr:.1f},{cr:.1f} 0 0 0 {txr(r_tagl):.1f},{y1_bot - cr:.1f} Z" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+        elif tipo == 'DRILL':
+            ph = r_tagl * 0.6 * scala
+            ch = h1 - ph
+            if ch > 0:
+                parts.append(f'<rect x="{txl(r_tagl):.1f}" y="{y1_top:.1f}" width="{r_tagl*2*scala:.1f}" height="{ch:.1f}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+            parts.append(f'<polygon points="{txl(r_tagl):.1f},{y1_bot - ph:.1f} {txr(r_tagl):.1f},{y1_bot - ph:.1f} {cx:.1f},{y1_bot:.1f}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+        else:
+            parts.append(f'<rect x="{txl(r_tagl):.1f}" y="{y1_top:.1f}" width="{r_tagl*2*scala:.1f}" height="{h1:.1f}" fill="#1e3a8a" stroke="#1e40af" stroke-width="1.5"/>')
+
+        # Z2: Gola (L_tagl → L_tagl+H_gola)
+        z_after_tagl = L_tagl
+        if D_gola > 0 and H_gola > 0.5:
+            h_g = H_gola * scala
+            y_g_top = ty(L_tagl + H_gola)
+            y_g_bot = ty(L_tagl)
+            # Trapezio: da r_tagl in basso a r_gola in mezzo a r_tagl/r_stelo in alto
+            pts_g = (f'{txl(r_tagl):.1f},{y_g_bot:.1f} {txr(r_tagl):.1f},{y_g_bot:.1f} '
+                     f'{txr(r_gola):.1f},{y_g_top + h_g*0.2:.1f} {txr(r_gola):.1f},{y_g_top:.1f} '
+                     f'{txl(r_gola):.1f},{y_g_top:.1f} {txl(r_gola):.1f},{y_g_top + h_g*0.2:.1f}')
+            parts.append(f'<polygon points="{pts_g}" fill="#7c3aed" fill-opacity="0.25" stroke="#6d28d9" stroke-width="1"/>')
+            z_after_tagl = L_tagl + H_gola
+
+        # Z3: Utile/scarico (after gola → L_utile)
+        if L_utile > z_after_tagl:
+            h_u = (L_utile - z_after_tagl) * scala
+            y_u = ty(L_utile)
+            r_u = r_tagl - 0.25 if r_tagl > 1 else r_tagl
+            parts.append(f'<rect x="{txl(r_u):.1f}" y="{y_u:.1f}" width="{r_u*2*scala:.1f}" height="{h_u:.1f}" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>')
+
+        # Z4: Gambo (L_utile → r_tool)
+        z_gambo_start = max(L_utile, z_after_tagl)
+        z_gambo_end = r_tool if r_ext > 0 else FP
+        if z_gambo_end > z_gambo_start:
+            h_gam = (z_gambo_end - z_gambo_start) * scala
+            y_gam = ty(z_gambo_end)
+            if abs(r_stelo - r_tagl) > 0.3 and shaft_chamfer_pos:
+                # Transizione conica
+                z_ch = min(shaft_chamfer_pos, z_gambo_end)
+                y_ch = ty(z_ch)
+                y_gs = ty(z_gambo_start)
+                pts_t = (f'{txl(r_tagl):.1f},{y_gs:.1f} {txr(r_tagl):.1f},{y_gs:.1f} '
+                         f'{txr(r_stelo):.1f},{y_ch:.1f} {txr(r_stelo):.1f},{y_gam:.1f} '
+                         f'{txl(r_stelo):.1f},{y_gam:.1f} {txl(r_stelo):.1f},{y_ch:.1f}')
+                parts.append(f'<polygon points="{pts_t}" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>')
+            else:
+                parts.append(f'<rect x="{txl(r_stelo):.1f}" y="{y_gam:.1f}" width="{r_stelo*2*scala:.1f}" height="{h_gam:.1f}" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>')
+
+    # Z5: Prolunga (r_tool → r_tool+r_ext)
+    if r_ext > 0:
+        y_ext_top = ty(r_tool + r_ext)
+        y_ext_bot = ty(r_tool)
+        h_ext = r_ext * scala
+        # Raccordo breve in basso + cilindro + raccordo in alto
+        raccordo = min(2 * scala, h_ext * 0.1)
+        parts.append(f'<polygon points="{txl(r_stelo):.1f},{y_ext_bot:.1f} {txr(r_stelo):.1f},{y_ext_bot:.1f} '
+            f'{txr(r_prolunga):.1f},{y_ext_bot - raccordo:.1f} {txr(r_prolunga):.1f},{y_ext_top + raccordo:.1f} '
+            f'{txr(r_stelo):.1f},{y_ext_top:.1f} {txl(r_stelo):.1f},{y_ext_top:.1f} '
+            f'{txl(r_prolunga):.1f},{y_ext_top + raccordo:.1f} {txl(r_prolunga):.1f},{y_ext_bot - raccordo:.1f}" '
+            f'fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1"/>')
+        # Label prolunga
+        if extension_name:
+            y_lbl = (y_ext_top + y_ext_bot) / 2
+            parts.append(f'<text x="{txr(r_prolunga) + 4:.0f}" y="{y_lbl + 3:.1f}" '
+                f'font-size="8" fill="#8b5cf6" font-family="sans-serif">{extension_name[:25]}</text>')
+
+    # ═══ ASSE CENTRALE ═══
+    parts.append(f'<line x1="{cx}" y1="{ty(H_tot) - 5:.1f}" x2="{cx}" y2="{ty(0) + 5:.1f}" '
         f'stroke="#ddd" stroke-width="0.5" stroke-dasharray="3,3"/>')
 
-    # ── LINEA FUORI PINZA ──
-    if fuori_pinza_mm and fuori_pinza_mm < L_tot * 3:
-        y_fp = ty(L_tot - fuori_pinza_mm)
-        if y_fp > y_top and y_fp < y_bottom:
-            parts.append(f'<line x1="{margin:.0f}" y1="{y_fp:.1f}" x2="{width - margin:.0f}" y2="{y_fp:.1f}" '
-                f'stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,3"/>')
-            parts.append(f'<text x="{width - margin + 2:.0f}" y="{y_fp + 4:.1f}" '
-                f'font-size="10" fill="#f59e0b" font-family="monospace">{fuori_pinza_mm:.1f}</text>')
+    # ═══ LINEA FUORI PINZA (SEMPRE) ═══
+    if FP > 0:
+        y_fp = ty(FP)
+        if y_fp >= margin - 5:
+            parts.append(f'<line x1="{margin - 5:.0f}" y1="{y_fp:.1f}" x2="{txr(max_r) + 5:.0f}" y2="{y_fp:.1f}" '
+                f'stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>')
+            parts.append(f'<text x="{txr(max_r) + 8:.0f}" y="{y_fp + 4:.1f}" '
+                f'font-size="10" fill="#f59e0b" font-family="monospace">{FP:.1f}</text>')
 
-    # ── QUOTE A DESTRA ──
-    x_q = tx_r(max_r) + 8
-    # Diametro
-    parts.append(f'<text x="{x_q:.0f}" y="{y_bottom - 5:.1f}" font-size="9" fill="#888" '
+    # ═══ QUOTA D/R ═══
+    parts.append(f'<text x="{margin:.0f}" y="{height - 5:.0f}" font-size="9" fill="#888" '
         f'font-family="sans-serif">D{D}{"R" + str(R) if R else ""}</text>')
 
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"
-  viewBox="0 0 {width} {height}" style="background:transparent">
-{''.join(parts)}
-</svg>'''
-    return svg
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" style="background:transparent">{"".join(parts)}</svg>'
 
 
 # ═══════════════════════════════════════════════════════════════

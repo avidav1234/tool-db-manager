@@ -1883,7 +1883,7 @@ def holder_detail(hid):
     hd['n_utensili'] = n_utensili
     if hd.get('geometria_json'):
         try:
-            from svg_holder import render_holder_svg
+            from ui.svg_holder import render_holder_svg
             svg_holder = render_holder_svg(_json.loads(hd['geometria_json']))
         except Exception:
             pass
@@ -2915,7 +2915,7 @@ def dettaglio_utensile(uid):
     import json as _json
     svg_fresa = ''
     try:
-        from svg_holder import render_fresa_svg
+        from ui.svg_holder import render_fresa_svg
         geos = conn.execute("SELECT tipo, elementi_json FROM geometria_fresa WHERE utensile_id=? ORDER BY tipo", (uid,)).fetchall()
         profilo = taglio = None
         for g in geos:
@@ -2934,7 +2934,12 @@ def dettaglio_utensile(uid):
             tipo=u.get('tipo_codice', 'FLAT'),
             shaft_chamfer_len=u.get('shaft_chamfer_length_mm'),
             shaft_chamfer_pos=u.get('shaft_chamfer_pos_mm'),
-            shaft_chamfer_angle=u.get('shaft_chamfer_angle_gradi'))
+            shaft_chamfer_angle=u.get('shaft_chamfer_angle_gradi'),
+            reach_tool_mm=u.get('reach_tool_mm'),
+            reach_extension_mm=u.get('reach_extension_mm'),
+            extension_name=u.get('extension_name'),
+            d_gola_mm=u.get('d_gola_mm'),
+            h_gola_mm=u.get('h_gola_mm'))
     except Exception as e:
         print(f"SVG fresa error: {e}", flush=True)
     # Parametri calcolati dalla famiglia
