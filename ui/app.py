@@ -2924,12 +2924,19 @@ def dettaglio_utensile(uid):
         svg_fresa = render_fresa_svg(
             elementi_profilo=profilo or [],
             elementi_taglio=taglio,
-            diametro_mm=u.get('diametro_mm'),
-            lunghezza_mm=u.get('lunghezza_totale_mm'),
+            diametro_mm=u.get('diametro_mm') or 0,
+            lunghezza_totale_mm=u.get('lunghezza_totale_mm') or 0,
+            lunghezza_tagl_mm=u.get('lunghezza_tagl_mm'),
+            lunghezza_utile_mm=u.get('lunghezza_utile_mm'),
+            fuori_pinza_mm=u.get('fuori_pinza_mm'),
+            diam_stelo_mm=u.get('diam_stelo_mm'),
+            raggio_punta_mm=u.get('raggio_punta_mm') or 0,
             tipo=u.get('tipo_codice', 'FLAT'),
-            raggio_mm=u.get('raggio_punta_mm') or 0)
-    except Exception:
-        pass
+            shaft_chamfer_len=u.get('shaft_chamfer_length_mm'),
+            shaft_chamfer_pos=u.get('shaft_chamfer_pos_mm'),
+            shaft_chamfer_angle=u.get('shaft_chamfer_angle_gradi'))
+    except Exception as e:
+        print(f"SVG fresa error: {e}", flush=True)
     # Parametri calcolati dalla famiglia
     parametri_calc = []
     if u.get('famiglia_id') and u.get('diametro_mm'):
