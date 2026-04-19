@@ -87,6 +87,7 @@ def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
                      shaft_chamfer_len=None, shaft_chamfer_pos=None,
                      shaft_chamfer_angle=None,
                      reach_tool_mm=None, reach_extension_mm=None, extension_name=None,
+                     extension_profilo=None,
                      d_gola_mm=None, h_gola_mm=None,
                      width=220, height=400):
     """Genera SVG del profilo fresa con zone colorate + prolunga + gola.
@@ -255,17 +256,54 @@ def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
         y_ext_top = ty(r_tool + r_ext)
         y_ext_bot = ty(r_tool)
         h_ext = r_ext * scala
-        # Raccordo breve in basso + cilindro + raccordo in alto
-        raccordo = min(2 * scala, h_ext * 0.1)
-        parts.append(f'<polygon points="{txl(r_stelo):.1f},{y_ext_bot:.1f} {txr(r_stelo):.1f},{y_ext_bot:.1f} '
-            f'{txr(r_prolunga):.1f},{y_ext_bot - raccordo:.1f} {txr(r_prolunga):.1f},{y_ext_top + raccordo:.1f} '
-            f'{txr(r_stelo):.1f},{y_ext_top:.1f} {txl(r_stelo):.1f},{y_ext_top:.1f} '
-            f'{txl(r_prolunga):.1f},{y_ext_top + raccordo:.1f} {txl(r_prolunga):.1f},{y_ext_bot - raccordo:.1f}" '
-            f'fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1"/>')
+        if extension_profilo and len(extension_profilo) > 2:
+            # Cont2D reale della prolunga — offset z di r_tool mm
+            all_z_e = [abs(float(e.get('ey', e.get('sy', 0)))) for e in extension_profilo]
+            max_z_e = max(all_z_e) if all_z_e else r_ext
+            if max_z_e <= 0: max_z_e = 1
+            sc_z_e = (r_ext * scala) / max_z_e
+            all_r_e = [abs(float(e.get('ex', e.get('sx', 0)))) for e in extension_profilo]
+            max_r_e = max(all_r_e) if all_r_e else r_stelo
+            if max_r_e <= 0: max_r_e = 1
+            # Offset: z_ext_svg = ty(r_tool + z_local * r_ext / max_z_e)
+            def to_ext_svg(r, z):
+                z_global = r_tool + z * r_ext / max_z_e
+                return cx + r * scala, ty(z_global)
+            # Path destro
+            pr = []
+            prev_r_e, prev_z_e = None, None
+            for e in extension_profilo:
+                sx_e = float(e.get('sx', prev_r_e or 0))
+                sy_e = float(e.get('sy', prev_z_e or 0))
+                ex_e = float(e.get('ex', 0))
+                ey_e = float(e.get('ey', 0))
+                if prev_r_e is None:
+                    x0, y0 = to_ext_svg(sx_e, sy_e)
+                    pr.append(f'M {x0:.1f},{y0:.1f}')
+                xn, yn = to_ext_svg(ex_e, ey_e)
+                pr.append(f'L {xn:.1f},{yn:.1f}')
+                prev_r_e, prev_z_e = ex_e, ey_e
+            # Path sinistro (specchiato, reversed)
+            pl = []
+            for e in reversed(extension_profilo):
+                sx_e = float(e.get('sx', 0))
+                sy_e = float(e.get('sy', 0))
+                xm, ym = to_ext_svg(-sx_e, sy_e)
+                pl.append(f'L {xm:.1f},{ym:.1f}')
+            ext_path = ' '.join(pr) + ' ' + ' '.join(pl) + ' Z'
+            parts.append(f'<path d="{ext_path}" fill="#c4b5fd" fill-opacity="0.3" stroke="#8b5cf6" stroke-width="1"/>')
+        else:
+            # Fallback: rettangolo con diam_stelo
+            raccordo = min(2 * scala, h_ext * 0.1)
+            parts.append(f'<polygon points="{txl(r_stelo):.1f},{y_ext_bot:.1f} {txr(r_stelo):.1f},{y_ext_bot:.1f} '
+                f'{txr(r_prolunga):.1f},{y_ext_bot - raccordo:.1f} {txr(r_prolunga):.1f},{y_ext_top + raccordo:.1f} '
+                f'{txr(r_stelo):.1f},{y_ext_top:.1f} {txl(r_stelo):.1f},{y_ext_top:.1f} '
+                f'{txl(r_prolunga):.1f},{y_ext_top + raccordo:.1f} {txl(r_prolunga):.1f},{y_ext_bot - raccordo:.1f}" '
+                f'fill="#c4b5fd" stroke="#8b5cf6" stroke-width="1"/>')
         # Label prolunga
         if extension_name:
             y_lbl = (y_ext_top + y_ext_bot) / 2
-            parts.append(f'<text x="{txr(r_prolunga) + 4:.0f}" y="{y_lbl + 3:.1f}" '
+            parts.append(f'<text x="{txr(max(r_prolunga, r_stelo)) + 4:.0f}" y="{y_lbl + 3:.1f}" '
                 f'font-size="8" fill="#8b5cf6" font-family="sans-serif">{extension_name[:25]}</text>')
 
     # ═══ ASSE CENTRALE ═══

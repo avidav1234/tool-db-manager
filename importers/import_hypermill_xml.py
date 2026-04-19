@@ -362,6 +362,7 @@ def import_xml(filepath, db_path, dry_run=False):
         reach_tool = 0.0
         reach_ext = 0.0
         ext_name = None
+        ext_contour = None
         holder_name_val = None
         holder_reach = 0.0
         comp_el = nct.find('components')
@@ -377,6 +378,7 @@ def import_xml(filepath, db_path, dry_run=False):
                 elif ctype == 'extension':
                     reach_ext = creach
                     ext_name = cname
+                    ext_contour = comp.get('contour', '') or cname
                 elif ctype == 'holder':
                     holder_name_val = cname
                     holder_reach = creach
@@ -400,7 +402,7 @@ def import_xml(filepath, db_path, dry_run=False):
             cut_len_factor, cut_wid_factor, max_rpm_nct, max_feed_nct, note_asm,
             nominal_diam, minor_thread_d, passo_max, passo_min, tol_inf, tol_sup,
             dir_rotazione_val, angolo_punta, commento_tool,
-            reach_tool, reach_ext, ext_name, holder_name, holder_reach,
+            reach_tool, reach_ext, ext_name, ext_contour, holder_name, holder_reach,
             d_gola_scalar, h_gola_scalar,
             'HyperMill', nctool_guid, tool_name)
 
@@ -418,7 +420,7 @@ def import_xml(filepath, db_path, dry_run=False):
                 nominal_diameter_mm=?, minor_thread_diameter_mm=?, passo_max_mm=?, passo_min_mm=?,
                 tolleranza_inf_mm=?, tolleranza_sup_mm=?,
                 dir_rotazione=?, angolo_punta_gradi=?, note=?,
-                reach_tool_mm=?, reach_extension_mm=?, extension_name=?, holder_name=?, holder_reach_mm=?,
+                reach_tool_mm=?, reach_extension_mm=?, extension_name=?, extension_contour=?, holder_name=?, holder_reach_mm=?,
                 d_gola_mm=?, h_gola_mm=?,
                 cam_sorgente=?, id_originale_cam=?, descrizione=?
                 WHERE id=?""", u_vals + (uid,))
@@ -435,10 +437,10 @@ def import_xml(filepath, db_path, dry_run=False):
                 nominal_diameter_mm, minor_thread_diameter_mm, passo_max_mm, passo_min_mm,
                 tolleranza_inf_mm, tolleranza_sup_mm,
                 dir_rotazione, angolo_punta_gradi, note,
-                reach_tool_mm, reach_extension_mm, extension_name, holder_name, holder_reach_mm,
+                reach_tool_mm, reach_extension_mm, extension_name, extension_contour, holder_name, holder_reach_mm,
                 d_gola_mm, h_gola_mm,
                 cam_sorgente, id_originale_cam, descrizione, stato)
-                VALUES (""" + ','.join(['?'] * 52) + ")",
+                VALUES (""" + ','.join(['?'] * 53) + ")",
                 (codice_interno,) + u_vals + ('staging',))
             uid = cur.lastrowid
             stats['utensili_importati'] += 1

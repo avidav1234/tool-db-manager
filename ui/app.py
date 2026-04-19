@@ -2921,6 +2921,13 @@ def dettaglio_utensile(uid):
         for g in geos:
             if g[0] == 'profilo_esterno': profilo = _json.loads(g[1])
             elif g[0] == 'area_taglio': taglio = _json.loads(g[1])
+        # Carica profilo prolunga se extension_contour presente
+        _ext_prof = None
+        if u.get('extension_contour'):
+            _ext_row = conn.execute("SELECT elementi_json FROM geometria_extension WHERE nome=?",
+                (u['extension_contour'],)).fetchone()
+            if _ext_row:
+                _ext_prof = _json.loads(_ext_row[0])
         svg_fresa = render_fresa_svg(
             elementi_profilo=profilo or [],
             elementi_taglio=taglio,
@@ -2938,6 +2945,7 @@ def dettaglio_utensile(uid):
             reach_tool_mm=u.get('reach_tool_mm'),
             reach_extension_mm=u.get('reach_extension_mm'),
             extension_name=u.get('extension_name'),
+            extension_profilo=_ext_prof,
             d_gola_mm=u.get('d_gola_mm'),
             h_gola_mm=u.get('h_gola_mm'))
     except Exception as e:

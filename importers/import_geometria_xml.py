@@ -193,14 +193,58 @@ def import_geometria(filepath, db_path):
                         conn.execute("UPDATE utensile SET d_gola_mm=?, h_gola_mm=? WHERE id=?",
                                      (d_gola, h_gola, uid))
 
+    # --- EXTENSION (prolunghe) ---
+    n_ext = 0
+    conn.execute("""CREATE TABLE IF NOT EXISTS geometria_extension (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT UNIQUE NOT NULL,
+        lunghezza_mm REAL, diametro_max_mm REAL, diametro_min_mm REAL,
+        lunghezza_scarico_mm REAL, elementi_json TEXT)""")
+    for ext_el in root.iter('extension'):
+        ext_name = ext_el.get('name', '').strip()
+        if not ext_name:
+            continue
+        cont2d = ext_el.find('.//cont2D')
+        if cont2d is None:
+            continue
+        elementi = _parse_cont2d(cont2d)
+        if not elementi:
+            continue
+        rs = [float(e.get('ex', e.get('sx', 0))) for e in elementi]
+        zs = [float(e.get('ey', e.get('sy', 0))) for e in elementi]
+        rs_pos = [r for r in rs if r > 0.01]
+        d_max = max(rs_pos) * 2 if rs_pos else 0
+        d_min = min(rs_pos) * 2 if rs_pos else 0
+        lung = max(zs) - min(zs) if zs else 0
+        # Lunghezza scarico: z dove r passa da min a max
+        lung_scarico = 0
+        if len(elementi) >= 2 and d_max > d_min:
+            r_soglia = (d_min / 2 + d_max / 2) / 2
+            for e in elementi:
+                r = float(e.get('ex', 0))
+                z = float(e.get('ey', 0))
+                if r > r_soglia:
+                    lung_scarico = z
+                    break
+        try:
+            conn.execute("""INSERT OR REPLACE INTO geometria_extension
+                (nome, lunghezza_mm, diametro_max_mm, diametro_min_mm,
+                 lunghezza_scarico_mm, elementi_json)
+                VALUES (?,?,?,?,?,?)""",
+                (ext_name, round(lung, 3), round(d_max, 3), round(d_min, 3),
+                 round(lung_scarico, 3), json.dumps(elementi, ensure_ascii=False)))
+            n_ext += 1
+        except Exception as e:
+            stats['errori'].append(f"extension {ext_name}: {e}")
+
     conn.commit()
     conn.close()
 
-    print(f"Geometria importata: {stats['holders_geo']} holders, {stats['tools_geo']} profili fresa")
+    print(f"Geometria importata: {stats['holders_geo']} holders, {stats['tools_geo']} profili fresa, {n_ext} extensions")
     if stats['errori']:
         print(f"Errori: {len(stats['errori'])}")
         for e in stats['errori'][:5]:
             print(f"  {e}")
+    stats['extensions_geo'] = n_ext
     return stats
 
 
