@@ -15,6 +15,57 @@ import sys
 _BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 
+def _estrai_gola(elementi):
+    """Analizza il profilo cont2D e trova la gola (neck).
+
+    La gola e' la zona tra la fine del corpo tagliente e l'inizio del gambo
+    dove il raggio e' minimo e stabile.
+
+    Ritorna: (d_gola_mm, h_gola_mm) oppure (None, None) se non trovata.
+    """
+    if not elementi or len(elementi) < 4:
+        return None, None
+
+    punti = []
+    for e in elementi:
+        r = e.get('ex', e.get('sx'))
+        z = e.get('ey', e.get('sy'))
+        if r is not None and z is not None:
+            punti.append((float(r), float(z)))
+
+    if len(punti) < 4:
+        return None, None
+
+    r_max = max(r for r, z in punti)
+    positive_r = [r for r, z in punti if r > 0]
+    if not positive_r:
+        return None, None
+    r_min = min(positive_r)
+
+    # Se r_min molto vicino a r_max -> nessuna gola significativa
+    if r_max - r_min < r_max * 0.1:
+        return None, None
+
+    # Trova zona a raggio minimo (< 80% del raggio max)
+    r_gola_candidates = [(r, z) for r, z in punti if 0 < r < r_max * 0.8]
+    if not r_gola_candidates:
+        return None, None
+
+    r_gola = min(r for r, z in r_gola_candidates)
+    z_gola_punti = [z for r, z in r_gola_candidates if abs(r - r_gola) < 0.5]
+
+    if len(z_gola_punti) < 2:
+        return None, None
+
+    h_gola = max(z_gola_punti) - min(z_gola_punti)
+    d_gola = r_gola * 2
+
+    if h_gola < 0.5:
+        return None, None
+
+    return round(d_gola, 3), round(h_gola, 3)
+
+
 def _parse_cont2d(cont_el):
     """Converte un <cont2D> in lista di dict con tutti gli attributi elem2D."""
     elements = []
@@ -125,6 +176,12 @@ def import_geometria(filepath, db_path):
                 conn.execute("INSERT INTO geometria_fresa (utensile_id, tipo, elementi_json) VALUES (?,?,?)",
                              (uid, tipo, geo_json))
                 stats['tools_geo'] += 1
+                # Estrai gola dal profilo esterno
+                if tipo == 'profilo_esterno':
+                    d_gola, h_gola = _estrai_gola(elements)
+                    if d_gola is not None:
+                        conn.execute("UPDATE utensile SET d_gola_mm=?, h_gola_mm=? WHERE id=?",
+                                     (d_gola, h_gola, uid))
 
     conn.commit()
     conn.close()

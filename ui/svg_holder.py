@@ -8,7 +8,75 @@ import math
 
 
 # ═══════════════════════════════════════════════════════════════
-# FUNZIONE 1 — Profilo fresa parametrico
+# Converter cont2D → SVG path
+# ═══════════════════════════════════════════════════════════════
+
+def _cont2d_to_svg_path(elementi, cx, height, margin, scala_r, scala_z):
+    """Converte lista elem2D cont2D in path SVG chiuso simmetrico.
+
+    Coordinate cont2D: (r, z) con z=0 in basso (punta fresa).
+    Coordinate SVG: x = cx + r*scala_r, y = (height-margin) - z*scala_z.
+    """
+    if not elementi:
+        return None
+
+    def to_svg(r, z):
+        return cx + r * scala_r, (height - margin) - z * scala_z
+
+    # Lato destro
+    path_right = []
+    prev_r, prev_z = None, None
+    for e in elementi:
+        sx = float(e.get('sx', prev_r or 0))
+        sy = float(e.get('sy', prev_z or 0))
+        ex = float(e.get('ex', 0))
+        ey = float(e.get('ey', 0))
+        etype = e.get('type', 'line')
+        if prev_r is None:
+            x0, y0 = to_svg(sx, sy)
+            path_right.append(f'M {x0:.2f},{y0:.2f}')
+        ex_svg, ey_svg = to_svg(ex, ey)
+        if etype == 'line':
+            path_right.append(f'L {ex_svg:.2f},{ey_svg:.2f}')
+        elif etype in ('cwarc', 'ccwarc'):
+            cx_a = float(e.get('cx', 0))
+            cy_a = float(e.get('cy', 0))
+            r_arc = math.sqrt((sx - cx_a)**2 + (sy - cy_a)**2) * scala_r
+            if r_arc < 0.1:
+                r_arc = math.sqrt((ex - cx_a)**2 + (ey - cy_a)**2) * scala_r
+            sweep = 0 if etype == 'cwarc' else 1  # Y flip inverts sweep
+            path_right.append(f'A {r_arc:.2f},{r_arc:.2f} 0 0 {sweep} {ex_svg:.2f},{ey_svg:.2f}')
+        prev_r, prev_z = ex, ey
+
+    # Lato sinistro (specchiato, reversed)
+    path_left = []
+    for i in range(len(elementi) - 1, -1, -1):
+        e = elementi[i]
+        sx = float(e.get('sx', 0))
+        sy = float(e.get('sy', 0))
+        ex = float(e.get('ex', 0))
+        ey = float(e.get('ey', 0))
+        etype = e.get('type', 'line')
+        if i == len(elementi) - 1:
+            lx, ly = to_svg(-ex, ey)
+            path_left.append(f'L {lx:.2f},{ly:.2f}')
+        sx_svg, sy_svg = to_svg(-sx, sy)
+        if etype == 'line':
+            path_left.append(f'L {sx_svg:.2f},{sy_svg:.2f}')
+        elif etype in ('cwarc', 'ccwarc'):
+            cx_a = float(e.get('cx', 0))
+            cy_a = float(e.get('cy', 0))
+            r_arc = math.sqrt((ex - cx_a)**2 + (ey - cy_a)**2) * scala_r
+            if r_arc < 0.1:
+                r_arc = math.sqrt((sx - cx_a)**2 + (sy - cy_a)**2) * scala_r
+            sweep = 1 if etype == 'cwarc' else 0  # reversed + mirrored
+            path_left.append(f'A {r_arc:.2f},{r_arc:.2f} 0 0 {sweep} {sx_svg:.2f},{sy_svg:.2f}')
+
+    return ' '.join(path_right) + ' ' + ' '.join(path_left) + ' Z'
+
+
+# ═══════════════════════════════════════════════════════════════
+# FUNZIONE 1 — Profilo fresa (cont2D o fallback parametrico)
 # ═══════════════════════════════════════════════════════════════
 
 def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
@@ -19,11 +87,48 @@ def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
                      shaft_chamfer_len=None, shaft_chamfer_pos=None,
                      shaft_chamfer_angle=None,
                      width=200, height=350):
-    """Genera SVG del profilo fresa con 3 zone colorate.
+    """Genera SVG del profilo fresa.
 
+    Se elementi_profilo disponibile: usa cont2D reale.
+    Altrimenti: fallback parametrico con 3 zone colorate.
     Orientamento: punta in basso, gambo in alto.
-    Zone: tagliente (blu scuro) | utile/scarico (blu chiaro) | gambo (grigio)
     """
+    # ── BRANCH A: cont2D reale ──
+    if elementi_profilo and len(elementi_profilo) > 3:
+        all_r = [abs(float(e.get('ex', e.get('sx', 0)))) for e in elementi_profilo]
+        all_z = [abs(float(e.get('ey', e.get('sy', 0)))) for e in elementi_profilo]
+        max_r = max(all_r) if all_r else (diametro_mm or 10) / 2
+        max_z = max(all_z) if all_z else (lunghezza_totale_mm or 60)
+        if max_r <= 0: max_r = 1
+        if max_z <= 0: max_z = 1
+        mg = 25
+        lab = 40
+        sc_r = (width / 2 - mg - lab) / max_r
+        sc_z = (height - 2 * mg) / max_z
+        cvx = width / 2 - lab / 2
+        path = _cont2d_to_svg_path(elementi_profilo, cvx, height, mg, sc_r, sc_z)
+        if path:
+            fp_line = ''
+            if fuori_pinza_mm and fuori_pinza_mm > 0:
+                y_fp = (height - mg) - fuori_pinza_mm * sc_z
+                if mg < y_fp < height - mg:
+                    fp_line = (f'<line x1="{mg}" y1="{y_fp:.1f}" x2="{cvx + max_r * sc_r + 5:.0f}" y2="{y_fp:.1f}" '
+                               f'stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>'
+                               f'<text x="{cvx + max_r * sc_r + 8:.0f}" y="{y_fp + 4:.1f}" '
+                               f'font-size="9" fill="#f59e0b" font-family="monospace">{fuori_pinza_mm:.1f}</text>')
+            d_label = f'D{diametro_mm}'
+            if raggio_punta_mm and raggio_punta_mm > 0:
+                d_label += f'R{raggio_punta_mm}'
+            return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+                    f'viewBox="0 0 {width} {height}" style="background:transparent">'
+                    f'<line x1="{cvx}" y1="{mg}" x2="{cvx}" y2="{height - mg}" '
+                    f'stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="3,3"/>'
+                    f'<path d="{path}" fill="#1e3a8a" fill-opacity="0.15" stroke="#1e3a8a" stroke-width="1.2"/>'
+                    f'{fp_line}'
+                    f'<text x="{mg}" y="{height - 5}" font-size="9" fill="#666" font-family="sans-serif">{d_label}</text>'
+                    f'</svg>')
+
+    # ── BRANCH B: fallback parametrico ──
     D = diametro_mm or 10
     R = raggio_punta_mm or 0
     L_tot = lunghezza_totale_mm or 60
