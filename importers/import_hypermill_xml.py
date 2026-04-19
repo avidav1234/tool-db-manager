@@ -352,6 +352,24 @@ def import_xml(filepath, db_path, dry_run=False):
                 hg = shaft_ch_pos - taper_height
                 h_gola_scalar = hg if hg >= 0.5 else None
 
+        # Campi P1 (critici SVG)
+        chamfer_angle_v = _float(_param(tool_el, 'chamferAngle'))
+        chamfer_height_v = _float(_param(tool_el, 'chamferHeight'))
+        chamfered_v = 1 if _param(tool_el, 'chamfered') in ('1', 'true', 'True') else 0
+        shaft_type_v = _param(tool_el, 'toolShaftType')
+        collar_v = 1 if _param(tool_el, 'collar') in ('1', 'true', 'True') else 0
+        disc_height_v = _float(_param(tool_el, 'discHeight'))
+        # Campi P2 (critici CAM export)
+        allow_plunge_v = 1 if _param(tool_el, 'allowPlunge') in ('1', 'true', 'True') else 0
+        no_tip_length_v = _float(_param(tool_el, 'noTipLength'))
+        break_through_v = _float(_param(tool_el, 'breakThroughLength'))
+        centering_req_v = 1 if _param(tool_el, 'centeringRequired') in ('1', 'true', 'True') else 0
+        back_angle_v = _float(_param(tool_el, 'backAngle'))
+        lead_in_diam_v = _float(_param(tool_el, 'leadInDiameter'))
+        lead_in_len_v = _float(_param(tool_el, 'leadInLength'))
+        no_thread_prof_v = _int(_param(tool_el, 'noOfThreadProfiles'))
+        thread_tip_type_v = _param(tool_el, 'threadMillTipType')
+
         # Dati ncTool (assemblaggio) — tutti i campi
         gage_length = _float(_param(nct, 'gageLength'))
         k_vc = _float(_param(nct, 'spindleSpeedFactor'), 1.0)
@@ -361,6 +379,7 @@ def import_xml(filepath, db_path, dry_run=False):
         max_rpm_nct = _float(_param(nct, 'maxSpindleSpeed'))
         max_feed_nct = _float(_param(nct, 'maxFeedrate'))
         note_asm = _param(nct, 'comment')
+        tool_reference_v = _param(nct, 'toolReference')
         nctool_guid = _param(nct, 'objGuid', '')
 
         # Estrai components: reach di tool, extension, holder
@@ -409,6 +428,11 @@ def import_xml(filepath, db_path, dry_run=False):
             dir_rotazione_val, angolo_punta, commento_tool,
             reach_tool, reach_ext, ext_name, ext_contour, holder_name, holder_reach,
             d_gola_scalar, h_gola_scalar,
+            chamfer_angle_v, chamfer_height_v, chamfered_v, allow_plunge_v,
+            shaft_type_v, collar_v, disc_height_v, no_tip_length_v,
+            break_through_v, centering_req_v, back_angle_v,
+            lead_in_diam_v, lead_in_len_v, no_thread_prof_v, thread_tip_type_v,
+            tool_reference_v,
             'HyperMill', nctool_guid, tool_name)
 
         existing = conn.execute("SELECT id FROM utensile WHERE codice_interno=?", (codice_interno,)).fetchone()
@@ -427,6 +451,11 @@ def import_xml(filepath, db_path, dry_run=False):
                 dir_rotazione=?, angolo_punta_gradi=?, note=?,
                 reach_tool_mm=?, reach_extension_mm=?, extension_name=?, extension_contour=?, holder_name=?, holder_reach_mm=?,
                 d_gola_mm=?, h_gola_mm=?,
+                chamfer_angle_gradi=?, chamfer_height_mm=?, chamfered=?, allow_plunge=?,
+                shaft_type=?, collar=?, disc_height_mm=?, no_tip_length_mm=?,
+                break_through_length_mm=?, centering_required=?, back_angle_gradi=?,
+                lead_in_diameter_mm=?, lead_in_length_mm=?, no_thread_profiles=?, thread_tip_type=?,
+                tool_reference=?,
                 cam_sorgente=?, id_originale_cam=?, descrizione=?
                 WHERE id=?""", u_vals + (uid,))
         else:
@@ -444,8 +473,13 @@ def import_xml(filepath, db_path, dry_run=False):
                 dir_rotazione, angolo_punta_gradi, note,
                 reach_tool_mm, reach_extension_mm, extension_name, extension_contour, holder_name, holder_reach_mm,
                 d_gola_mm, h_gola_mm,
+                chamfer_angle_gradi, chamfer_height_mm, chamfered, allow_plunge,
+                shaft_type, collar, disc_height_mm, no_tip_length_mm,
+                break_through_length_mm, centering_required, back_angle_gradi,
+                lead_in_diameter_mm, lead_in_length_mm, no_thread_profiles, thread_tip_type,
+                tool_reference,
                 cam_sorgente, id_originale_cam, descrizione, stato)
-                VALUES (""" + ','.join(['?'] * 53) + ")",
+                VALUES (""" + ','.join(['?'] * 69) + ")",
                 (codice_interno,) + u_vals + ('staging',))
             uid = cur.lastrowid
             stats['utensili_importati'] += 1

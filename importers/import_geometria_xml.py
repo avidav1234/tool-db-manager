@@ -154,9 +154,12 @@ def import_geometria(filepath, db_path):
         uid = row[0]
         # Elimina geometrie precedenti per questo utensile
         conn.execute("DELETE FROM geometria_fresa WHERE utensile_id=?", (uid,))
+        # Mappa geometry.name → tipo DB
+        GEO_NAME_MAP = {'freeShaft': 'profilo_gambo', 'freeTip': 'profilo_taglio'}
         # Raccogli cont2D dai blocchi geometry
         geos = list(tool_el.iter('geometry'))
         for gi, geo in enumerate(geos):
+            geo_name = geo.get('name', '')
             for cont in geo:
                 ct = cont.tag.split('}')[-1] if '}' in cont.tag else cont.tag
                 if ct != 'cont2D':
@@ -164,9 +167,10 @@ def import_geometria(filepath, db_path):
                 elements = _parse_cont2d(cont)
                 if not elements:
                     continue
-                # Determina tipo: se ha cuttingArea=1 -> area_taglio, altrimenti ordine
-                has_cutting = any(e.get('cuttingArea') for e in elements)
-                if has_cutting:
+                # Determina tipo da geometry.name o dal contenuto
+                if geo_name in GEO_NAME_MAP:
+                    tipo = GEO_NAME_MAP[geo_name]
+                elif any(e.get('cuttingArea') for e in elements):
                     tipo = 'area_taglio'
                 elif gi == 0:
                     tipo = 'profilo_esterno'
