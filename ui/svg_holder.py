@@ -129,7 +129,7 @@ def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
     r_tagl = D / 2
     r_stelo = D_stelo / 2
     r_gola = D_gola / 2 if D_gola > 0 else 0
-    r_prolunga = D * 0.65 if r_ext > 0 else 0
+    r_prolunga = D_stelo / 2 if r_ext > 0 else 0
 
     parts = []
 
