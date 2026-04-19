@@ -336,6 +336,16 @@ def import_xml(filepath, db_path, dry_run=False):
         ha_scarico_val = 1 if tapered in ('1', 'true', 'True') else 0
         ha_collare_val = 1 if collar in ('1', 'true', 'True') else 0
         angolo_punta = chamfer_angle or cone_angle
+        # Gola da tipDiameter per frese a inserti (D_tagl > D_stelo * 1.2)
+        d_gola_scalar = None
+        h_gola_scalar = None
+        if (diametro and diam_stelo and diametro > diam_stelo * 1.2
+                and tip_diameter and tip_diameter > diam_stelo
+                and tip_diameter < diametro):
+            d_gola_scalar = tip_diameter
+            if shaft_ch_pos and taper_height:
+                hg = shaft_ch_pos - taper_height
+                h_gola_scalar = hg if hg >= 0.5 else None
 
         # Dati ncTool (assemblaggio) — tutti i campi
         gage_length = _float(_param(nct, 'gageLength'))
@@ -391,6 +401,7 @@ def import_xml(filepath, db_path, dry_run=False):
             nominal_diam, minor_thread_d, passo_max, passo_min, tol_inf, tol_sup,
             dir_rotazione_val, angolo_punta, commento_tool,
             reach_tool, reach_ext, ext_name, holder_name, holder_reach,
+            d_gola_scalar, h_gola_scalar,
             'HyperMill', nctool_guid, tool_name)
 
         existing = conn.execute("SELECT id FROM utensile WHERE codice_interno=?", (codice_interno,)).fetchone()
@@ -408,6 +419,7 @@ def import_xml(filepath, db_path, dry_run=False):
                 tolleranza_inf_mm=?, tolleranza_sup_mm=?,
                 dir_rotazione=?, angolo_punta_gradi=?, note=?,
                 reach_tool_mm=?, reach_extension_mm=?, extension_name=?, holder_name=?, holder_reach_mm=?,
+                d_gola_mm=?, h_gola_mm=?,
                 cam_sorgente=?, id_originale_cam=?, descrizione=?
                 WHERE id=?""", u_vals + (uid,))
         else:
@@ -424,8 +436,9 @@ def import_xml(filepath, db_path, dry_run=False):
                 tolleranza_inf_mm, tolleranza_sup_mm,
                 dir_rotazione, angolo_punta_gradi, note,
                 reach_tool_mm, reach_extension_mm, extension_name, holder_name, holder_reach_mm,
+                d_gola_mm, h_gola_mm,
                 cam_sorgente, id_originale_cam, descrizione, stato)
-                VALUES (""" + ','.join(['?'] * 50) + ")",
+                VALUES (""" + ','.join(['?'] * 52) + ")",
                 (codice_interno,) + u_vals + ('staging',))
             uid = cur.lastrowid
             stats['utensili_importati'] += 1

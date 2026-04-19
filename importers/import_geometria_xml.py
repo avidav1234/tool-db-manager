@@ -176,9 +176,19 @@ def import_geometria(filepath, db_path):
                 conn.execute("INSERT INTO geometria_fresa (utensile_id, tipo, elementi_json) VALUES (?,?,?)",
                              (uid, tipo, geo_json))
                 stats['tools_geo'] += 1
-                # Estrai gola dal profilo esterno
+                # Estrai gola dal profilo esterno — solo se coerente
                 if tipo == 'profilo_esterno':
                     d_gola, h_gola = _estrai_gola(elements)
+                    if d_gola is not None:
+                        # Verifica coerenza: d_gola deve essere > diam_stelo
+                        u_row = conn.execute("SELECT diam_stelo_mm, d_gola_mm FROM utensile WHERE id=?", (uid,)).fetchone()
+                        d_stelo = u_row[0] if u_row else None
+                        existing_gola = u_row[1] if u_row else None
+                        # Non sovrascrivere se scalare gia presente (piu affidabile)
+                        if existing_gola is not None:
+                            d_gola = None  # scalare ha priorita
+                        elif d_stelo and d_gola < d_stelo:
+                            d_gola = None  # artefatto cont2D
                     if d_gola is not None:
                         conn.execute("UPDATE utensile SET d_gola_mm=?, h_gola_mm=? WHERE id=?",
                                      (d_gola, h_gola, uid))

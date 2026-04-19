@@ -137,18 +137,51 @@ def render_fresa_svg(elementi_profilo=None, elementi_taglio=None,
     use_cont2d = elementi_profilo and len(elementi_profilo) > 3
 
     if use_cont2d:
-        all_r_c = [abs(float(e.get('ex', e.get('sx', 0)))) for e in elementi_profilo]
-        all_z_c = [abs(float(e.get('ey', e.get('sy', 0)))) for e in elementi_profilo]
+        # Tronca cont2D a reach_tool_mm (non disegnare la parte dentro la prolunga)
+        z_max_vis = r_tool if r_tool and r_tool > 0 else H_tot
+        troncati = []
+        for e in elementi_profilo:
+            ez = float(e.get('ey', e.get('sy', 0)))
+            if ez <= z_max_vis:
+                troncati.append(e)
+            else:
+                # Interpola al bordo
+                sx_v = float(e.get('sx', 0))
+                sy_v = float(e.get('sy', 0))
+                ex_v = float(e.get('ex', 0))
+                ey_v = float(e.get('ey', 0))
+                if sy_v < z_max_vis < ey_v and (ey_v - sy_v) > 0:
+                    t = (z_max_vis - sy_v) / (ey_v - sy_v)
+                    r_interp = sx_v + t * (ex_v - sx_v)
+                    e_trunc = dict(e)
+                    e_trunc['ex'] = r_interp
+                    e_trunc['ey'] = z_max_vis
+                    troncati.append(e_trunc)
+                break
+        if len(troncati) < 3:
+            troncati = elementi_profilo  # fallback: non troncare
+
+        all_r_c = [abs(float(e.get('ex', e.get('sx', 0)))) for e in troncati]
+        all_z_c = [abs(float(e.get('ey', e.get('sy', 0)))) for e in troncati]
         max_r_c = max(all_r_c) if all_r_c else r_tagl
         max_z_c = max(all_z_c) if all_z_c else r_tool
         if max_r_c <= 0: max_r_c = 1
         if max_z_c <= 0: max_z_c = 1
-        # Riscala per far stare il cont2D nella zona fresa (da 0 a r_tool)
         sc_r = (width / 2 - margin - label_w / 2) / max(max_r_c, r_prolunga or 1)
         sc_z = (r_tool * scala) / max_z_c if max_z_c > 0 else scala
-        path = _cont2d_to_svg_path(elementi_profilo, cx, height, margin, sc_r, sc_z)
+        path = _cont2d_to_svg_path(troncati, cx, height, margin, sc_r, sc_z)
         if path:
-            parts.append(f'<path d="{path}" fill="#1e3a8a" fill-opacity="0.2" stroke="#1e3a8a" stroke-width="1.2"/>')
+            # Colore grigio corpo (non tutto blu tagliente)
+            parts.append(f'<path d="{path}" fill="#6b7280" fill-opacity="0.15" stroke="#6b7280" stroke-width="1.2"/>')
+            # Overlay zona tagliente (da z=0 a L_tagl) come rettangolo semitrasparente
+            if L_tagl and L_tagl > 0:
+                y_t_top = ty(min(L_tagl, z_max_vis))
+                y_t_bot = ty(0)
+                ht = y_t_bot - y_t_top
+                if ht > 1:
+                    parts.append(f'<rect x="{cx - max_r_c * sc_r:.1f}" y="{y_t_top:.1f}" '
+                        f'width="{max_r_c * 2 * sc_r:.1f}" height="{ht:.1f}" '
+                        f'fill="#1e3a8a" fill-opacity="0.15" stroke="none"/>')
     else:
         # ═══ BRANCH B: parametrico con zone ═══
         # Zone dal basso verso l'alto
