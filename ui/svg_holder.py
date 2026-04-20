@@ -221,7 +221,11 @@ def render_fresa_svg(
             parts.append(trap(0, L_tagl, D / 2, D / 2, '#1e3a8a', '#1e40af'))
 
     # ── ZONA GAMBO (z_fine_tagl → r_tool) ──
-    if elementi_gambo and len(elementi_gambo) >= 2:
+    # BALL: non usare freeShaft (copre la sfera — descrive l'intero tool)
+    tipo_r_gambo = _determina_tipo(tipo, R, angolo_punta_gradi, chamfer_angle_gradi, D)
+    usa_freeshaft = (elementi_gambo and len(elementi_gambo) >= 2
+                     and tipo_r_gambo != 'BALL')
+    if usa_freeshaft:
         z_max_g = max(abs(float(e.get('ey', e.get('sy', 0)))) for e in elementi_gambo)
         lung_disp = r_tool - z_fine_tagl
         if z_max_g > 0 and lung_disp > 0:

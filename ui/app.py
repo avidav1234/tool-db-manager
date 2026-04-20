@@ -2921,11 +2921,16 @@ def dettaglio_utensile(uid):
         for g in geos:
             if g[0] == 'profilo_gambo': _profilo_g = _json.loads(g[1])
             elif g[0] == 'profilo_taglio': _profilo_t = _json.loads(g[1])
+        # ballMill: R = D/2 per definizione (cornerRadius non presente nel XML)
+        _r_eff = u.get('raggio_punta_mm') or 0
+        _tipo_c = u.get('tipo_codice', 'FLAT')
+        if _tipo_c == 'BALL' and (not _r_eff or _r_eff == 0):
+            _r_eff = (u.get('diametro_mm') or 10) / 2
         svg_fresa = render_fresa_svg(
             diametro_mm=u.get('diametro_mm') or 0,
             lunghezza_totale_mm=u.get('lunghezza_totale_mm') or 0,
             lunghezza_tagl_mm=u.get('lunghezza_tagl_mm'),
-            raggio_punta_mm=u.get('raggio_punta_mm') or 0,
+            raggio_punta_mm=_r_eff,
             angolo_punta_gradi=u.get('angolo_punta_gradi'),
             tipo=u.get('tipo_codice', 'FLAT'),
             fuori_pinza_mm=u.get('fuori_pinza_mm'),
