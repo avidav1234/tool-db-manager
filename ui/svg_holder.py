@@ -229,13 +229,31 @@ def render_fresa_svg(
     usa_freeshaft = (elementi_gambo and len(elementi_gambo) >= 2
                      and tipo_r_gambo != 'BALL')
     if usa_freeshaft:
-        z_max_g = max(abs(float(e.get('ey', e.get('sy', 0)))) for e in elementi_gambo)
-        lung_disp = r_tool - z_fine_tagl
-        if z_max_g > 0 and lung_disp > 0:
-            z_sc = min(1.0, lung_disp / z_max_g)
+        # Tronca freeShaft a z <= r_tool (z > r_tool = vite dentro holder)
+        elementi_gambo_troncati = []
+        for e in elementi_gambo:
+            ez = abs(float(e.get('ey', 0)))
+            if ez <= r_tool:
+                elementi_gambo_troncati.append(e)
+            else:
+                prev_e = elementi_gambo_troncati[-1] if elementi_gambo_troncati else e
+                prev_z = abs(float(prev_e.get('ey', 0)))
+                prev_r = abs(float(prev_e.get('ex', 0)))
+                curr_r = abs(float(e.get('ex', 0)))
+                curr_z = ez
+                if curr_z > prev_z:
+                    t = (r_tool - prev_z) / (curr_z - prev_z)
+                    r_interp = prev_r + t * (curr_r - prev_r)
+                    elementi_gambo_troncati.append({
+                        'type': 'line',
+                        'sx': str(prev_r), 'sy': str(prev_z),
+                        'ex': str(r_interp), 'ey': str(r_tool)
+                    })
+                break
+        if elementi_gambo_troncati:
             parts.append(_disegna_profilo(
-                elementi_gambo, cx, scala, yz, xr, xl,
-                z_offset=z_fine_tagl, z_scala=z_sc,
+                elementi_gambo_troncati, cx, scala, yz, xr, xl,
+                z_offset=0, z_scala=1.0,
                 fill='#e5e7eb', stroke='#9ca3af'))
     elif r_tool > z_fine_tagl:
         D_stelo = diam_stelo_mm or D
