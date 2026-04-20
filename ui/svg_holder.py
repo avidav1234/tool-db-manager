@@ -33,7 +33,8 @@ def _disegna_profilo(elementi, cx_svg, scala, yz_fn, xr_fn, xl_fn,
         return xl_fn(abs(r_mm))
 
     path_dx = []
-    path_sx_rev = []  # costruito in ordine inverso
+    # path_sx: lista di tuple (tipo, x, y [, r_arc, sweep]) nell'ordine di visita
+    path_sx = []
     prev_r, prev_z = None, None
 
     for i, e in enumerate(elementi):
@@ -47,7 +48,7 @@ def _disegna_profilo(elementi, cx_svg, scala, yz_fn, xr_fn, xl_fn,
             sy = float(e.get('sy', ey))
             sx = abs(sx_raw)
             path_dx.append(f'M {to_xr(sx):.1f},{to_y(sy):.1f}')
-            path_sx_rev.append(f'{to_xl(sx):.1f},{to_y(sy):.1f}')
+            path_sx.append(('M', to_xl(sx), to_y(sy)))
             prev_r, prev_z = sx, sy
 
         x1 = to_xr(ex)
@@ -55,7 +56,7 @@ def _disegna_profilo(elementi, cx_svg, scala, yz_fn, xr_fn, xl_fn,
 
         if etype == 'line':
             path_dx.append(f'L {x1:.1f},{y1:.1f}')
-            path_sx_rev.append(f'{to_xl(ex):.1f},{y1:.1f}')
+            path_sx.append(('L', to_xl(ex), y1))
         elif etype in ('cwarc', 'ccwarc'):
             cx_a = abs(float(e.get('cx', 0)))
             cy_a = float(e.get('cy', 0))
@@ -65,23 +66,31 @@ def _disegna_profilo(elementi, cx_svg, scala, yz_fn, xr_fn, xl_fn,
             sweep_dx = 0 if etype == 'cwarc' else 1
             sweep_sx = 1 if etype == 'cwarc' else 0
             path_dx.append(f'A {r_arc:.2f},{r_arc:.2f} 0 0 {sweep_dx} {x1:.1f},{y1:.1f}')
-            path_sx_rev.append(f'A{r_arc:.2f},{r_arc:.2f},0,0,{sweep_sx},{to_xl(ex):.1f},{y1:.1f}')
+            path_sx.append(('A', r_arc, sweep_sx, to_xl(ex), y1))
 
         prev_r, prev_z = ex, ey
 
-    # Chiudi: ultimo punto destro → ultimo punto sinistro → risali sinistro → Z
-    last_xl = to_xl(prev_r)
-    last_y = to_y(prev_z)
-    # Connetti lato destro a lato sinistro (in alto, poi percorri inverso)
+    # Chiudi: dall'ultimo punto dx → ultimo punto sx, poi percorri sx al contrario
     sx_parts = []
-    sx_parts.append(f'L {last_xl:.1f},{last_y:.1f}')
-    for item in reversed(path_sx_rev[1:]):
-        if item.startswith('A'):
-            sx_parts.append(item)
-        else:
-            sx_parts.append(f'L {item}')
+    # Connetti ultimo punto dx al corrispondente punto sx (ultimo della lista)
+    last_item = path_sx[-1]
+    if last_item[0] == 'L':
+        sx_parts.append(f'L {last_item[1]:.1f},{last_item[2]:.1f}')
+    elif last_item[0] == 'A':
+        sx_parts.append(f'L {last_item[3]:.1f},{last_item[4]:.1f}')
+
+    # Percorri in ordine inverso (dall'alto verso il basso sul lato sinistro)
+    for item in reversed(path_sx[1:-1]):
+        if item[0] == 'L':
+            sx_parts.append(f'L {item[1]:.1f},{item[2]:.1f}')
+        elif item[0] == 'A':
+            # Inverti sweep per il percorso di ritorno
+            sweep_inv = 1 - item[2]
+            sx_parts.append(f'A {item[1]:.2f},{item[1]:.2f} 0 0 {sweep_inv} {item[3]:.1f},{item[4]:.1f}')
+
     # Chiudi al primo punto sinistro
-    sx_parts.append(f'L {path_sx_rev[0]}')
+    first_sx = path_sx[0]
+    sx_parts.append(f'L {first_sx[1]:.1f},{first_sx[2]:.1f}')
 
     d = ' '.join(path_dx) + ' ' + ' '.join(sx_parts) + ' Z'
     return f'<path d="{d}" fill="{fill}" stroke="{stroke}" stroke-width="0.8" fill-opacity="0.9"/>'
