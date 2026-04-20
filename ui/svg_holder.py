@@ -100,8 +100,14 @@ def _determina_tipo(tipo, R, angolo_punta, chamfer_angle, D):
     t = (tipo or '').upper()
     if chamfer_angle and chamfer_angle > 0:
         return 'CHAMFER'
-    if t in ('DRILL', 'REAM', 'TAP', 'THREAD', 'LOLLIPOP'):
+    # Tipi espliciti dal DB — precedenza assoluta
+    if t == 'BALL':
+        return 'BALL'
+    if t == 'BULL':
+        return 'BULL'
+    if t in ('DRILL', 'REAM', 'TAP', 'THREAD', 'LOLLIPOP', 'FLAT'):
         return t
+    # Fallback geometrico
     if angolo_punta and angolo_punta > 0 and (not R or R == 0):
         return 'DRILL'
     if R and D and abs(R - D / 2) < 0.3:
@@ -149,9 +155,7 @@ def render_fresa_svg(
     # ma la scala visiva e' basata sul diametro del tagliente.
     r_massimo = D / 2.0
 
-    # Scala su r_tool (non FP): la sfera risulta visibile
-    H_tot = r_tool if r_tool > 0 else FP
-    scala_z = (height - 2 * margin) / H_tot if H_tot > 0 else 1
+    scala_z = (height - 2 * margin) / FP if FP > 0 else 1
     scala_r = (cx - margin) / r_massimo if r_massimo > 0 else 1
     scala = min(scala_z, scala_r)
 
@@ -191,13 +195,14 @@ def render_fresa_svg(
     else:
         tipo_r = _determina_tipo(tipo, R, angolo_punta_gradi, chamfer_angle_gradi, D)
         if tipo_r == 'BALL':
-            arc_r = R * scala
-            y_c = yz(R)
-            parts.append(f'<path d="M {xl(R):.1f},{y_c:.1f} '
-                         f'A {arc_r:.1f},{arc_r:.1f} 0 0 1 {xr(R):.1f},{y_c:.1f} Z" '
+            R_ball = R if (R and R > 0) else D / 2
+            arc_r = R_ball * scala
+            y_c = yz(R_ball)
+            parts.append(f'<path d="M {xl(R_ball):.1f},{y_c:.1f} '
+                         f'A {arc_r:.1f},{arc_r:.1f} 0 0 1 {xr(R_ball):.1f},{y_c:.1f} Z" '
                          f'fill="#1e3a8a" stroke="#1e40af" stroke-width="0.8"/>')
-            if L_tagl > R + 0.5:
-                parts.append(trap(R, L_tagl, D / 2, D / 2, '#1e3a8a', '#1e40af'))
+            if L_tagl > R_ball + 0.5:
+                parts.append(trap(R_ball, L_tagl, D / 2, D / 2, '#1e3a8a', '#1e40af'))
         elif tipo_r == 'BULL' and R > 0:
             cr = min(R, D / 2) * scala
             ri = max((D / 2 - R), 0) * scala
@@ -276,12 +281,11 @@ def render_fresa_svg(
                          f'{extension_name[:22]}</text>')
 
     # ── ASSE CENTRALE ──
-    y_top_asse = max(margin - 5, yz(FP))
-    parts.append(f'<line x1="{cx}" y1="{y_top_asse:.1f}" x2="{cx}" y2="{yz(0) + 5:.1f}" '
+    parts.append(f'<line x1="{cx}" y1="{yz(FP) - 5:.1f}" x2="{cx}" y2="{yz(0) + 5:.1f}" '
                  f'stroke="#ddd" stroke-width="0.5" stroke-dasharray="3,3"/>')
 
     # ── LINEA FUORI PINZA (SEMPRE) ──
-    y_fp = max(margin - 3, yz(FP))
+    y_fp = yz(FP)
     parts.append(f'<line x1="{margin:.0f}" y1="{y_fp:.1f}" '
                  f'x2="{xr(r_massimo) + 4:.0f}" y2="{y_fp:.1f}" '
                  f'stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>')
