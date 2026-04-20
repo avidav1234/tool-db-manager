@@ -181,7 +181,7 @@ def render_fresa_svg(
         arc_r = r_tagl * scala
         y_arc = yz(R)
         parts.append(f'<path d="M {xl(r_tagl):.1f},{y_arc:.1f} A {arc_r:.1f},{arc_r:.1f} 0 0 1 {xr(r_tagl):.1f},{y_arc:.1f} Z" fill="#1e3a8a" stroke="#1e40af" stroke-width="1"/>')
-        if L_tagl > R:
+        if L_tagl > R + 0.5:
             parts.append(trap(R, L_tagl, r_tagl, r_tagl, '#1e3a8a', '#1e40af'))
     elif tipo_r == 'BULL' and R > 0:
         cr = min(R, r_tagl) * scala
@@ -208,21 +208,35 @@ def render_fresa_svg(
         parts.append(trap(L_tagl, L_utile, r_u, r_u, '#bfdbfe', '#60a5fa'))
         z_post = L_utile
 
-    # ── GAMBO (z_post → r_tool) ──
+    # ── CORPO / GAMBO (z_post → z_gambo_end) ──
+    is_inserti = D > 0 and D_stelo > 0 and D > D_stelo * 1.2
     z_gambo_end = r_tool if r_ext > 0 else FP
     if z_gambo_end > z_post:
         r_u_eff = r_tagl - 0.2 if r_tagl > 1 else r_tagl
         r_bot = D_gola / 2 if D_gola > 0 else (r_u_eff if L_utile > L_tagl else r_tagl)
-        if shaft_chamfer_pos and shaft_chamfer_pos > z_post:
+
+        if is_inserti and shaft_chamfer_pos and shaft_chamfer_pos > z_post:
+            # Fresa a inserti: corpo largo (D) fino allo smusso, poi si stringe
+            z_smusso = min(shaft_chamfer_pos, z_gambo_end)
+            r_corpo = r_tagl
+            if z_smusso > z_post:
+                parts.append(trap(z_post, z_smusso, r_bot, r_corpo, '#e5e7eb', '#9ca3af'))
+            if z_gambo_end > z_smusso:
+                parts.append(trap(z_smusso, z_gambo_end, r_corpo, r_stelo, '#d1d5db', '#9ca3af'))
+
+        elif shaft_chamfer_pos and shaft_chamfer_pos > z_post:
+            # Fresa integrale con shaft chamfer
             z_ch = min(shaft_chamfer_pos, z_gambo_end)
             parts.append(trap(z_post, z_ch, r_bot, r_stelo, '#e5e7eb', '#9ca3af'))
             if z_gambo_end > z_ch:
                 parts.append(trap(z_ch, z_gambo_end, r_stelo, r_stelo, '#e5e7eb', '#9ca3af'))
+
         elif abs(r_bot - r_stelo) > 0.3:
             trans_h = min(3, (z_gambo_end - z_post) * 0.3)
             parts.append(trap(z_post, z_post + trans_h, r_bot, r_stelo, '#d1d5db', '#9ca3af'))
             if z_gambo_end > z_post + trans_h:
                 parts.append(trap(z_post + trans_h, z_gambo_end, r_stelo, r_stelo, '#e5e7eb', '#9ca3af'))
+
         else:
             parts.append(trap(z_post, z_gambo_end, r_stelo, r_stelo, '#e5e7eb', '#9ca3af'))
 
