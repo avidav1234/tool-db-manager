@@ -149,8 +149,7 @@ def render_fresa_svg(
     parts = []
 
     # ═══ ZONA 1: GAMBO (freeShaft o parametrico) — disegnato PRIMA ═══
-    usa_freeshaft = (elementi_gambo and len(elementi_gambo) >= 2
-                     and tipo_r != 'BALL')
+    usa_freeshaft = (elementi_gambo and len(elementi_gambo) >= 2)
     if usa_freeshaft:
         troncati = []
         for e in elementi_gambo:
