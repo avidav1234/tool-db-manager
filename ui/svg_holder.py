@@ -144,15 +144,10 @@ def render_fresa_svg(
     label_w = 50
     cx = (width - label_w) / 2.0
 
-    # Raggio massimo dai profili reali
+    # Raggio massimo: sempre D/2 (il tagliente e' sempre largo D).
+    # I profili freeShaft/freeTip possono avere r < D/2 (gambo interno),
+    # ma la scala visiva e' basata sul diametro del tagliente.
     r_massimo = D / 2.0
-    for elems in (elementi_gambo, elementi_taglio):
-        if elems:
-            for e in elems:
-                for k in ('ex', 'sx'):
-                    v = e.get(k)
-                    if v is not None:
-                        r_massimo = max(r_massimo, abs(float(v)))
 
     scala_z = (height - 2 * margin) / FP if FP > 0 else 1
     scala_r = (cx - margin) / r_massimo if r_massimo > 0 else 1
