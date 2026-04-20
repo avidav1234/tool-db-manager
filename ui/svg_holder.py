@@ -149,7 +149,9 @@ def render_fresa_svg(
     # ma la scala visiva e' basata sul diametro del tagliente.
     r_massimo = D / 2.0
 
-    scala_z = (height - 2 * margin) / FP if FP > 0 else 1
+    # Scala su r_tool (non FP): la sfera risulta visibile
+    H_tot = r_tool if r_tool > 0 else FP
+    scala_z = (height - 2 * margin) / H_tot if H_tot > 0 else 1
     scala_r = (cx - margin) / r_massimo if r_massimo > 0 else 1
     scala = min(scala_z, scala_r)
 
@@ -174,7 +176,13 @@ def render_fresa_svg(
     # ── ZONA TAGLIENTE (z=0 → L_tagl) ──
     z_fine_tagl = L_tagl
 
-    if elementi_taglio and len(elementi_taglio) >= 2:
+    # freeTip solo per tipi speciali (LOLLIPOP, CHAMFER, ecc.)
+    # Per BULL/BALL/FLAT/DRILL standard il freeTip descrive la geometria inserto, non il profilo laterale
+    tipo_r_tagl = _determina_tipo(tipo, R, angolo_punta_gradi, chamfer_angle_gradi, D)
+    usa_freetip = (elementi_taglio and len(elementi_taglio) >= 2
+                   and tipo_r_tagl not in ('BULL', 'BALL', 'FLAT', 'DRILL', 'REAM', 'TAP', 'THREAD'))
+
+    if usa_freetip:
         parts.append(_disegna_profilo(
             elementi_taglio, cx, scala, yz, xr, xl,
             z_offset=0, z_scala=1.0,
@@ -250,11 +258,12 @@ def render_fresa_svg(
                          f'{extension_name[:22]}</text>')
 
     # ── ASSE CENTRALE ──
-    parts.append(f'<line x1="{cx}" y1="{yz(FP) - 5:.1f}" x2="{cx}" y2="{yz(0) + 5:.1f}" '
+    y_top_asse = max(margin - 5, yz(FP))
+    parts.append(f'<line x1="{cx}" y1="{y_top_asse:.1f}" x2="{cx}" y2="{yz(0) + 5:.1f}" '
                  f'stroke="#ddd" stroke-width="0.5" stroke-dasharray="3,3"/>')
 
     # ── LINEA FUORI PINZA (SEMPRE) ──
-    y_fp = yz(FP)
+    y_fp = max(margin - 3, yz(FP))
     parts.append(f'<line x1="{margin:.0f}" y1="{y_fp:.1f}" '
                  f'x2="{xr(r_massimo) + 4:.0f}" y2="{y_fp:.1f}" '
                  f'stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,3"/>')
