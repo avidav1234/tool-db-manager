@@ -42,7 +42,8 @@ def render_fresa_svg(
     profilo = []
 
     # A. Punta
-    if elementi_taglio:
+    usa_tip = (elementi_taglio and tipo_r not in ('BULL', 'BALL', 'FLAT', 'DRILL', 'REAM', 'TAP', 'THREAD'))
+    if usa_tip:
         for e in elementi_taglio:
             profilo.append({
                 'type': e.get('type', 'line'),
@@ -138,7 +139,7 @@ def render_fresa_svg(
             if e['type'] == 'line': d_parts.append(f"L {tx(-e['sx']):.2f},{ty(e['sy']):.2f}")
             else:
                 r_svg = _ar(e['cx'], e['cy'], e['sx'], e['sy']) * scala
-                sweep = 0 if e['type'] == 'ccwarc' else 1
+                sweep = 1 if e['type'] == 'ccwarc' else 0
                 d_parts.append(f"A {r_svg:.2f},{r_svg:.2f} 0 0 {sweep} {tx(-e['sx']):.2f},{ty(e['sy']):.2f}")
         d_parts.append("Z")
 
@@ -156,7 +157,7 @@ def render_fresa_svg(
     parts.append(f'<text x="{tx(max_r)+12}" y="{ty(FP)+4}" font-size="11" fill="#f59e0b" font-weight="bold" font-family="monospace">{FP:.1f}</text>')
     label = f"D{D:.1f}" + (f" R{R:.1f}" if R > 0 else "")
     parts.append(f'<text x="{cx_svg}" y="{height-5}" text-anchor="middle" font-size="10" fill="#444" font-family="sans-serif">{label}</text>')
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" style="background-color:#fff">'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" style="background:transparent">'
             f'{"".join(parts)}</svg>')
 
 def render_holder_svg(elementi, width=300, height=400, colore='#6366f1', margin=15):
