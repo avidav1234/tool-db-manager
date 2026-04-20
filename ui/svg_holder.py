@@ -38,12 +38,14 @@ def _disegna_profilo(elementi, cx_svg, scala, yz_fn, xr_fn, xl_fn,
 
     for i, e in enumerate(elementi):
         etype = e.get('type', 'line')
-        ex = abs(float(e.get('ex', 0)))
+        ex_raw = float(e.get('ex', 0))
         ey = float(e.get('ey', 0))
+        ex = abs(ex_raw)
 
         if i == 0:
-            sx = abs(float(e.get('sx', ex)))
+            sx_raw = float(e.get('sx', ex_raw))
             sy = float(e.get('sy', ey))
+            sx = abs(sx_raw)
             path_dx.append(f'M {to_xr(sx):.1f},{to_y(sy):.1f}')
             path_sx_rev.append(f'{to_xl(sx):.1f},{to_y(sy):.1f}')
             prev_r, prev_z = sx, sy
@@ -188,10 +190,11 @@ def render_fresa_svg(
             cr = min(R, D / 2) * scala
             ri = max((D / 2 - R), 0) * scala
             y_R = yz(R)
-            parts.append(f'<path d="M {xl(D/2):.1f},{y_R:.1f} '
-                         f'A {cr:.1f},{cr:.1f} 0 0 0 {cx - ri:.1f},{yz(0):.1f} '
-                         f'L {cx + ri:.1f},{yz(0):.1f} '
-                         f'A {cr:.1f},{cr:.1f} 0 0 0 {xr(D/2):.1f},{y_R:.1f} Z" '
+            y_0 = yz(0)
+            parts.append(f'<path d="M {xr(D/2):.1f},{y_R:.1f} '
+                         f'A {cr:.1f},{cr:.1f} 0 0 1 {cx + ri:.1f},{y_0:.1f} '
+                         f'L {cx - ri:.1f},{y_0:.1f} '
+                         f'A {cr:.1f},{cr:.1f} 0 0 1 {xl(D/2):.1f},{y_R:.1f} Z" '
                          f'fill="#1e3a8a" stroke="#1e40af" stroke-width="0.8"/>')
             if L_tagl > R:
                 parts.append(trap(R, L_tagl, D / 2, D / 2, '#1e3a8a', '#1e40af'))
