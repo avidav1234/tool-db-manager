@@ -1910,7 +1910,7 @@ FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
 </div>
 <div class="card" style="margin-bottom:1rem">
 <table style="font-size:13px">
-<thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>N taglienti</th><th>Utensili</th><th>Azioni</th></tr></thead>
+<thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Utensili</th><th>Azioni</th></tr></thead>
 <tbody>
 {% for f in famiglie %}
 <tr class="clickable" onclick="location.href='/famiglie/{{ f.id }}/parametri'">
@@ -1918,7 +1918,6 @@ FAMIGLIE_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <td><b>{{ f.nome }}</b></td>
   <td>{{ f.tipo or '—' }}</td>
 
-  <td>{{ f.n_taglienti_default or '—' }}</td>
   <td><span class="badge b-ok">{{ f.n_utensili }}</span></td>
   <td style="white-space:nowrap">
     <a href="/famiglie/{{ f.id }}/parametri" class="btn btn-p" style="padding:3px 10px;font-size:11px">Parametri</a>
