@@ -132,7 +132,7 @@ def render_fresa_svg(
             if e['type'] == 'line': d_parts.append(f"L {tx(e['ex']):.2f},{ty(e['ey']):.2f}")
             else:
                 r_svg = _ar(e['cx'], e['cy'], e['sx'], e['sy']) * scala
-                sweep = 0 if e['type'] == 'ccwarc' else 1
+                sweep = 1 if e['type'] == 'ccwarc' else 0  # SVG y invertito: ccwarc→CW→sweep=1
                 d_parts.append(f"A {r_svg:.2f},{r_svg:.2f} 0 0 {sweep} {tx(e['ex']):.2f},{ty(e['ey']):.2f}")
         last_ex, last_ey = profilo[-1]['ex'], profilo[-1]['ey']
         d_parts.append(f"L {tx(-last_ex):.2f},{ty(last_ey):.2f}")
@@ -141,7 +141,7 @@ def render_fresa_svg(
             if e['type'] == 'line': d_parts.append(f"L {tx(-e['sx']):.2f},{ty(e['sy']):.2f}")
             else:
                 r_svg = _ar(e['cx'], e['cy'], e['sx'], e['sy']) * scala
-                sweep = 1 if e['type'] == 'ccwarc' else 0
+                sweep = 0 if e['type'] == 'ccwarc' else 1  # backward: invertito rispetto a forward
                 d_parts.append(f"A {r_svg:.2f},{r_svg:.2f} 0 0 {sweep} {tx(-e['sx']):.2f},{ty(e['sy']):.2f}")
         d_parts.append("Z")
 
