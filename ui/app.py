@@ -3258,6 +3258,10 @@ MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <input name="angolo_punta_gradi" type="number" step="0.1" value="{{ u.angolo_punta_gradi or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Passo filetto [mm]</label>
       <input name="passo_mm" type="number" step="0.01" value="{{ u.passo_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Fuori pinza [mm]</label>
+      <input name="fuori_pinza_mm" type="number" step="0.01" value="{{ u.fuori_pinza_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diam. stelo [mm]</label>
+      <input name="diam_stelo_mm" type="number" step="0.01" value="{{ u.diam_stelo_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
   </div>
 </div>
 
@@ -3265,9 +3269,14 @@ MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Classificazione</h3>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Famiglia</label>
-      <select name="famiglia_id" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+      <select name="famiglia_id" id="sel-fam" onchange="filtraSottofam()" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
         <option value="">-- non assegnata --</option>
         {% for f in famiglie %}<option value="{{ f.id }}" {{ 'selected' if f.id==u.famiglia_id }}>{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Sottofamiglia</label>
+      <select name="sottofamiglia_id" id="sel-sf" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        <option value="">-- nessuna --</option>
+        {% for sf in sottofamiglie %}<option value="{{ sf.id }}" data-fam="{{ sf.famiglia_id }}" {{ 'selected' if sf.id==u.sottofamiglia_id }}>{{ sf.codice }} ({{ sf.produttore or '?' }})</option>{% endfor %}
       </select></div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Stato</label>
       <select name="stato" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
@@ -3295,6 +3304,14 @@ MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
   {% endif %}
 </div>
 </form>
+<script>
+function filtraSottofam(){
+  var fam=document.getElementById('sel-fam').value;
+  var opts=document.querySelectorAll('#sel-sf option[data-fam]');
+  opts.forEach(function(o){o.style.display=(o.getAttribute('data-fam')==fam||!fam)?'':'none';});
+}
+filtraSottofam();
+</script>
 """)
 
 @app.route('/utensile/<int:uid>/modifica', methods=['GET','POST'])
@@ -3305,11 +3322,13 @@ def modifica_utensile(uid):
         fam = f.get('famiglia_id') or None
         impiego = ','.join(f.getlist('impiego')) or None
         stato_new = f.get('stato', 'staging')
+        sf = f.get('sottofamiglia_id') or None
         conn.execute("""UPDATE utensile SET alias=?, codice_catalogo=?, descrizione=?,
             id_tipo=?, diametro_mm=?, raggio_punta_mm=?,
             num_taglienti=?, lunghezza_totale_mm=?, lunghezza_tagl_mm=?,
             angolo_punta_gradi=?, passo_mm=?,
-            famiglia_id=?, impiego=?, stato=?, note=?
+            fuori_pinza_mm=?, diam_stelo_mm=?,
+            famiglia_id=?, sottofamiglia_id=?, impiego=?, stato=?, note=?
             WHERE id=?""", (
             f.get('alias') or None, f.get('codice_catalogo') or None,
             f.get('descrizione') or None,
@@ -3321,7 +3340,10 @@ def modifica_utensile(uid):
             float(f['lunghezza_tagl_mm']) if f.get('lunghezza_tagl_mm') else None,
             float(f['angolo_punta_gradi']) if f.get('angolo_punta_gradi') else None,
             float(f['passo_mm']) if f.get('passo_mm') else None,
-            int(fam) if fam else None, impiego, stato_new, f.get('note') or None, uid))
+            float(f['fuori_pinza_mm']) if f.get('fuori_pinza_mm') else None,
+            float(f['diam_stelo_mm']) if f.get('diam_stelo_mm') else None,
+            int(fam) if fam else None, int(sf) if sf else None,
+            impiego, stato_new, f.get('note') or None, uid))
         conn.commit(); conn.close()
         return redirect('/master' if stato_new == 'master' else '/staging')
     row = conn.execute("SELECT * FROM utensile WHERE id=?", (uid,)).fetchone()
@@ -3329,8 +3351,10 @@ def modifica_utensile(uid):
         conn.close(); return redirect('/staging')
     tipi = [dict(r) for r in conn.execute("SELECT id, codice FROM tipo_utensile ORDER BY codice")]
     famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    sottofamiglie = [dict(r) for r in conn.execute("SELECT id, famiglia_id, codice, produttore FROM SottoFamiglie ORDER BY codice")]
     conn.close()
-    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie, active='staging')
+    return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie,
+        sottofamiglie=sottofamiglie, active='staging')
 
 
 PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
