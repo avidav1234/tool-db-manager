@@ -78,9 +78,11 @@ def render_fresa_svg(
 
     if elementi_gambo:
         gambo_to_add = []
+        # Se il freeShaft parte da z~0, descrive il profilo completo (non solo gambo)
+        _fs_starts_at_zero = abs(float(elementi_gambo[0].get('sy', 0))) < 1.0 if elementi_gambo else False
         for e in elementi_gambo:
             sz, ez = float(e.get('sy', 0)), float(e.get('ey', 0))
-            if ez <= curr_z: continue
+            if not _fs_starts_at_zero and ez <= curr_z: continue
             if sz >= r_tool: continue
             ne = {'type': e.get('type', 'line'), 'sx': abs(float(e.get('sx', 0))), 'sy': sz, 'ex': abs(float(e.get('ex', 0))), 'ey': ez, 'cx': abs(float(e.get('cx', 0))), 'cy': float(e.get('cy', 0))}
             if sz < curr_z:
