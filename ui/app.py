@@ -331,7 +331,9 @@ a.btn.btn-sec,button.btn.btn-sec{background-color:#fff !important;color:#333 !im
     <a href="/famiglie-holder" class="{{ 'active' if active=='fam-holder' }}">Holder</a>
     <a href="/lavorazioni" class="{{ 'active' if active=='lavorazioni' }}">Lavorazioni</a>
     <a href="/materiali" class="{{ 'active' if active=='materiali' }}">Materiali</a>
-    <a href="/fattori-ld" class="{{ 'active' if active=='fattori-ld' }}">L/D</a>
+    <a href="/sottofamiglie" class="{{ 'active' if active=='sottofam' }}">SottoFam</a>
+    <a href="/parametri-base" class="{{ 'active' if active=='param-base' }}">Param v2</a>
+    <a href="/fattori-correzione" class="{{ 'active' if active=='fattori-v2' }}">Fattori</a>
   </div>
   <div class="nav-group">
     <span class="nav-group-label">Output</span>
@@ -2446,6 +2448,232 @@ def fattore_ld_nuovo():
     except Exception: pass
     conn.close()
     return redirect('/fattori-ld')
+
+
+# ---------------------------------------------------------------
+# SOTTOFAMIGLIE
+# ---------------------------------------------------------------
+SOTTOFAM_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Sottofamiglie
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Sottofamiglie utensile</h2>
+<div class="card" style="margin-bottom:1rem">
+<table style="font-size:13px">
+<thead><tr><th>Codice</th><th>Famiglia</th><th>Produttore</th><th>Descrizione</th><th>Utensili</th></tr></thead>
+<tbody>
+{% for s in sottofamiglie %}
+<tr>
+  <td><b>{{ s.codice }}</b></td>
+  <td>{{ s.fam_nome }}</td>
+  <td>{{ s.produttore or '—' }}</td>
+  <td style="color:#888;font-size:12px">{{ s.descrizione or '—' }}</td>
+  <td><span class="badge b-ok">{{ s.n_ut }}</span></td>
+</tr>
+{% endfor %}
+{% if not sottofamiglie %}<tr><td colspan="5" style="text-align:center;color:#aaa;padding:2rem">Nessuna sottofamiglia</td></tr>{% endif %}
+</tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Nuova sottofamiglia</h3>
+  <form method="post" action="/sottofamiglie/nuova" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end">
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Codice</label>
+      <input name="codice" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Famiglia</label>
+      <select name="famiglia_id" required style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        {% for f in famiglie %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Produttore</label>
+      <input name="produttore" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:100px"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:3px">Descrizione</label>
+      <input name="descrizione" style="padding:5px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:150px"></div>
+    <button type="submit" class="btn btn-s" style="padding:5px 14px;font-size:13px">+ Aggiungi</button>
+  </form>
+</div>
+""")
+
+@app.route('/sottofamiglie')
+def sottofamiglie_page():
+    conn = get_conn()
+    sottofamiglie = [dict(r) for r in conn.execute("""
+        SELECT sf.*, f.nome as fam_nome,
+            (SELECT COUNT(*) FROM utensile WHERE sottofamiglia_id=sf.id) as n_ut
+        FROM SottoFamiglie sf JOIN FamiglieUtensile f ON sf.famiglia_id=f.id
+        ORDER BY f.nome, sf.codice""")]
+    famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    conn.close()
+    return render_template_string(SOTTOFAM_HTML, sottofamiglie=sottofamiglie, famiglie=famiglie, active='sottofam')
+
+@app.route('/sottofamiglie/nuova', methods=['POST'])
+def sottofamiglia_nuova():
+    f = request.form
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO SottoFamiglie (famiglia_id, codice, produttore, descrizione) VALUES (?,?,?,?)",
+            (int(f['famiglia_id']), f['codice'], f.get('produttore') or None, f.get('descrizione') or None))
+        conn.commit()
+    except Exception: pass
+    conn.close()
+    return redirect('/sottofamiglie')
+
+
+# ---------------------------------------------------------------
+# PARAMETRI BASE v2
+# ---------------------------------------------------------------
+PARAM_BASE_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Parametri Base v2
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Parametri Base v2 — famiglia x materiale</h2>
+<div class="card" style="overflow-x:auto">
+<table style="font-size:12px">
+<thead><tr><th>Famiglia</th>
+  {% for m in materiali %}<th style="text-align:center;background:#f8f8f6;width:120px">{{ m.nome }}<br><span style="font-size:10px;color:#999">Vc | fz/D</span></th>{% endfor %}
+</tr></thead>
+<tbody>
+{% for f in famiglie %}
+<tr>
+  <td><b>{{ f.nome }}</b></td>
+  {% for m in materiali %}
+  {% set key = (f.id|string) + '_' + (m.id|string) %}
+  {% set v = vals.get(key) %}
+  <td style="text-align:center;font-size:11px">
+    {% if v %}
+    <span style="color:#1a56db">{{ v.vc }}</span> | <span style="color:#059669">{{ v.fz }}</span>
+    {% else %}<span style="color:#ddd">—</span>{% endif %}
+  </td>
+  {% endfor %}
+</tr>
+{% endfor %}
+</tbody></table>
+</div>
+<p style="font-size:12px;color:#888;margin-top:.75rem">
+  <b>Vc</b> = velocita taglio base [m/min] &nbsp;|&nbsp; <b>fz/D</b> = avanzamento per dente / diametro<br>
+  Modifica dalla pagina <a href="/famiglie">Famiglie</a> > Parametri.
+</p>
+""")
+
+@app.route('/parametri-base')
+def parametri_base_page():
+    conn = get_conn()
+    materiali = [dict(r) for r in conn.execute("SELECT id, nome_master as nome FROM Materiali ORDER BY nome_master")]
+    famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
+    rows = conn.execute("SELECT famiglia_id, materiale_id, vc_base, fz_D_ratio FROM ParametriBase_v2").fetchall()
+    vals = {}
+    for r in rows:
+        key = f"{r[0]}_{r[1]}"
+        vals[key] = {'vc': r[2], 'fz': r[3]}
+    conn.close()
+    return render_template_string(PARAM_BASE_HTML, materiali=materiali, famiglie=famiglie, vals=vals, active='param-base')
+
+
+# ---------------------------------------------------------------
+# FATTORI CORREZIONE v2
+# ---------------------------------------------------------------
+FATTORI_V2_HTML = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Fattori correzione v2
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 1.25rem">Fattori correzione v2</h2>
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Fattori L/D</h3>
+  <table style="font-size:13px">
+  <thead><tr><th>Range</th><th>k_Vc</th><th>k_fz</th><th>k_Ap</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for f in fattori_ld %}
+  <tr><td>{{ f.nome }}</td><td>{{ f.k_vc }}</td><td>{{ f.k_fz }}</td><td>{{ f.k_ap }}</td><td style="color:#888;font-size:12px">{{ f.note or '' }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+<div class="card">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;margin:0 0 .75rem">Fattori Holder</h3>
+  <table style="font-size:13px">
+  <thead><tr><th>Tipo</th><th>k_Vc</th><th>k_fz</th><th>k_Ap</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for f in fattori_holder %}
+  <tr><td><b>{{ f.nome }}</b></td><td>{{ f.k_vc }}</td><td>{{ f.k_fz }}</td><td>{{ f.k_ap }}</td><td style="color:#888;font-size:12px">{{ f.note or '' }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</div>
+""")
+
+@app.route('/fattori-correzione')
+def fattori_correzione_page():
+    conn = get_conn()
+    fattori_ld = [dict(r) for r in conn.execute("SELECT * FROM FattoriCorrezione_v2 WHERE tipo_fattore='ld_ratio' ORDER BY range_min")]
+    fattori_holder = [dict(r) for r in conn.execute("SELECT * FROM FattoriCorrezione_v2 WHERE tipo_fattore='holder' ORDER BY nome")]
+    conn.close()
+    return render_template_string(FATTORI_V2_HTML, fattori_ld=fattori_ld, fattori_holder=fattori_holder, active='fattori-v2')
+
+
+# ---------------------------------------------------------------
+# CALCOLO PARAMETRI (preview)
+# ---------------------------------------------------------------
+@app.route('/calcolo-parametri')
+def calcolo_parametri_page():
+    uid = request.args.get('utensile')
+    if not uid:
+        return redirect('/staging')
+    conn = get_conn()
+    u = conn.execute("SELECT * FROM utensile WHERE id=?", (uid,)).fetchone()
+    if not u:
+        conn.close(); return redirect('/staging')
+    u = dict(u)
+    materiali = [dict(r) for r in conn.execute("SELECT id, nome_master FROM Materiali ORDER BY nome_master")]
+    lavorazioni = [dict(r) for r in conn.execute("SELECT id, nome, scopo FROM Lavorazioni_v2 ORDER BY scopo, nome")]
+    # Calcola per tutti i materiali x lavorazioni
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'tools'))
+    try:
+        from calcola_parametri_v2 import calcola_parametri
+        risultati = []
+        for m in materiali:
+            for l in lavorazioni:
+                r = calcola_parametri(u, m['id'], l['id'], conn)
+                if r:
+                    r['materiale'] = m['nome_master']
+                    r['lavorazione'] = l['nome']
+                    r['scopo'] = l['scopo']
+                    risultati.append(r)
+    except Exception as e:
+        risultati = []
+        print(f"Calcolo v2 error: {e}", flush=True)
+    conn.close()
+    html = BASE.replace('{% block content %}{% endblock %}', """
+<div style="font-size:12px;color:#888;margin-bottom:.5rem">
+  <a href="/" style="color:#888;text-decoration:none">Dashboard</a> &rsaquo; Calcolo parametri v2
+</div>
+<h2 style="font-size:1.1rem;margin:0 0 .5rem">Calcolo parametri — {{ u.alias or u.codice_interno }}</h2>
+<p style="color:#888;font-size:13px;margin:0 0 1.25rem">D={{ u.diametro_mm }}mm | FP={{ u.fuori_pinza_mm }}mm | L/D={{ '%.1f'|format((u.fuori_pinza_mm or 0) / (u.diametro_mm or 1)) }}</p>
+{% if risultati %}
+<div class="card" style="overflow-x:auto">
+<table style="font-size:12px">
+<thead><tr><th>Materiale</th><th>Lavorazione</th><th>Vc</th><th>n rpm</th><th>fz</th><th>F mm/min</th><th>ap</th><th>ae</th><th>L/D</th></tr></thead>
+<tbody>
+{% set prev_mat = namespace(v='') %}
+{% for r in risultati %}
+{% if r.materiale != prev_mat.v %}{% set prev_mat.v = r.materiale %}
+<tr style="background:#e8f0fd"><td colspan="9" style="font-weight:600;color:#1a56db;padding:4px 12px">{{ r.materiale }}</td></tr>
+{% endif %}
+<tr>
+  <td></td><td>{{ r.lavorazione }}</td>
+  <td style="font-family:monospace">{{ r.vc }}</td>
+  <td style="font-family:monospace">{{ r.n_rpm|int }}</td>
+  <td style="font-family:monospace">{{ r.fz }}</td>
+  <td style="font-family:monospace">{{ r.f_mm_min|int }}</td>
+  <td style="font-family:monospace">{{ r.ap }}</td>
+  <td style="font-family:monospace">{{ r.ae }}</td>
+  <td style="font-family:monospace;color:#888">{{ r.ld_ratio }}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;color:#aaa;padding:2rem">Nessun parametro calcolato. Assegna una famiglia e aggiungi parametri base.</div>
+{% endif %}
+<div style="margin-top:1rem"><a href="/utensile/{{ u.id }}" class="btn">&#8592; Dettaglio utensile</a></div>
+""")
+    return render_template_string(html, u=u, risultati=risultati, active='calc')
 
 
 EXPORT_HTML = BASE.replace('{% block content %}{% endblock %}', """
