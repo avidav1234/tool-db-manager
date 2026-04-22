@@ -3026,6 +3026,8 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
     <div><span style="color:#888">Fuori pinza:</span> <b>{{ '%.2f'|format(u.fuori_pinza_mm) if u.fuori_pinza_mm else '—' }}</b> mm</div>
     <div><span style="color:#888">Gage length:</span> <b>{{ u.gage_length_mm or '—' }}</b> mm</div>
     <div><span style="color:#888">Famiglia:</span> <b>{{ u.fam_nome or '— non assegnata —' }}</b></div>
+    {% if u.sf_codice %}<div><span style="color:#888">Sottofamiglia:</span> <b>{{ u.sf_codice }}</b> {% if u.sf_prod %}({{ u.sf_prod }}){% endif %}</div>{% endif %}
+    {% if u.diametro_mm and u.fuori_pinza_mm %}<div><span style="color:#888">L/D ratio:</span> <b>{{ '%.1f'|format(u.fuori_pinza_mm / u.diametro_mm) }}</b></div>{% endif %}
   </div>
 </div>
 </div>
@@ -3127,9 +3129,11 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
 def dettaglio_utensile(uid):
     conn = get_conn()
     row = conn.execute("""SELECT u.*, tu.codice as tipo_codice,
-        COALESCE(f.nome, '') as fam_nome
+        COALESCE(f.nome, '') as fam_nome,
+        sf.codice as sf_codice, sf.produttore as sf_prod
         FROM utensile u LEFT JOIN tipo_utensile tu ON u.id_tipo=tu.id
         LEFT JOIN FamiglieUtensile f ON u.famiglia_id=f.id
+        LEFT JOIN SottoFamiglie sf ON u.sottofamiglia_id=sf.id
         WHERE u.id=?""", (uid,)).fetchone()
     if not row:
         conn.close(); return redirect('/staging')
@@ -3262,6 +3266,21 @@ MODIFICA_HTML = BASE.replace('{% block content %}{% endblock %}', """
       <input name="fuori_pinza_mm" type="number" step="0.01" value="{{ u.fuori_pinza_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
     <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Diam. stelo [mm]</label>
       <input name="diam_stelo_mm" type="number" step="0.01" value="{{ u.diam_stelo_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Tip diameter [mm]</label>
+      <input name="tip_diameter_mm" type="number" step="0.01" value="{{ u.tip_diameter_mm or '' }}" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Assemblaggio</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Portautensile</label>
+      <select name="id_portautensile" style="width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+        <option value="">-- nessuno --</option>
+        {% for p in portautensili %}<option value="{{ p.id }}" {{ 'selected' if p.id==u.id_portautensile }}>{{ p.codice_interno }}</option>{% endfor %}
+      </select></div>
+    <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:3px">Holder (testo)</label>
+      <input value="{{ u.holder_name or u.nome_pinza or '' }}" readonly style="width:100%;padding:6px 10px;border:1px solid #eee;border-radius:5px;font-size:13px;background:#f8f8f6;color:#888"></div>
   </div>
 </div>
 
@@ -3323,12 +3342,14 @@ def modifica_utensile(uid):
         impiego = ','.join(f.getlist('impiego')) or None
         stato_new = f.get('stato', 'staging')
         sf = f.get('sottofamiglia_id') or None
+        pu = f.get('id_portautensile') or None
         conn.execute("""UPDATE utensile SET alias=?, codice_catalogo=?, descrizione=?,
             id_tipo=?, diametro_mm=?, raggio_punta_mm=?,
             num_taglienti=?, lunghezza_totale_mm=?, lunghezza_tagl_mm=?,
             angolo_punta_gradi=?, passo_mm=?,
-            fuori_pinza_mm=?, diam_stelo_mm=?,
-            famiglia_id=?, sottofamiglia_id=?, impiego=?, stato=?, note=?
+            fuori_pinza_mm=?, diam_stelo_mm=?, tip_diameter_mm=?,
+            famiglia_id=?, sottofamiglia_id=?, id_portautensile=?,
+            impiego=?, stato=?, note=?
             WHERE id=?""", (
             f.get('alias') or None, f.get('codice_catalogo') or None,
             f.get('descrizione') or None,
@@ -3342,7 +3363,9 @@ def modifica_utensile(uid):
             float(f['passo_mm']) if f.get('passo_mm') else None,
             float(f['fuori_pinza_mm']) if f.get('fuori_pinza_mm') else None,
             float(f['diam_stelo_mm']) if f.get('diam_stelo_mm') else None,
+            float(f['tip_diameter_mm']) if f.get('tip_diameter_mm') else None,
             int(fam) if fam else None, int(sf) if sf else None,
+            int(pu) if pu else None,
             impiego, stato_new, f.get('note') or None, uid))
         conn.commit(); conn.close()
         return redirect('/master' if stato_new == 'master' else '/staging')
@@ -3352,9 +3375,10 @@ def modifica_utensile(uid):
     tipi = [dict(r) for r in conn.execute("SELECT id, codice FROM tipo_utensile ORDER BY codice")]
     famiglie = [dict(r) for r in conn.execute("SELECT id, nome FROM FamiglieUtensile ORDER BY nome")]
     sottofamiglie = [dict(r) for r in conn.execute("SELECT id, famiglia_id, codice, produttore FROM SottoFamiglie ORDER BY codice")]
+    portautensili = [dict(r) for r in conn.execute("SELECT id, codice_interno FROM portautensile ORDER BY codice_interno")]
     conn.close()
     return render_template_string(MODIFICA_HTML, u=dict(row), tipi=tipi, famiglie=famiglie,
-        sottofamiglie=sottofamiglie, active='staging')
+        sottofamiglie=sottofamiglie, portautensili=portautensili, active='staging')
 
 
 PROMUOVI_HTML = BASE.replace('{% block content %}{% endblock %}', """
