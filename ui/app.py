@@ -290,8 +290,12 @@ a.btn.btn-ok,button.btn.btn-ok{background-color:#10b981 !important;color:#fff !i
 a.btn.btn-mod,button.btn.btn-mod{background-color:#f59e0b !important;color:#fff !important;border-color:#d97706 !important}
 a.btn.btn-d,button.btn.btn-d{background-color:#ef4444 !important;color:#fff !important;border-color:#dc2626 !important}
 a.btn.btn-sec,button.btn.btn-sec{background-color:#fff !important;color:#333 !important;border:1px solid #d1d5db !important}
-.nav-group{display:inline-flex;align-items:center;gap:0;padding:0 4px;border-left:1px solid #e2e2df}
-.nav-group-label{font-size:9px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.4px;padding:0 6px;white-space:nowrap}
+.nav-dropdown{position:relative;display:inline-flex;align-items:center}
+.nav-dropdown-toggle{cursor:pointer}
+.nav-dropdown-menu{display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #e2e2df;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1);min-width:200px;padding:6px 0;z-index:200}
+.nav-dropdown:hover .nav-dropdown-menu{display:block}
+.nav-dropdown-menu a{display:block !important;padding:8px 16px !important;height:auto !important;border-bottom:none !important;font-size:13px !important;color:#333 !important;white-space:nowrap}
+.nav-dropdown-menu a:hover{background:#f0f0ee !important;color:#1a56db !important}
 .nav-badge{font-size:10px;padding:1px 6px;border-radius:8px;font-weight:700;margin-left:2px}
 .nav-badge-amber{background:#fbbf24;color:#78350f}
 .nav-badge-green{background:#34d399;color:#064e3b}
@@ -320,25 +324,25 @@ a.btn.btn-sec,button.btn.btn-sec{background-color:#fff !important;color:#333 !im
 <div class="hdr">
   <h1>Tool DB Manager</h1>
   <a href="/" class="{{ 'active' if active=='home' }}">Dashboard</a>
-  <div class="nav-group">
-    <span class="nav-group-label">Utensili</span>
-    <a href="/staging" class="{{ 'active' if active=='staging' }}">Staging <span class="nav-badge nav-badge-amber">{{ nav_staging }}</span></a>
-    <a href="/master" class="{{ 'active' if active=='master' }}">Master <span class="nav-badge nav-badge-green">{{ nav_master }}</span></a>
+  <a href="/staging" class="{{ 'active' if active=='staging' }}">Staging <span class="nav-badge nav-badge-amber">{{ nav_staging }}</span></a>
+  <a href="/master" class="{{ 'active' if active=='master' }}">Master <span class="nav-badge nav-badge-green">{{ nav_master }}</span></a>
+  <div class="nav-dropdown">
+    <a href="/famiglie" class="nav-dropdown-toggle {{ 'active' if active in ('famiglie','sottofam','param-base','lavorazioni','materiali','fam-holder','fattori-v2','fattori-ld','holders') }}">Configurazione &#9662;</a>
+    <div class="nav-dropdown-menu">
+      <a href="/famiglie">Famiglie &amp; Sottofamiglie</a>
+      <a href="/parametri-base">Parametri Base</a>
+      <a href="/lavorazioni">Strategie (Lavorazioni)</a>
+      <a href="/materiali">Materiali</a>
+      <a href="/fattori-correzione">Fattori (Holder + L/D)</a>
+      <a href="/holders">Portautensili</a>
+    </div>
   </div>
-  <div class="nav-group">
-    <span class="nav-group-label">Config</span>
-    <a href="/famiglie" class="{{ 'active' if active=='famiglie' }}">Famiglie</a>
-    <a href="/famiglie-holder" class="{{ 'active' if active=='fam-holder' }}">Holder</a>
-    <a href="/lavorazioni" class="{{ 'active' if active=='lavorazioni' }}">Lavorazioni</a>
-    <a href="/materiali" class="{{ 'active' if active=='materiali' }}">Materiali</a>
-    <a href="/sottofamiglie" class="{{ 'active' if active=='sottofam' }}">SottoFam</a>
-    <a href="/parametri-base" class="{{ 'active' if active=='param-base' }}">Param v2</a>
-    <a href="/fattori-correzione" class="{{ 'active' if active=='fattori-v2' }}">Fattori</a>
-  </div>
-  <div class="nav-group">
-    <span class="nav-group-label">Output</span>
-    <a href="/export" class="{{ 'active' if active=='export' }}">Export</a>
-    <a href="/importa" class="{{ 'active' if active=='importa' }}">Importa</a>
+  <div class="nav-dropdown">
+    <a href="/importa" class="nav-dropdown-toggle {{ 'active' if active in ('export','importa') }}">I/O &#9662;</a>
+    <div class="nav-dropdown-menu">
+      <a href="/importa">Importa</a>
+      <a href="/export">Export</a>
+    </div>
   </div>
   <a href="/cam-agent" class="{{ 'active' if active=='cam-agent' }}" style="background:#6366f1;color:#fff;padding:.2rem .7rem;border-radius:12px;font-weight:600">&#129302; Agente</a>
 </div>
@@ -3098,6 +3102,16 @@ DETTAGLIO_HTML = BASE.replace('{% block content %}{% endblock %}', """
 <div class="card" style="margin-bottom:1rem">
   <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .75rem">Holder</h3>
   <div style="font-size:13px"><span style="color:#888">Nome:</span> <b>{{ u.nome_pinza }}</b> <span style="color:#aaa;font-size:11px">(non trovato in portautensile)</span></div>
+</div>
+{% endif %}
+
+{% if u.famiglia_id %}
+<div class="card" style="margin-bottom:1rem">
+  <h3 style="font-size:.85rem;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:0 0 .5rem">Parametri calcolati v2</h3>
+  <p style="font-size:12px;color:#888;margin:0 0 .5rem">
+    Formula: Vc = Vc_base(famiglia) x k_strategia x k_holder x k_L/D
+  </p>
+  <a href="/calcolo-parametri?utensile={{ u.id }}" class="btn btn-p" style="font-size:12px">Vedi parametri calcolati &#8594;</a>
 </div>
 {% endif %}
 
